@@ -1,7 +1,7 @@
 import { defineConfig } from "@rsbuild/core";
 import { pluginReact } from "@rsbuild/plugin-react";
 import { pluginTailwindcss } from "@rsbuild/plugin-tailwindcss";
-import { pluginCssDoctor } from "@zealamic/css-doctor-rsbuild";
+import { pluginCssDoctor } from "@zealakit/css-doctor-rsbuild";
 
 export default defineConfig({
   plugins: [

@@ -8,7 +8,7 @@ import svelte from "@astrojs/svelte";
 import preact from "@astrojs/preact";
 import solidJs from "@astrojs/solid-js";
 import tailwindcss from "@tailwindcss/vite";
-import { cssDoctor } from "@zealamic/css-doctor-vite";
+import { cssDoctor } from "@zealakit/css-doctor-vite";
 
 const pageCssManifest = join(process.cwd(), ".css-doctor-page-css.json");
 

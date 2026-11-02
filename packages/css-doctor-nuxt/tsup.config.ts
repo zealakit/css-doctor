@@ -10,5 +10,5 @@ export default defineConfig({
   platform: "node",
   splitting: false,
   outDir: "dist",
-  external: ["@nuxt/kit", "nuxt", "@zealamic/css-doctor-vite"],
+  external: ["@nuxt/kit", "nuxt", "@zealakit/css-doctor-vite"],
 });

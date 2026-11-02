@@ -74,7 +74,7 @@ rustc-ice-*.txt
 # -----------------------------------------------------------------------------
 # NAPI-RS generated artifacts
 # Keep the native build reproducible; regenerate with:
-#   pnpm --filter @zealamic/css-doctor-binding build
+#   pnpm --filter @zealakit/css-doctor-binding build
 # -----------------------------------------------------------------------------
 *.node
 .napi-rs/

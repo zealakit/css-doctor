@@ -78,7 +78,7 @@ importers:
       '@types/react-dom':
         specifier: ^19.0.0
         version: 19.3.0(@types/react@19.3.0)
-      '@zealamic/css-doctor-vite':
+      '@zealakit/css-doctor-vite':
         specifier: workspace:*
         version: link:../../packages/css-doctor-vite
       sass:
@@ -115,7 +115,7 @@ importers:
       '@types/react-dom':
         specifier: ^19.0.0
         version: 19.3.0(@types/react@19.3.0)
-      '@zealamic/css-doctor-next':
+      '@zealakit/css-doctor-next':
         specifier: workspace:*
         version: link:../../packages/css-doctor-next
       postcss:
@@ -143,10 +143,10 @@ importers:
       '@tailwindcss/vite':
         specifier: ^4.0.0
         version: 4.3.3(vite@8.3.5(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.106.1)(terser@5.51.2)(tsx@4.23.15)(yaml@1.10.3))
-      '@zealamic/css-doctor-nuxt':
+      '@zealakit/css-doctor-nuxt':
         specifier: workspace:*
         version: link:../../packages/css-doctor-nuxt
-      '@zealamic/css-doctor-vite':
+      '@zealakit/css-doctor-vite':
         specifier: workspace:*
         version: link:../../packages/css-doctor-vite
       sass:
@@ -161,7 +161,7 @@ importers:
 
   examples/remix-tailwind-sass:
     dependencies:
-      '@zealamic/css-doctor-remix':
+      '@zealakit/css-doctor-remix':
         specifier: workspace:*
         version: link:../../packages/css-doctor-remix
       remix:
@@ -214,7 +214,7 @@ importers:
       '@types/react-dom':
         specifier: ^19.3.0
         version: 19.3.0(@types/react@19.3.0)
-      '@zealamic/css-doctor-rsbuild':
+      '@zealakit/css-doctor-rsbuild':
         specifier: workspace:*
         version: link:../../packages/css-doctor-rsbuild
       tailwindcss:
@@ -269,7 +269,7 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.3.0
         version: 4.7.0(vite@6.4.5(@types/node@22.20.5)(jiti@2.7.0)(lightningcss@1.33.0)(sass@1.106.1)(terser@5.51.2)(tsx@4.23.15)(yaml@1.10.3))
-      '@zealamic/css-doctor-vite':
+      '@zealakit/css-doctor-vite':
         specifier: workspace:*
         version: link:../../packages/css-doctor-vite
       tailwindcss:
@@ -309,7 +309,7 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.7.0
         version: 4.7.0(vite@6.4.5(@types/node@22.20.5)(jiti@2.7.0)(lightningcss@1.33.0)(sass@1.106.1)(terser@5.51.2)(tsx@4.23.15)(yaml@1.10.3))
-      '@zealamic/css-doctor-vite':
+      '@zealakit/css-doctor-vite':
         specifier: workspace:*
         version: link:../../packages/css-doctor-vite
       tailwindcss:
@@ -337,7 +337,7 @@ importers:
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.5
-      '@zealamic/css-doctor-vite':
+      '@zealakit/css-doctor-vite':
         specifier: workspace:*
         version: link:../../packages/css-doctor-vite
       svelte-check:
@@ -371,7 +371,7 @@ importers:
       '@vitejs/plugin-vue':
         specifier: ^5.1.0
         version: 5.2.4(vite@6.4.5(@types/node@22.20.5)(jiti@2.7.0)(lightningcss@1.33.0)(sass@1.106.1)(terser@5.51.2)(tsx@4.23.15)(yaml@1.10.3))(vue@3.5.44(typescript@5.9.3))
-      '@zealamic/css-doctor-vite':
+      '@zealakit/css-doctor-vite':
         specifier: workspace:*
         version: link:../../packages/css-doctor-vite
       tailwindcss:
@@ -389,19 +389,19 @@ importers:
 
   packages/binding:
     optionalDependencies:
-      '@zealamic/css-doctor-binding-darwin-arm64':
+      '@zealakit/css-doctor-binding-darwin-arm64':
         specifier: workspace:*
         version: link:npm/css-doctor-binding-darwin-arm64
-      '@zealamic/css-doctor-binding-darwin-x64':
+      '@zealakit/css-doctor-binding-darwin-x64':
         specifier: workspace:*
         version: link:npm/css-doctor-binding-darwin-x64
-      '@zealamic/css-doctor-binding-linux-x64-gnu':
+      '@zealakit/css-doctor-binding-linux-x64-gnu':
         specifier: workspace:*
         version: link:npm/css-doctor-binding-linux-x64-gnu
-      '@zealamic/css-doctor-binding-linux-x64-musl':
+      '@zealakit/css-doctor-binding-linux-x64-musl':
         specifier: workspace:*
         version: link:npm/css-doctor-binding-linux-x64-musl
-      '@zealamic/css-doctor-binding-win32-x64-msvc':
+      '@zealakit/css-doctor-binding-win32-x64-msvc':
         specifier: workspace:*
         version: link:npm/css-doctor-binding-win32-x64-msvc
     devDependencies:
@@ -430,7 +430,7 @@ importers:
 
   packages/cli:
     dependencies:
-      '@zealamic/css-doctor-binding':
+      '@zealakit/css-doctor-binding':
         specifier: workspace:*
         version: link:../binding
     devDependencies:
@@ -458,7 +458,7 @@ importers:
 
   packages/css-doctor-next:
     dependencies:
-      '@zealamic/css-doctor-binding':
+      '@zealakit/css-doctor-binding':
         specifier: workspace:*
         version: link:../binding
       jiti:
@@ -501,7 +501,7 @@ importers:
 
   packages/css-doctor-nuxt:
     dependencies:
-      '@zealamic/css-doctor-vite':
+      '@zealakit/css-doctor-vite':
         specifier: workspace:*
         version: link:../css-doctor-vite
     devDependencies:
@@ -523,7 +523,7 @@ importers:
 
   packages/css-doctor-remix:
     dependencies:
-      '@zealamic/css-doctor-binding':
+      '@zealakit/css-doctor-binding':
         specifier: workspace:*
         version: link:../binding
     devDependencies:
@@ -539,7 +539,7 @@ importers:
 
   packages/css-doctor-rsbuild:
     dependencies:
-      '@zealamic/css-doctor-binding':
+      '@zealakit/css-doctor-binding':
         specifier: workspace:*
         version: link:../binding
       picocolors:
@@ -567,7 +567,7 @@ importers:
       '@rollup/pluginutils':
         specifier: ^5.5.1
         version: 5.5.1(rollup@4.65.0)
-      '@zealamic/css-doctor-binding':
+      '@zealakit/css-doctor-binding':
         specifier: workspace:*
         version: link:../binding
       picocolors:

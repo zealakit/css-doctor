@@ -4,12 +4,12 @@ import { readFile } from "node:fs/promises";
 import { dirname, extname, posix, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 
-import { analyzeCss, optimizeCss } from "@zealamic/css-doctor-binding";
+import { analyzeCss, optimizeCss } from "@zealakit/css-doctor-binding";
 import type {
   JsChunkOutput,
   JsCssAnalysisResult,
   JsSelectorStat,
-} from "@zealamic/css-doctor-binding";
+} from "@zealakit/css-doctor-binding";
 import type { Compilation, Compiler, Entrypoint, Module } from "webpack";
 
 import { printDiagnostics } from "./reporter";

@@ -1,7 +1,7 @@
 # rsbuild-react-tailwind
 
 Rsbuild 2 + React 19 + React Router 7 + Tailwind CSS v4 example for
-`@zealamic/css-doctor-rsbuild`.
+`@zealakit/css-doctor-rsbuild`.
 
 ## Commands
 

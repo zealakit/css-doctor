@@ -1,21 +1,21 @@
 <div align="center">
 
-# @zealamic/css-doctor-nuxt
+# @zealakit/css-doctor-nuxt
 
 **css-doctor 官方 Nuxt 4 模块。**
 
-[English](https://github.com/zealamic/css-doctor/blob/main/packages/css-doctor-nuxt/README.md) | [Tiếng Việt](https://github.com/zealamic/css-doctor/blob/main/packages/css-doctor-nuxt/README_VI.md) | [简体中文](https://github.com/zealamic/css-doctor/blob/main/packages/css-doctor-nuxt/README_CN.md)
+[English](https://github.com/zealakit/css-doctor/blob/main/packages/css-doctor-nuxt/README.md) | [Tiếng Việt](https://github.com/zealakit/css-doctor/blob/main/packages/css-doctor-nuxt/README_VI.md) | [简体中文](https://github.com/zealakit/css-doctor/blob/main/packages/css-doctor-nuxt/README_CN.md)
 
 </div>
 
 ---
 
-![css doctor](https://github.com/zealamic/css-doctor/blob/main/assets/images/css-doctor.jpg)
+![css doctor](https://github.com/zealakit/css-doctor/blob/main/assets/images/css-doctor.jpg)
 
 ## 安装
 
 ```bash
-pnpm add -D @zealamic/css-doctor-nuxt
+pnpm add -D @zealakit/css-doctor-nuxt
 ```
 
 ## 使用
@@ -25,7 +25,7 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineNuxtConfig({
   compatibilityDate: "2025-07-15",
-  modules: ["@zealamic/css-doctor-nuxt"],
+  modules: ["@zealakit/css-doctor-nuxt"],
   css: [
     "~/assets/styles-tailwind.css",
     "~/assets/styles-custom.scss",
@@ -61,4 +61,4 @@ export default defineNuxtConfig({
 
 ## 完整文档
 
-项目 README：[English](https://github.com/zealamic/css-doctor/blob/main/README.md) | [Tiếng Việt](https://github.com/zealamic/css-doctor/blob/main/README_VI.md) | [简体中文](https://github.com/zealamic/css-doctor/blob/main/README_CN.md)
+项目 README：[English](https://github.com/zealakit/css-doctor/blob/main/README.md) | [Tiếng Việt](https://github.com/zealakit/css-doctor/blob/main/README_VI.md) | [简体中文](https://github.com/zealakit/css-doctor/blob/main/README_CN.md)

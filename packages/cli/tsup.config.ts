@@ -16,7 +16,7 @@ export default defineConfig({
   shims: true,
   // The native binding must remain a dynamic runtime require. It resolves the
   // correct platform package (.node) at execution time.
-  external: ["@zealamic/css-doctor-binding"],
+  external: ["@zealakit/css-doctor-binding"],
   banner: {
     js: [
       "#!/usr/bin/env node",

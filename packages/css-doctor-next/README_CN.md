@@ -1,27 +1,27 @@
 <div align="center">
 
-# @zealamic/css-doctor-next
+# @zealakit/css-doctor-next
 
 **面向 Next.js App Router 与 Pages Router 的 css-doctor 集成。**
 
-[English](https://github.com/zealamic/css-doctor/blob/main/packages/css-doctor-next/README.md) | [Tiếng Việt](https://github.com/zealamic/css-doctor/blob/main/packages/css-doctor-next/README_VI.md) | [简体中文](https://github.com/zealamic/css-doctor/blob/main/packages/css-doctor-next/README_CN.md)
+[English](https://github.com/zealakit/css-doctor/blob/main/packages/css-doctor-next/README.md) | [Tiếng Việt](https://github.com/zealakit/css-doctor/blob/main/packages/css-doctor-next/README_VI.md) | [简体中文](https://github.com/zealakit/css-doctor/blob/main/packages/css-doctor-next/README_CN.md)
 
 </div>
 
 ---
 
-![css doctor](https://github.com/zealamic/css-doctor/blob/main/assets/images/css-doctor.jpg)
+![css doctor](https://github.com/zealakit/css-doctor/blob/main/assets/images/css-doctor.jpg)
 
 ## 安装
 
 ```bash
-pnpm add -D @zealamic/css-doctor-next
+pnpm add -D @zealakit/css-doctor-next
 ```
 
 ## 使用
 
 ```ts
-import { withCssDoctor } from "@zealamic/css-doctor-next";
+import { withCssDoctor } from "@zealakit/css-doctor-next";
 
 export default withCssDoctor(
   { reactStrictMode: true },
@@ -63,4 +63,4 @@ export default withCssDoctor(
 
 ## 完整文档
 
-项目 README：[English](https://github.com/zealamic/css-doctor/blob/main/README.md) | [Tiếng Việt](https://github.com/zealamic/css-doctor/blob/main/README_VI.md) | [简体中文](https://github.com/zealamic/css-doctor/blob/main/README_CN.md)
+项目 README：[English](https://github.com/zealakit/css-doctor/blob/main/README.md) | [Tiếng Việt](https://github.com/zealakit/css-doctor/blob/main/README_VI.md) | [简体中文](https://github.com/zealakit/css-doctor/blob/main/README_CN.md)

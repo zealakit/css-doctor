@@ -13,6 +13,6 @@ export default defineConfig({
   external: [
     "@rsbuild/core",
     "@rspack/core",
-    "@zealamic/css-doctor-binding",
+    "@zealakit/css-doctor-binding",
   ],
 });

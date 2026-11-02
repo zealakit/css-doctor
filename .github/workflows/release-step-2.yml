@@ -39,14 +39,14 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           registry-url: "https://registry.npmjs.org"
-          scope: "@zealamic"
+          scope: "@zealakit"
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
         run: >-
           pnpm install --frozen-lockfile --prefer-offline --ignore-scripts
-          --filter "@zealamic/*..." --filter "."
+          --filter "@zealakit/*..." --filter "."
 
       - name: Resolve Version & Prepare Workspace
         shell: bash
@@ -139,12 +139,12 @@ jobs:
       - name: Build CLI and adapters
         run: |
           set -euo pipefail
-          pnpm --filter @zealamic/css-doctor-cli build
-          pnpm --filter @zealamic/css-doctor-vite build
-          pnpm --filter @zealamic/css-doctor-rsbuild build
-          pnpm --filter @zealamic/css-doctor-remix build
-          pnpm --filter @zealamic/css-doctor-nuxt build
-          pnpm --filter @zealamic/css-doctor-next build
+          pnpm --filter @zealakit/css-doctor-cli build
+          pnpm --filter @zealakit/css-doctor-vite build
+          pnpm --filter @zealakit/css-doctor-rsbuild build
+          pnpm --filter @zealakit/css-doctor-remix build
+          pnpm --filter @zealakit/css-doctor-nuxt build
+          pnpm --filter @zealakit/css-doctor-next build
 
       - name: Verify CLI bundle
         shell: bash
@@ -185,11 +185,11 @@ jobs:
             const depKeys = ["dependencies", "peerDependencies", "optionalDependencies"];
             for (const key of depKeys) {
               if (!manifest[key]) continue;
-              if (manifest[key]["@zealamic/css-doctor-binding"]) {
-                manifest[key]["@zealamic/css-doctor-binding"] = version;
+              if (manifest[key]["@zealakit/css-doctor-binding"]) {
+                manifest[key]["@zealakit/css-doctor-binding"] = version;
               }
-              if (manifest[key]["@zealamic/css-doctor-vite"]) {
-                manifest[key]["@zealamic/css-doctor-vite"] = version;
+              if (manifest[key]["@zealakit/css-doctor-vite"]) {
+                manifest[key]["@zealakit/css-doctor-vite"] = version;
               }
             }
 
@@ -230,6 +230,6 @@ jobs:
             echo "## Release Step 2 Completed 🎉"
             echo "- Version: \`${RELEASE_VERSION}\`"
             echo "- npm Dist-tag: \`${NPM_TAG}\`"
-            echo "- Pinned: \`@zealamic/css-doctor-binding@${RELEASE_VERSION}\`"
+            echo "- Pinned: \`@zealakit/css-doctor-binding@${RELEASE_VERSION}\`"
             echo "- Published: \`vite\`, \`rsbuild\`, \`remix\`, \`nuxt\`, \`next\`, \`cli\`"
           } >> "$GITHUB_STEP_SUMMARY"

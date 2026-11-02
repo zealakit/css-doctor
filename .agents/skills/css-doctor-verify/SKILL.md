@@ -45,8 +45,8 @@ Expected: core tests (including splitter), binding mapping tests, doctests.
 ### 3. Native binding
 
 ```bash
-pnpm --filter @zealamic/css-doctor-binding build
-pnpm --filter @zealamic/css-doctor-binding test
+pnpm --filter @zealakit/css-doctor-binding build
+pnpm --filter @zealakit/css-doctor-binding test
 ```
 
 Rebuild whenever core public API or binding source changed. Inspect the generated
@@ -83,7 +83,7 @@ pnpm exec turbo build --dry-run
 ### 5. Real Next.js build
 
 ```bash
-pnpm --filter @zealamic/css-doctor-next test:next
+pnpm --filter @zealakit/css-doctor-next test:next
 ```
 
 This runs Next 14 App Router with `app/**/page`, layouts, global CSS, and the
@@ -109,7 +109,7 @@ TypeScript consumer change should not rebuild the native addon.
 ### 7. Manual Vite smoke (when touching Vite)
 
 ```bash
-pnpm --filter @zealamic/css-doctor-vite test
+pnpm --filter @zealakit/css-doctor-vite test
 ```
 
 The Vite test suite already runs a real multi-page Vite build. If you edit the

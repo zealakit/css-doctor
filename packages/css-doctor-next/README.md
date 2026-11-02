@@ -1,27 +1,27 @@
 <div align="center">
 
-# @zealamic/css-doctor-next
+# @zealakit/css-doctor-next
 
 **Next.js App Router and Pages Router integration for css-doctor.**
 
-[English](https://github.com/zealamic/css-doctor/blob/main/packages/css-doctor-next/README.md) | [Tiếng Việt](https://github.com/zealamic/css-doctor/blob/main/packages/css-doctor-next/README_VI.md) | [简体中文](https://github.com/zealamic/css-doctor/blob/main/packages/css-doctor-next/README_CN.md)
+[English](https://github.com/zealakit/css-doctor/blob/main/packages/css-doctor-next/README.md) | [Tiếng Việt](https://github.com/zealakit/css-doctor/blob/main/packages/css-doctor-next/README_VI.md) | [简体中文](https://github.com/zealakit/css-doctor/blob/main/packages/css-doctor-next/README_CN.md)
 
 </div>
 
 ---
 
-![css doctor](https://github.com/zealamic/css-doctor/blob/main/assets/images/css-doctor.jpg)
+![css doctor](https://github.com/zealakit/css-doctor/blob/main/assets/images/css-doctor.jpg)
 
 ## Installation
 
 ```bash
-pnpm add -D @zealamic/css-doctor-next
+pnpm add -D @zealakit/css-doctor-next
 ```
 
 ## Usage
 
 ```ts
-import { withCssDoctor } from "@zealamic/css-doctor-next";
+import { withCssDoctor } from "@zealakit/css-doctor-next";
 
 export default withCssDoctor(
   { reactStrictMode: true },
@@ -63,4 +63,4 @@ export default withCssDoctor(
 
 ## Full documentation
 
-Project README: [English](https://github.com/zealamic/css-doctor/blob/main/README.md) | [Tiếng Việt](https://github.com/zealamic/css-doctor/blob/main/README_VI.md) | [简体中文](https://github.com/zealamic/css-doctor/blob/main/README_CN.md)
+Project README: [English](https://github.com/zealakit/css-doctor/blob/main/README.md) | [Tiếng Việt](https://github.com/zealakit/css-doctor/blob/main/README_VI.md) | [简体中文](https://github.com/zealakit/css-doctor/blob/main/README_CN.md)

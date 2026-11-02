@@ -70,17 +70,17 @@ to `true`. `maxChunkSize` maps to `u32`, chunk byte sizes map back with
 6. Rebuild the release binary and regenerate declarations:
 
    ```bash
-   pnpm --filter @zealamic/css-doctor-binding build
-   pnpm --filter @zealamic/css-doctor-binding test
+   pnpm --filter @zealakit/css-doctor-binding build
+   pnpm --filter @zealakit/css-doctor-binding test
    ```
 
 7. Inspect `index.d.ts` for the expected exported names and property types.
 8. Re-run TypeScript consumers that import the binding:
 
    ```bash
-   pnpm --filter @zealamic/css-doctor-cli typecheck
-   pnpm --filter @zealamic/css-doctor-vite test
-   pnpm --filter @zealamic/css-doctor-next test
+   pnpm --filter @zealakit/css-doctor-cli typecheck
+   pnpm --filter @zealakit/css-doctor-vite test
+   pnpm --filter @zealakit/css-doctor-next test
    ```
 
 ## Type mapping reference

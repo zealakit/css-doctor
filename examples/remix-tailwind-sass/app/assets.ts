@@ -7,7 +7,7 @@ import { createAssetServer } from "remix/assets";
 import type { AssetServer } from "remix/assets";
 import * as sass from "sass";
 import { compile } from "tailwindcss";
-import { withCssDoctorAssets } from "@zealamic/css-doctor-remix";
+import { withCssDoctorAssets } from "@zealakit/css-doctor-remix";
 
 const require = createRequire(import.meta.url);
 const root = process.cwd();

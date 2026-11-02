@@ -1,28 +1,28 @@
 <div align="center">
 
-# @zealamic/css-doctor-vite
+# @zealakit/css-doctor-vite
 
 **Plugin Vite/Rollup tối ưu CSS theo page coverage và size budget.**
 
-[English](https://github.com/zealamic/css-doctor/blob/main/packages/css-doctor-vite/README.md) | [Tiếng Việt](https://github.com/zealamic/css-doctor/blob/main/packages/css-doctor-vite/README_VI.md) | [简体中文](https://github.com/zealamic/css-doctor/blob/main/packages/css-doctor-vite/README_CN.md)
+[English](https://github.com/zealakit/css-doctor/blob/main/packages/css-doctor-vite/README.md) | [Tiếng Việt](https://github.com/zealakit/css-doctor/blob/main/packages/css-doctor-vite/README_VI.md) | [简体中文](https://github.com/zealakit/css-doctor/blob/main/packages/css-doctor-vite/README_CN.md)
 
 </div>
 
 ---
 
-![css doctor](https://github.com/zealamic/css-doctor/blob/main/assets/images/css-doctor.jpg)
+![css doctor](https://github.com/zealakit/css-doctor/blob/main/assets/images/css-doctor.jpg)
 
 ## Cài đặt
 
 ```bash
-pnpm add -D @zealamic/css-doctor-vite
+pnpm add -D @zealakit/css-doctor-vite
 ```
 
 ## Sử dụng
 
 ```ts
 import { defineConfig } from "vite";
-import { cssDoctor } from "@zealamic/css-doctor-vite";
+import { cssDoctor } from "@zealakit/css-doctor-vite";
 
 export default defineConfig({
   plugins: [
@@ -65,4 +65,4 @@ export default defineConfig({
 
 ## Tài liệu đầy đủ
 
-README dự án: [English](https://github.com/zealamic/css-doctor/blob/main/README.md) | [Tiếng Việt](https://github.com/zealamic/css-doctor/blob/main/README_VI.md) | [简体中文](https://github.com/zealamic/css-doctor/blob/main/README_CN.md)
+README dự án: [English](https://github.com/zealakit/css-doctor/blob/main/README.md) | [Tiếng Việt](https://github.com/zealakit/css-doctor/blob/main/README_VI.md) | [简体中文](https://github.com/zealakit/css-doctor/blob/main/README_CN.md)

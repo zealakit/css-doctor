@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
-import { optimizeCss } from "@zealamic/css-doctor-binding";
-import type { JsChunkOutput } from "@zealamic/css-doctor-binding";
+import { optimizeCss } from "@zealakit/css-doctor-binding";
+import type { JsChunkOutput } from "@zealakit/css-doctor-binding";
 
 import { CssCacheManager } from "./cache-manager";
 import type {

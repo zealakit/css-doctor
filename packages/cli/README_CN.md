@@ -1,21 +1,21 @@
 <div align="center">
 
-# @zealamic/css-doctor-cli
+# @zealakit/css-doctor-cli
 
 **使用原生 css-doctor 引擎的命令行 CSS 诊断工具。**
 
-[English](https://github.com/zealamic/css-doctor/blob/main/packages/cli/README.md) | [Tiếng Việt](https://github.com/zealamic/css-doctor/blob/main/packages/cli/README_VI.md) | [简体中文](https://github.com/zealamic/css-doctor/blob/main/packages/cli/README_CN.md)
+[English](https://github.com/zealakit/css-doctor/blob/main/packages/cli/README.md) | [Tiếng Việt](https://github.com/zealakit/css-doctor/blob/main/packages/cli/README_VI.md) | [简体中文](https://github.com/zealakit/css-doctor/blob/main/packages/cli/README_CN.md)
 
 </div>
 
 ---
 
-![css doctor](https://github.com/zealamic/css-doctor/blob/main/assets/images/css-doctor.jpg)
+![css doctor](https://github.com/zealakit/css-doctor/blob/main/assets/images/css-doctor.jpg)
 
 ## 安装
 
 ```bash
-pnpm add -D @zealamic/css-doctor-cli
+pnpm add -D @zealakit/css-doctor-cli
 ```
 
 ## 使用
@@ -39,4 +39,4 @@ pnpm exec css-doctor check "src/**/*.css" --threshold 500
 
 ## 完整文档
 
-项目 README：[English](https://github.com/zealamic/css-doctor/blob/main/README.md) | [Tiếng Việt](https://github.com/zealamic/css-doctor/blob/main/README_VI.md) | [简体中文](https://github.com/zealamic/css-doctor/blob/main/README_CN.md)
+项目 README：[English](https://github.com/zealakit/css-doctor/blob/main/README.md) | [Tiếng Việt](https://github.com/zealakit/css-doctor/blob/main/README_VI.md) | [简体中文](https://github.com/zealakit/css-doctor/blob/main/README_CN.md)

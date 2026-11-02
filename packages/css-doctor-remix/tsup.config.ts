@@ -10,5 +10,5 @@ export default defineConfig({
   platform: "node",
   splitting: false,
   outDir: "dist",
-  external: ["@zealamic/css-doctor-binding"],
+  external: ["@zealakit/css-doctor-binding"],
 });

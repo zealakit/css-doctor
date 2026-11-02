@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-import { withCssDoctor } from "@zealamic/css-doctor-next";
+import { withCssDoctor } from "@zealakit/css-doctor-next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,

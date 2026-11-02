@@ -8,13 +8,13 @@
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![Rust](https://img.shields.io/badge/rust-stable-b7410e?logo=rust&logoColor=white)](https://www.rust-lang.org)
 
-[English](https://github.com/zealamic/css-doctor/blob/main/README.md) | [Tiếng Việt](https://github.com/zealamic/css-doctor/blob/main/README_VI.md) | [简体中文](https://github.com/zealamic/css-doctor/blob/main/README_CN.md)
+[English](https://github.com/zealakit/css-doctor/blob/main/README.md) | [Tiếng Việt](https://github.com/zealakit/css-doctor/blob/main/README_VI.md) | [简体中文](https://github.com/zealakit/css-doctor/blob/main/README_CN.md)
 
 </div>
 
 ---
 
-![css doctor](https://github.com/zealamic/css-doctor/blob/main/assets/images/css-doctor.jpg)
+![css doctor](https://github.com/zealakit/css-doctor/blob/main/assets/images/css-doctor.jpg)
 
 ## 概述
 
@@ -54,7 +54,7 @@ CLI 可报告：
 
 ### 跨平台原生二进制
 
-`@zealamic/css-doctor-binding` 自动解析预构建 NAPI 二进制：
+`@zealakit/css-doctor-binding` 自动解析预构建 NAPI 二进制：
 
 | 平台 | 架构 | Target |
 | --- | --- | --- |
@@ -78,16 +78,16 @@ CSS Modules、Vue scoped、Svelte scoped、Astro scoped 的安全处理。
 ### 直接运行 CLI
 
 ```bash
-npx @zealamic/css-doctor-cli check "src/**/*.css"
+npx @zealakit/css-doctor-cli check "src/**/*.css"
 ```
 
 ### 安装 CLI
 
 ```bash
-pnpm add -D @zealamic/css-doctor-cli
+pnpm add -D @zealakit/css-doctor-cli
 
 # 或
-npm install -D @zealamic/css-doctor-cli
+npm install -D @zealakit/css-doctor-cli
 ```
 
 ### 常用命令
@@ -127,13 +127,13 @@ patterns src/**/*.css
 
 | Framework / tool | Package | 安装 |
 | --- | --- | --- |
-| Vite、React、Vue、Svelte、TanStack | [`@zealamic/css-doctor-vite`](https://www.npmjs.com/package/@zealamic/css-doctor-vite) | `pnpm add -D @zealamic/css-doctor-vite` |
-| Next.js App/Pages Router | [`@zealamic/css-doctor-next`](https://www.npmjs.com/package/@zealamic/css-doctor-next) | `pnpm add -D @zealamic/css-doctor-next` |
-| Nuxt 4 | [`@zealamic/css-doctor-nuxt`](https://www.npmjs.com/package/@zealamic/css-doctor-nuxt) | `pnpm add -D @zealamic/css-doctor-nuxt` |
-| Remix 3 | [`@zealamic/css-doctor-remix`](https://www.npmjs.com/package/@zealamic/css-doctor-remix) | `pnpm add @zealamic/css-doctor-remix` |
-| Rsbuild / Rspack | [`@zealamic/css-doctor-rsbuild`](https://www.npmjs.com/package/@zealamic/css-doctor-rsbuild) | `pnpm add -D @zealamic/css-doctor-rsbuild` |
-| CLI | [`@zealamic/css-doctor-cli`](https://www.npmjs.com/package/@zealamic/css-doctor-cli) | `pnpm add -D @zealamic/css-doctor-cli` |
-| Native binding | [`@zealamic/css-doctor-binding`](https://www.npmjs.com/package/@zealamic/css-doctor-binding) | 通过依赖自动安装 |
+| Vite、React、Vue、Svelte、TanStack | [`@zealakit/css-doctor-vite`](https://www.npmjs.com/package/@zealakit/css-doctor-vite) | `pnpm add -D @zealakit/css-doctor-vite` |
+| Next.js App/Pages Router | [`@zealakit/css-doctor-next`](https://www.npmjs.com/package/@zealakit/css-doctor-next) | `pnpm add -D @zealakit/css-doctor-next` |
+| Nuxt 4 | [`@zealakit/css-doctor-nuxt`](https://www.npmjs.com/package/@zealakit/css-doctor-nuxt) | `pnpm add -D @zealakit/css-doctor-nuxt` |
+| Remix 3 | [`@zealakit/css-doctor-remix`](https://www.npmjs.com/package/@zealakit/css-doctor-remix) | `pnpm add @zealakit/css-doctor-remix` |
+| Rsbuild / Rspack | [`@zealakit/css-doctor-rsbuild`](https://www.npmjs.com/package/@zealakit/css-doctor-rsbuild) | `pnpm add -D @zealakit/css-doctor-rsbuild` |
+| CLI | [`@zealakit/css-doctor-cli`](https://www.npmjs.com/package/@zealakit/css-doctor-cli) | `pnpm add -D @zealakit/css-doctor-cli` |
+| Native binding | [`@zealakit/css-doctor-binding`](https://www.npmjs.com/package/@zealakit/css-doctor-binding) | 通过依赖自动安装 |
 
 每个 package 目录都包含英文、越南文和简体中文 README。根目录翻译仍可访问：
 [English](./README.md) 与 [Tiếng Việt](./README_VI.md)。
@@ -143,7 +143,7 @@ patterns src/**/*.css
 ```ts
 // vite.config.ts
 import { defineConfig } from "vite";
-import { cssDoctor } from "@zealamic/css-doctor-vite";
+import { cssDoctor } from "@zealakit/css-doctor-vite";
 
 export default defineConfig({
   plugins: [
@@ -169,7 +169,7 @@ export default defineConfig({
 
 ```js
 // next.config.mjs
-import { withCssDoctor } from "@zealamic/css-doctor-next";
+import { withCssDoctor } from "@zealakit/css-doctor-next";
 
 export default withCssDoctor(
   {

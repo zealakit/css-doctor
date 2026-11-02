@@ -73,7 +73,7 @@ the fixture contract.
 
 ## Rule 4: package names and imports
 
-- Published packages: `@zealamic/css-doctor-*`.
+- Published packages: `@zealakit/css-doctor-*`.
 - Local workspace dependencies: `"workspace:*"`.
 - Adapter packages expose ESM (and CJS where already established) through
   `package.json` `exports`.

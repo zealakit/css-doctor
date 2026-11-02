@@ -1,28 +1,28 @@
 <div align="center">
 
-# @zealamic/css-doctor-remix
+# @zealakit/css-doctor-remix
 
 **Remix 3 asset-server middleware for runtime CSS optimization.**
 
-[English](https://github.com/zealamic/css-doctor/blob/main/packages/css-doctor-remix/README.md) | [Tiếng Việt](https://github.com/zealamic/css-doctor/blob/main/packages/css-doctor-remix/README_VI.md) | [简体中文](https://github.com/zealamic/css-doctor/blob/main/packages/css-doctor-remix/README_CN.md)
+[English](https://github.com/zealakit/css-doctor/blob/main/packages/css-doctor-remix/README.md) | [Tiếng Việt](https://github.com/zealakit/css-doctor/blob/main/packages/css-doctor-remix/README_VI.md) | [简体中文](https://github.com/zealakit/css-doctor/blob/main/packages/css-doctor-remix/README_CN.md)
 
 </div>
 
 ---
 
-![css doctor](https://github.com/zealamic/css-doctor/blob/main/assets/images/css-doctor.jpg)
+![css doctor](https://github.com/zealakit/css-doctor/blob/main/assets/images/css-doctor.jpg)
 
 ## Installation
 
 ```bash
-pnpm add @zealamic/css-doctor-remix
+pnpm add @zealakit/css-doctor-remix
 ```
 
 ## Usage
 
 ```ts
 import { createAssetServer } from "remix/assets";
-import { withCssDoctorAssets } from "@zealamic/css-doctor-remix";
+import { withCssDoctorAssets } from "@zealakit/css-doctor-remix";
 
 const baseAssets = createAssetServer({
   basePath: "/assets",
@@ -61,4 +61,4 @@ export const assets = withCssDoctorAssets(baseAssets, {
 
 ## Full documentation
 
-Project README: [English](https://github.com/zealamic/css-doctor/blob/main/README.md) | [Tiếng Việt](https://github.com/zealamic/css-doctor/blob/main/README_VI.md) | [简体中文](https://github.com/zealamic/css-doctor/blob/main/README_CN.md)
+Project README: [English](https://github.com/zealakit/css-doctor/blob/main/README.md) | [Tiếng Việt](https://github.com/zealakit/css-doctor/blob/main/README_VI.md) | [简体中文](https://github.com/zealakit/css-doctor/blob/main/README_CN.md)

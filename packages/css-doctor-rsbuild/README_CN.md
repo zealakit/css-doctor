@@ -1,21 +1,21 @@
 <div align="center">
 
-# @zealamic/css-doctor-rsbuild
+# @zealakit/css-doctor-rsbuild
 
 **用于页面覆盖率与体积预算 CSS 分割的 Rsbuild/Rspack 集成。**
 
-[English](https://github.com/zealamic/css-doctor/blob/main/packages/css-doctor-rsbuild/README.md) | [Tiếng Việt](https://github.com/zealamic/css-doctor/blob/main/packages/css-doctor-rsbuild/README_VI.md) | [简体中文](https://github.com/zealamic/css-doctor/blob/main/packages/css-doctor-rsbuild/README_CN.md)
+[English](https://github.com/zealakit/css-doctor/blob/main/packages/css-doctor-rsbuild/README.md) | [Tiếng Việt](https://github.com/zealakit/css-doctor/blob/main/packages/css-doctor-rsbuild/README_VI.md) | [简体中文](https://github.com/zealakit/css-doctor/blob/main/packages/css-doctor-rsbuild/README_CN.md)
 
 </div>
 
 ---
 
-![css doctor](https://github.com/zealamic/css-doctor/blob/main/assets/images/css-doctor.jpg)
+![css doctor](https://github.com/zealakit/css-doctor/blob/main/assets/images/css-doctor.jpg)
 
 ## 安装
 
 ```bash
-pnpm add -D @zealamic/css-doctor-rsbuild
+pnpm add -D @zealakit/css-doctor-rsbuild
 ```
 
 ## 使用
@@ -23,7 +23,7 @@ pnpm add -D @zealamic/css-doctor-rsbuild
 ```ts
 import { defineConfig } from "@rsbuild/core";
 import { pluginReact } from "@rsbuild/plugin-react";
-import { pluginCssDoctor } from "@zealamic/css-doctor-rsbuild";
+import { pluginCssDoctor } from "@zealakit/css-doctor-rsbuild";
 
 export default defineConfig({
   plugins: [
@@ -59,4 +59,4 @@ export default defineConfig({
 
 ## 完整文档
 
-项目 README：[English](https://github.com/zealamic/css-doctor/blob/main/README.md) | [Tiếng Việt](https://github.com/zealamic/css-doctor/blob/main/README_VI.md) | [简体中文](https://github.com/zealamic/css-doctor/blob/main/README_CN.md)
+项目 README：[English](https://github.com/zealakit/css-doctor/blob/main/README.md) | [Tiếng Việt](https://github.com/zealakit/css-doctor/blob/main/README_VI.md) | [简体中文](https://github.com/zealakit/css-doctor/blob/main/README_CN.md)

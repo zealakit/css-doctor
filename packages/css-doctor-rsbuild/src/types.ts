@@ -1,4 +1,4 @@
-import type { JsSelectorStat } from "@zealamic/css-doctor-binding";
+import type { JsSelectorStat } from "@zealakit/css-doctor-binding";
 
 /** Tier 1: semantic page-coverage splitting. */
 export type PageCoverageOptions = {

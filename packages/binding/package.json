@@ -1,13 +1,14 @@
 {
-  "name": "@zealamic/css-doctor-binding",
-  "version": "1.0.1",
+  "name": "@zealakit/css-doctor-binding",
+  "version": "1.0.0",
   "description": "Native Node.js bindings for the css-doctor CSS analysis engine",
+  "author": "nqhed - Huy Edward Nguyen",
   "license": "MIT",
   "main": "index.js",
   "types": "index.d.ts",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/zealamic/css-doctor.git",
+    "url": "git+https://github.com/zealakit/css-doctor.git",
     "directory": "packages/binding"
   },
   "files": [
@@ -47,14 +48,14 @@
     "access": "public"
   },
   "optionalDependencies": {
-    "@zealamic/css-doctor-binding-darwin-arm64": "workspace:*",
-    "@zealamic/css-doctor-binding-darwin-x64": "workspace:*",
-    "@zealamic/css-doctor-binding-linux-x64-gnu": "workspace:*",
-    "@zealamic/css-doctor-binding-linux-x64-musl": "workspace:*",
-    "@zealamic/css-doctor-binding-win32-x64-msvc": "workspace:*"
+    "@zealakit/css-doctor-binding-darwin-arm64": "workspace:*",
+    "@zealakit/css-doctor-binding-darwin-x64": "workspace:*",
+    "@zealakit/css-doctor-binding-linux-x64-gnu": "workspace:*",
+    "@zealakit/css-doctor-binding-linux-x64-musl": "workspace:*",
+    "@zealakit/css-doctor-binding-win32-x64-msvc": "workspace:*"
   },
   "bugs": {
-    "url": "https://github.com/zealamic/css-doctor/issues"
+    "url": "https://github.com/zealakit/css-doctor/issues"
   },
-  "homepage": "https://github.com/zealamic/css-doctor#readme"
+  "homepage": "https://github.com/zealakit/css-doctor#readme"
 }

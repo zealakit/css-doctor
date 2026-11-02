@@ -1,8 +1,9 @@
 {
-  "name": "@zealamic/css-doctor-rsbuild",
-  "version": "1.0.1",
-  "type": "module",
+  "name": "@zealakit/css-doctor-rsbuild",
+  "version": "1.0.0",
   "description": "Rsbuild/Rspack integration for css-doctor page-coverage and size-budget CSS splitting",
+  "author": "nqhed - Huy Edward Nguyen",
+  "type": "module",
   "license": "MIT",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -29,7 +30,7 @@
     "check": "biome check src"
   },
   "dependencies": {
-    "@zealamic/css-doctor-binding": "workspace:*",
+    "@zealakit/css-doctor-binding": "workspace:*",
     "picocolors": "^1.1.1"
   },
   "peerDependencies": {
@@ -47,11 +48,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/zealamic/css-doctor.git",
+    "url": "git+https://github.com/zealakit/css-doctor.git",
     "directory": "packages/css-doctor-rsbuild"
   },
   "bugs": {
-    "url": "https://github.com/zealamic/css-doctor/issues"
+    "url": "https://github.com/zealakit/css-doctor/issues"
   },
-  "homepage": "https://github.com/zealamic/css-doctor#readme"
+  "homepage": "https://github.com/zealakit/css-doctor#readme"
 }

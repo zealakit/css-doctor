@@ -46,7 +46,7 @@ Turborepo.
 3. Public API changes must be propagated through:
    `crates/core` → `packages/binding` → consumers (CLI/Vite/Next) → tests/docs.
 4. Build the native binding before running TypeScript integration tests:
-   `pnpm --filter @zealamic/css-doctor-binding build`.
+   `pnpm --filter @zealakit/css-doctor-binding build`.
 5. NAPI-RS 2.x does not support `f32`. Use `f64` at the JS boundary and cast
    explicitly to/from `f32` in Rust.
 6. Do not commit generated lockfile noise. `Cargo.lock` and `pnpm-lock.yaml`
@@ -91,10 +91,10 @@ cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
 
 # Binding-focused verification
-pnpm --filter @zealamic/css-doctor-binding test
+pnpm --filter @zealakit/css-doctor-binding test
 
 # Real Next.js App Router build
-pnpm --filter @zealamic/css-doctor-next test:next
+pnpm --filter @zealakit/css-doctor-next test:next
 
 # Inspect task order/inputs without running
 pnpm exec turbo build --dry=json

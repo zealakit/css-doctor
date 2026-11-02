@@ -1,4 +1,4 @@
-//! Core analysis engine for [`css-doctor`](https://github.com/zealamic/css-doctor).
+//! Core analysis engine for [`css-doctor`](https://github.com/zealakit/css-doctor).
 //!
 //! `css_doctor_core` parses CSS with [`lightningcss`], walks the resulting AST
 //! with a visitor, and exposes every selector in a serializable form. The

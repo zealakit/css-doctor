@@ -1,8 +1,8 @@
 {
-  "name": "@zealamic/css-doctor-workspace",
-  "version": "1.0.1",
+  "name": "@zealakit/css-doctor-workspace",
+  "version": "1.0.0",
   "description": "Smart CSS diagnostics, dead code elimination, and intelligent chunk splitting tool.",
-  "author": "Zealamic (nqhed - Huy Edward Nguyen)",
+  "author": "nqhed - Huy Edward Nguyen",
   "private": true,
   "packageManager": "pnpm@9.0.0",
   "engines": {
@@ -37,10 +37,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/zealamic/css-doctor.git"
+    "url": "git+https://github.com/zealakit/css-doctor.git"
   },
   "bugs": {
-    "url": "https://github.com/zealamic/css-doctor/issues"
+    "url": "https://github.com/zealakit/css-doctor/issues"
   },
-  "homepage": "https://github.com/zealamic/css-doctor#readme"
+  "homepage": "https://github.com/zealakit/css-doctor#readme"
 }

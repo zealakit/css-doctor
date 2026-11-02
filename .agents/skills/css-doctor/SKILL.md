@@ -1,11 +1,11 @@
 ---
 name: css-doctor
-description: Canonical operating guide for @zealamic/css-doctor. Use for the Rust/LightningCSS engine, NAPI-RS binding, Vite/Next/Rsbuild/Nuxt adapters, Remix 3 runtime middleware, examples, CSS splitting, variable isolation, and dead-code removal.
+description: Canonical operating guide for @zealakit/css-doctor. Use for the Rust/LightningCSS engine, NAPI-RS binding, Vite/Next/Rsbuild/Nuxt adapters, Remix 3 runtime middleware, examples, CSS splitting, variable isolation, and dead-code removal.
 ---
 
 # css-doctor agent guide
 
-`@zealamic/css-doctor` is a Rust-powered CSS optimization and splitting engine.
+`@zealakit/css-doctor` is a Rust-powered CSS optimization and splitting engine.
 It parses CSS with LightningCSS, builds a selector/class usage matrix, removes
 unused selectors, splits CSS by page coverage and byte budget, isolates CSS
 variables, and optionally minifies the result.
@@ -46,11 +46,11 @@ must never break dynamic class names, CSS Modules, or framework-scoped styles.
 
 | Ecosystem | Package | Integration point |
 | --- | --- | --- |
-| Vite / Vue / Svelte / React / TanStack | `@zealamic/css-doctor-vite` | Rollup/Vite `generateBundle` |
-| Astro | `@zealamic/css-doctor-vite` | Astro Vite integration + `astro:build:done` link injection |
-| Nuxt 4 | `@zealamic/css-doctor-nuxt` | Nuxt `vite:extendConfig` client production hook |
-| Next.js | `@zealamic/css-doctor-next` | Webpack `processAssets` |
-| Rsbuild / Rspack | `@zealamic/css-doctor-rsbuild` | Rspack plugin/compiler hook |
+| Vite / Vue / Svelte / React / TanStack | `@zealakit/css-doctor-vite` | Rollup/Vite `generateBundle` |
+| Astro | `@zealakit/css-doctor-vite` | Astro Vite integration + `astro:build:done` link injection |
+| Nuxt 4 | `@zealakit/css-doctor-nuxt` | Nuxt `vite:extendConfig` client production hook |
+| Next.js | `@zealakit/css-doctor-next` | Webpack `processAssets` |
+| Rsbuild / Rspack | `@zealakit/css-doctor-rsbuild` | Rspack plugin/compiler hook |
 
 These adapters support, where the host exposes the required graph:
 
@@ -70,7 +70,7 @@ HTML is produced after or outside the Vite HTML bundle.
 
 | Ecosystem | Package | Integration point |
 | --- | --- | --- |
-| Remix 3 | `@zealamic/css-doctor-remix` | `withCssDoctorAssets(createAssetServer(...))` |
+| Remix 3 | `@zealakit/css-doctor-remix` | `withCssDoctorAssets(createAssetServer(...))` |
 
 Remix 3 runs directly on Node and serves assets through `remix/assets`.
 `withCssDoctorAssets` wraps the asset server's `fetch` and optimizes successful
@@ -150,7 +150,7 @@ examples/<framework>-<style>/
 
 Rules:
 
-- `"@zealamic/css-doctor-<adapter>": "workspace:*"`.
+- `"@zealakit/css-doctor-<adapter>": "workspace:*"`.
 - Add `format`, `format:check`, and `check` scripts when the example has
   TypeScript/JSON files.
 - Keep Tailwind v4 directives in a pure `.css` file.
@@ -173,7 +173,7 @@ pnpm format
 pnpm format:check
 
 # Native binding before TS integration tests
-pnpm --filter @zealamic/css-doctor-binding build
+pnpm --filter @zealakit/css-doctor-binding build
 
 # Rust
 cargo fmt --all -- --check

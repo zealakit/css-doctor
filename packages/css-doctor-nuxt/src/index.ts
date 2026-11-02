@@ -1,5 +1,5 @@
 import { defineNuxtModule } from "@nuxt/kit";
-import { cssDoctor } from "@zealamic/css-doctor-vite";
+import { cssDoctor } from "@zealakit/css-doctor-vite";
 import type { NuxtModule } from "@nuxt/schema";
 
 import type { ModuleOptions } from "./types";
@@ -9,7 +9,7 @@ const VITE_PLUGIN_NAME = "vite-plugin-css-doctor";
 const cssDoctorNuxtModule: NuxtModule<ModuleOptions> =
   defineNuxtModule<ModuleOptions>({
     meta: {
-      name: "@zealamic/css-doctor-nuxt",
+      name: "@zealakit/css-doctor-nuxt",
       configKey: "cssDoctor",
       compatibility: {
         nuxt: ">=3.0.0",

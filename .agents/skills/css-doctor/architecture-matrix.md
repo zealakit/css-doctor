@@ -4,12 +4,12 @@
 
 | Ecosystem | Adapter package | Bundler / hook | pageCoverage | sizeBudget | isolateVariables | Delivery model |
 | --- | --- | --- | --- | --- | --- | --- |
-| Vite (Vue, Svelte, React, TanStack) | `@zealamic/css-doctor-vite` | Rollup/Vite `generateBundle` | Yes | Yes | Yes | Common links + page JS CSS loader |
-| Astro | `@zealamic/css-doctor-vite` | Astro Vite integration + `astro:build:done` | Yes | Yes | Yes | Integration injects page/common links into HTML |
-| Nuxt 4 | `@zealamic/css-doctor-nuxt` | Nuxt `vite:extendConfig` (client production) | Yes | Yes | Yes | Common chunks imported by entry; page loaders |
-| Next.js | `@zealamic/css-doctor-next` | Webpack `processAssets` | Yes | Yes | Yes | Existing CSS asset unchanged; common `@import`; page loader |
-| Rsbuild / Rspack | `@zealamic/css-doctor-rsbuild` | Rspack plugin/compiler | Yes | Yes | Yes | Plugin emits/updates CSS assets |
-| Remix 3 | `@zealamic/css-doctor-remix` | Runtime `AssetServer.fetch` wrapper | No | Yes | Yes | Optimized single Response + LRU cache |
+| Vite (Vue, Svelte, React, TanStack) | `@zealakit/css-doctor-vite` | Rollup/Vite `generateBundle` | Yes | Yes | Yes | Common links + page JS CSS loader |
+| Astro | `@zealakit/css-doctor-vite` | Astro Vite integration + `astro:build:done` | Yes | Yes | Yes | Integration injects page/common links into HTML |
+| Nuxt 4 | `@zealakit/css-doctor-nuxt` | Nuxt `vite:extendConfig` (client production) | Yes | Yes | Yes | Common chunks imported by entry; page loaders |
+| Next.js | `@zealakit/css-doctor-next` | Webpack `processAssets` | Yes | Yes | Yes | Existing CSS asset unchanged; common `@import`; page loader |
+| Rsbuild / Rspack | `@zealakit/css-doctor-rsbuild` | Rspack plugin/compiler | Yes | Yes | Yes | Plugin emits/updates CSS assets |
+| Remix 3 | `@zealakit/css-doctor-remix` | Runtime `AssetServer.fetch` wrapper | No | Yes | Yes | Optimized single Response + LRU cache |
 
 ## Why Remix has no pageCoverage
 
@@ -107,8 +107,8 @@ version.
 | --- | --- |
 | Core AST/splitter | `cargo test -p css_doctor_core`, clippy, fmt |
 | NAPI surface | build binding, package tests, generated `.d.ts` inspection |
-| Vite adapter | `pnpm --filter @zealamic/css-doctor-vite test`, example build/preview |
-| Next adapter | `pnpm --filter @zealamic/css-doctor-next test`, `test:next` |
+| Vite adapter | `pnpm --filter @zealakit/css-doctor-vite test`, example build/preview |
+| Next adapter | `pnpm --filter @zealakit/css-doctor-next test`, `test:next` |
 | Nuxt module | module typecheck/build, Nuxt example build/preview |
 | Remix middleware | package typecheck/build, mock asset-server test, preview |
 | Rsbuild adapter | package typecheck/build, Rsbuild example build |

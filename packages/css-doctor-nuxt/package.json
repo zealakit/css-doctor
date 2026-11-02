@@ -1,8 +1,9 @@
 {
-  "name": "@zealamic/css-doctor-nuxt",
-  "version": "1.0.1",
-  "type": "module",
+  "name": "@zealakit/css-doctor-nuxt",
+  "version": "1.0.0",
   "description": "Official Nuxt 4 module for css-doctor",
+  "author": "nqhed - Huy Edward Nguyen",
+  "type": "module",
   "license": "MIT",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -34,7 +35,7 @@
     "prepare": "pnpm build"
   },
   "dependencies": {
-    "@zealamic/css-doctor-vite": "workspace:*"
+    "@zealakit/css-doctor-vite": "workspace:*"
   },
   "peerDependencies": {
     "@nuxt/kit": ">=3.0.0",
@@ -53,11 +54,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/zealamic/css-doctor.git",
+    "url": "git+https://github.com/zealakit/css-doctor.git",
     "directory": "packages/css-doctor-nuxt"
   },
   "bugs": {
-    "url": "https://github.com/zealamic/css-doctor/issues"
+    "url": "https://github.com/zealakit/css-doctor/issues"
   },
-  "homepage": "https://github.com/zealamic/css-doctor#readme"
+  "homepage": "https://github.com/zealakit/css-doctor#readme"
 }

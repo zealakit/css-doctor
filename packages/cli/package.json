@@ -1,8 +1,9 @@
 {
-  "name": "@zealamic/css-doctor-cli",
-  "version": "1.0.1",
-  "type": "module",
+  "name": "@zealakit/css-doctor-cli",
+  "version": "1.0.0",
   "description": "Command line interface for css-doctor: CSS diagnostics from the terminal",
+  "author": "nqhed - Huy Edward Nguyen",
+  "type": "module",
   "license": "MIT",
   "bin": {
     "css-doctor": "./dist/index.js"
@@ -25,7 +26,7 @@
     "check": "biome check src test/cli.test.ts"
   },
   "dependencies": {
-    "@zealamic/css-doctor-binding": "workspace:*"
+    "@zealakit/css-doctor-binding": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
@@ -44,11 +45,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/zealamic/css-doctor.git",
+    "url": "git+https://github.com/zealakit/css-doctor.git",
     "directory": "packages/cli"
   },
   "bugs": {
-    "url": "https://github.com/zealamic/css-doctor/issues"
+    "url": "https://github.com/zealakit/css-doctor/issues"
   },
-  "homepage": "https://github.com/zealamic/css-doctor#readme"
+  "homepage": "https://github.com/zealakit/css-doctor#readme"
 }

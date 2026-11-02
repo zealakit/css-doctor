@@ -23,7 +23,7 @@
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@zealamic/css-doctor-rsbuild": "workspace:*",
+    "@zealakit/css-doctor-rsbuild": "workspace:*",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3"
   }

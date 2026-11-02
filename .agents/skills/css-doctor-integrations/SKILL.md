@@ -93,7 +93,7 @@ yet** — state this limitation explicitly in docs and final answers.
 - Verify:
 
   ```bash
-  pnpm --filter @zealamic/css-doctor-cli test
+  pnpm --filter @zealakit/css-doctor-cli test
   ./packages/cli/dist/index.js check "packages/cli/test/fixtures/*.css" --json
   ```
 
@@ -117,7 +117,7 @@ yet** — state this limitation explicitly in docs and final answers.
 - Verify:
 
   ```bash
-  pnpm --filter @zealamic/css-doctor-vite test
+  pnpm --filter @zealakit/css-doctor-vite test
   ```
 
 ## Next.js integration (`packages/css-doctor-next`)
@@ -146,8 +146,8 @@ yet** — state this limitation explicitly in docs and final answers.
 - Verify:
 
   ```bash
-  pnpm --filter @zealamic/css-doctor-next test
-  pnpm --filter @zealamic/css-doctor-next test:next
+  pnpm --filter @zealakit/css-doctor-next test
+  pnpm --filter @zealakit/css-doctor-next test:next
   ```
 
 ## Known limitations

@@ -1,7 +1,7 @@
 import type {
   JsCssAnalysisResult,
   JsSelectorStat,
-} from "@zealamic/css-doctor-binding";
+} from "@zealakit/css-doctor-binding";
 
 /** A single include/exclude filter entry. */
 export type CssDoctorFilterPattern = string | RegExp;

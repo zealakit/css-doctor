@@ -64,7 +64,7 @@ jobs:
       - name: Install Node dependencies
         run: >-
           pnpm install --frozen-lockfile --prefer-offline --ignore-scripts
-          --filter "@zealamic/*..." --filter "."
+          --filter "@zealakit/*..." --filter "."
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -111,7 +111,7 @@ jobs:
         run: |
           set -euo pipefail
           zig version
-          pnpm --filter @zealamic/css-doctor-binding build \
+          pnpm --filter @zealakit/css-doctor-binding build \
             --target "${{ matrix.settings.target }}" \
             --zig
 
@@ -120,7 +120,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          pnpm --filter @zealamic/css-doctor-binding build \
+          pnpm --filter @zealakit/css-doctor-binding build \
             --target "${{ matrix.settings.target }}"
 
       - name: Verify native output
@@ -162,7 +162,7 @@ jobs:
       - name: Install Node dependencies
         run: >-
           pnpm install --frozen-lockfile --prefer-offline --ignore-scripts
-          --filter "@zealamic/*..." --filter "."
+          --filter "@zealakit/*..." --filter "."
 
       - name: Download all native binaries
         uses: actions/download-artifact@v4
@@ -241,7 +241,7 @@ jobs:
 
             cat > "${package_dir}/package.json" <<JSON
           {
-            "name": "@zealamic/css-doctor-binding-${platform}",
+            "name": "@zealakit/css-doctor-binding-${platform}",
             "version": "${version}",
             "description": "Prebuilt css-doctor native binding for ${platform}",
             "license": "MIT",

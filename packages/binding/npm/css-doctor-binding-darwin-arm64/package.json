@@ -1,7 +1,8 @@
 {
-  "name": "@zealamic/css-doctor-binding-darwin-arm64",
-  "version": "1.0.1",
+  "name": "@zealakit/css-doctor-binding-darwin-arm64",
+  "version": "1.0.0",
   "description": "Prebuilt css-doctor native binding for darwin-arm64",
+  "author": "nqhed - Huy Edward Nguyen",
   "license": "MIT",
   "main": "css-doctor-binding.darwin-arm64.node",
   "files": [
@@ -18,11 +19,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/zealamic/css-doctor.git",
+    "url": "git+https://github.com/zealakit/css-doctor.git",
     "directory": "packages/binding/npm/css-doctor-binding-darwin-arm64"
   },
   "bugs": {
-    "url": "https://github.com/zealamic/css-doctor/issues"
+    "url": "https://github.com/zealakit/css-doctor/issues"
   },
-  "homepage": "https://github.com/zealamic/css-doctor#readme"
+  "homepage": "https://github.com/zealakit/css-doctor#readme"
 }

@@ -7,7 +7,7 @@ import { InvalidArgumentError, type Command } from "commander";
 import type {
   JsCssAnalysisResult,
   JsSelectorInfo,
-} from "@zealamic/css-doctor-binding";
+} from "@zealakit/css-doctor-binding";
 
 import packageJson from "../../package.json";
 import { formatJsonReport } from "../formatters/json";
@@ -20,7 +20,7 @@ import {
   toDisplayPath,
 } from "../utils/file";
 
-type BindingModule = typeof import("@zealamic/css-doctor-binding");
+type BindingModule = typeof import("@zealakit/css-doctor-binding");
 type AnalyzeCssFn = (cssContent: string) => JsCssAnalysisResult;
 
 const require = createRequire(import.meta.url);
@@ -32,12 +32,12 @@ function loadBinding(): BindingModule {
   }
 
   try {
-    cachedBinding = require("@zealamic/css-doctor-binding") as BindingModule;
+    cachedBinding = require("@zealakit/css-doctor-binding") as BindingModule;
     return cachedBinding;
   } catch (error) {
     throw new Error(
-      "Unable to load @zealamic/css-doctor-binding. Build it first with " +
-        "`pnpm --filter @zealamic/css-doctor-binding build`.\n" +
+      "Unable to load @zealakit/css-doctor-binding. Build it first with " +
+        "`pnpm --filter @zealakit/css-doctor-binding build`.\n" +
         describeError(error),
     );
   }

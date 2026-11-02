@@ -3,11 +3,11 @@ import { readFile } from "node:fs/promises";
 import { posix } from "node:path";
 import { performance } from "node:perf_hooks";
 
-import { analyzeCss, optimizeCss } from "@zealamic/css-doctor-binding";
+import { analyzeCss, optimizeCss } from "@zealakit/css-doctor-binding";
 import type {
   JsChunkOutput,
   JsSelectorStat,
-} from "@zealamic/css-doctor-binding";
+} from "@zealakit/css-doctor-binding";
 import type { Compilation, Compiler } from "@rspack/core";
 
 import { printReport } from "./reporter";

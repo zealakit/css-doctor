@@ -16,7 +16,7 @@ const useNuxtSource =
   process.env.NODE_ENV !== "production" || !existsSync(nuxtDistEntry);
 const nuxtModule = useNuxtSource
   ? nuxtSourceEntry
-  : "@zealamic/css-doctor-nuxt";
+  : "@zealakit/css-doctor-nuxt";
 
 const stressSelectors = Array.from(
   { length: 140 },
@@ -31,8 +31,8 @@ export default defineNuxtConfig({
 
   alias: useNuxtSource
     ? {
-        "@zealamic/css-doctor-nuxt": nuxtSourceEntry,
-        "@zealamic/css-doctor-vite": viteSourceEntry,
+        "@zealakit/css-doctor-nuxt": nuxtSourceEntry,
+        "@zealakit/css-doctor-vite": viteSourceEntry,
       }
     : {},
 

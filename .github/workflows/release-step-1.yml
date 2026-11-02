@@ -66,7 +66,7 @@ jobs:
       - name: Install Node dependencies
         run: >-
           pnpm install --frozen-lockfile --prefer-offline --ignore-scripts
-          --filter "@zealamic/*..." --filter "."
+          --filter "@zealakit/*..." --filter "."
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -113,7 +113,7 @@ jobs:
         run: |
           set -euo pipefail
           zig version
-          pnpm --filter @zealamic/css-doctor-binding build \
+          pnpm --filter @zealakit/css-doctor-binding build \
             --target "${{ matrix.settings.target }}" \
             --zig
 
@@ -122,7 +122,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          pnpm --filter @zealamic/css-doctor-binding build \
+          pnpm --filter @zealakit/css-doctor-binding build \
             --target "${{ matrix.settings.target }}"
 
       - name: Verify native output
@@ -152,7 +152,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           registry-url: "https://registry.npmjs.org"
-          scope: "@zealamic"
+          scope: "@zealakit"
 
       - name: Download all native artifacts
         uses: actions/download-artifact@v4
@@ -233,7 +233,7 @@ jobs:
             }
 
             const manifest = {
-              name: `@zealamic/css-doctor-binding-${platform}`,
+              name: `@zealakit/css-doctor-binding-${platform}`,
               version: version,
               description: `Prebuilt css-doctor native binding for ${platform}`,
               license: "MIT",
@@ -258,7 +258,7 @@ jobs:
           mainManifest.publishConfig = mainManifest.publishConfig ?? {};
           mainManifest.publishConfig.access = "public";
           mainManifest.optionalDependencies = Object.fromEntries(
-            platforms.map((p) => [`@zealamic/css-doctor-binding-${p}`, version])
+            platforms.map((p) => [`@zealakit/css-doctor-binding-${p}`, version])
           );
           fs.writeFileSync(mainBindingPath, `${JSON.stringify(mainManifest, null, 2)}\n`);
           console.log(`Updated loader ${mainManifest.name} -> ${mainManifest.version}`);
@@ -279,7 +279,7 @@ jobs:
           )
           for platform in "${platforms[@]}"; do
             dir="packages/binding/npm/css-doctor-binding-${platform}"
-            pkg_name="@zealamic/css-doctor-binding-${platform}"
+            pkg_name="@zealakit/css-doctor-binding-${platform}"
 
             if npm view "${pkg_name}@${RELEASE_VERSION}" version >/dev/null 2>&1; then
               echo "⏩ ${pkg_name}@${RELEASE_VERSION} already exists on npm. Skipping publish."
@@ -295,7 +295,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
-          pkg_name="@zealamic/css-doctor-binding"
+          pkg_name="@zealakit/css-doctor-binding"
           if npm view "${pkg_name}@${RELEASE_VERSION}" version >/dev/null 2>&1; then
             echo "⏩ ${pkg_name}@${RELEASE_VERSION} already exists on npm. Skipping publish."
           else
