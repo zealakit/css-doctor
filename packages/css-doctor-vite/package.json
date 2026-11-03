@@ -1,8 +1,8 @@
 {
   "name": "@zealamic/css-doctor-vite",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "type": "module",
-  "description": "Vite plugin that analyzes emitted CSS assets with the css-doctor native engine",
+  "description": "[DEPRECATED -> @zealakit] Use @zealakit/css-doctor-vite instead. Vite plugin that analyzes emitted CSS assets with the css-doctor native engine",
   "license": "MIT",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",

@@ -10,6 +10,15 @@
 
 ---
 
+
+> **DEPRECATED：** `@zealamic/css-doctor-nuxt` 已迁移到 [`@zealakit/css-doctor-nuxt`](https://www.npmjs.com/package/@zealakit/css-doctor-nuxt)。
+>
+> 安装新包：`pnpm add -D @zealakit/css-doctor-nuxt`
+>
+> 当前文档：https://github.com/zealakit/css-doctor
+>
+> `@zealamic` 包因已有下载量无法安全删除，仍保留在 npm 上，但不再维护。
+
 ![css doctor](https://github.com/zealamic/css-doctor/blob/main/assets/images/css-doctor.jpg)
 
 ## 安装

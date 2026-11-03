@@ -1,7 +1,7 @@
 {
   "name": "@zealamic/css-doctor-binding-win32-x64-msvc",
-  "version": "1.0.1",
-  "description": "Prebuilt css-doctor native binding for win32-x64-msvc",
+  "version": "1.0.3",
+  "description": "[DEPRECATED -> @zealakit] Use @zealakit/css-doctor-binding-win32-x64-msvc instead. Prebuilt css-doctor native binding for win32-x64-msvc",
   "license": "MIT",
   "main": "css-doctor-binding.win32-x64-msvc.node",
   "files": [

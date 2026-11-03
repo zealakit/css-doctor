@@ -1,7 +1,7 @@
 {
   "name": "@zealamic/css-doctor-binding-linux-x64-gnu",
-  "version": "1.0.1",
-  "description": "Prebuilt css-doctor native binding for linux-x64-gnu",
+  "version": "1.0.3",
+  "description": "[DEPRECATED -> @zealakit] Use @zealakit/css-doctor-binding-linux-x64-gnu instead. Prebuilt css-doctor native binding for linux-x64-gnu",
   "license": "MIT",
   "main": "css-doctor-binding.linux-x64-gnu.node",
   "files": [

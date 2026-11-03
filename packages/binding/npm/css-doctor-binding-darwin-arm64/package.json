@@ -1,7 +1,7 @@
 {
   "name": "@zealamic/css-doctor-binding-darwin-arm64",
-  "version": "1.0.1",
-  "description": "Prebuilt css-doctor native binding for darwin-arm64",
+  "version": "1.0.3",
+  "description": "[DEPRECATED -> @zealakit] Use @zealakit/css-doctor-binding-darwin-arm64 instead. Prebuilt css-doctor native binding for darwin-arm64",
   "license": "MIT",
   "main": "css-doctor-binding.darwin-arm64.node",
   "files": [

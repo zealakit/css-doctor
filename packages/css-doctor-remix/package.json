@@ -1,8 +1,8 @@
 {
   "name": "@zealamic/css-doctor-remix",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "type": "module",
-  "description": "Remix 3 asset-server middleware for css-doctor CSS optimization",
+  "description": "[DEPRECATED -> @zealakit] Use @zealakit/css-doctor-remix instead. Remix 3 asset-server middleware for css-doctor CSS optimization",
   "license": "MIT",
   "main": "./dist/index.js",
   "module": "./dist/index.js",

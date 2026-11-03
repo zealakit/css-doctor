@@ -1,7 +1,7 @@
 {
   "name": "@zealamic/css-doctor-binding",
-  "version": "1.0.1",
-  "description": "Native Node.js bindings for the css-doctor CSS analysis engine",
+  "version": "1.0.3",
+  "description": "[DEPRECATED -> @zealakit] Use @zealakit/css-doctor-binding instead. Native Node.js bindings for the css-doctor CSS analysis engine",
   "license": "MIT",
   "main": "index.js",
   "types": "index.d.ts",

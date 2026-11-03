@@ -1,8 +1,8 @@
 {
   "name": "@zealamic/css-doctor-next",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "type": "module",
-  "description": "Next.js integration for css-doctor page-coverage CSS splitting",
+  "description": "[DEPRECATED -> @zealakit] Use @zealakit/css-doctor-next instead. Next.js integration for css-doctor page-coverage CSS splitting",
   "license": "MIT",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",

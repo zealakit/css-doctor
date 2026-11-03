@@ -10,6 +10,15 @@
 
 ---
 
+
+> **DEPRECATED:** `@zealamic/css-doctor-cli` đã chuyển sang [`@zealakit/css-doctor-cli`](https://www.npmjs.com/package/@zealakit/css-doctor-cli).
+>
+> Cài package mới: `pnpm add -D @zealakit/css-doctor-cli`
+>
+> Docs hiện hành: https://github.com/zealakit/css-doctor
+>
+> Các package `@zealamic` vẫn giữ trên npm vì đã có download và không thể xóa an toàn. Chúng không còn được duy trì.
+
 ![css doctor](https://github.com/zealamic/css-doctor/blob/main/assets/images/css-doctor.jpg)
 
 ## Cài đặt

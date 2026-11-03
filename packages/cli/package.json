@@ -1,8 +1,8 @@
 {
   "name": "@zealamic/css-doctor-cli",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "type": "module",
-  "description": "Command line interface for css-doctor: CSS diagnostics from the terminal",
+  "description": "[DEPRECATED -> @zealakit] Use @zealakit/css-doctor-cli instead. Command line interface for css-doctor: CSS diagnostics from the terminal",
   "license": "MIT",
   "bin": {
     "css-doctor": "./dist/index.js"

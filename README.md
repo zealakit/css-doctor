@@ -1,235 +1,85 @@
 <div align="center">
 
-# css-doctor
+# css-doctor (deprecated scope)
 
-**Native CSS diagnostics, intelligent splitting, and production-grade optimization for modern web applications.**
+> **DEPRECATED:** The `@zealamic/css-doctor*` packages have moved to
+> **`@zealakit/css-doctor*`**.
+>
+> New home: [github.com/zealakit/css-doctor](https://github.com/zealakit/css-doctor) ·
+> npm scope [`@zealakit`](https://www.npmjs.com/org/zealakit)
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](https://nodejs.org)
-[![Rust](https://img.shields.io/badge/rust-stable-b7410e?logo=rust&logoColor=white)](https://www.rust-lang.org)
-
-[English](https://github.com/zealamic/css-doctor/blob/main/README.md) | [Tiếng Việt](https://github.com/zealamic/css-doctor/blob/main/README_VI.md) | [简体中文](https://github.com/zealamic/css-doctor/blob/main/README_CN.md)
+[English](./README.md) | [Tiếng Việt](./README_VI.md) | [简体中文](./README_CN.md)
 
 </div>
 
 ---
 
-![css doctor](https://github.com/zealamic/css-doctor/blob/main/assets/images/css-doctor.jpg)
+## Why this repository / scope is deprecated
 
-## Overview
+The project was renamed from the `@zealamic` npm scope to **`@zealakit`**.
 
-`css-doctor` is a CSS analysis and optimization toolkit built on a native Rust
-core using the **LightningCSS AST** and exposed to Node.js through **NAPI-RS**.
+The old `@zealamic/css-doctor*` packages remain on npm because they already have
+downloads and **cannot be safely deleted/unpublished**. They are kept installable
+for existing lockfiles, but **no longer receive features or fixes**.
 
-It is designed for teams that need more than minification: detect problematic
-selectors, find dead CSS, understand page coverage, isolate variables, and split
-oversized stylesheets without breaking framework-scoped styles.
+Please migrate to the new packages.
 
-The project ships a zero-config CLI, a native binding, and first-class adapters
-for Vite, Next.js, Nuxt, Remix, and Rsbuild.
+## Package mapping
 
----
+| Deprecated (`@zealamic`) | Replacement (`@zealakit`) |
+| --- | --- |
+| `@zealamic/css-doctor-binding` | [`@zealakit/css-doctor-binding`](https://www.npmjs.com/package/@zealakit/css-doctor-binding) |
+| `@zealamic/css-doctor-binding-darwin-arm64` | `@zealakit/css-doctor-binding-darwin-arm64` |
+| `@zealamic/css-doctor-binding-darwin-x64` | `@zealakit/css-doctor-binding-darwin-x64` |
+| `@zealamic/css-doctor-binding-linux-x64-gnu` | `@zealakit/css-doctor-binding-linux-x64-gnu` |
+| `@zealamic/css-doctor-binding-linux-x64-musl` | `@zealakit/css-doctor-binding-linux-x64-musl` |
+| `@zealamic/css-doctor-binding-win32-x64-msvc` | `@zealakit/css-doctor-binding-win32-x64-msvc` |
+| `@zealamic/css-doctor-cli` | [`@zealakit/css-doctor-cli`](https://www.npmjs.com/package/@zealakit/css-doctor-cli) |
+| `@zealamic/css-doctor-vite` | [`@zealakit/css-doctor-vite`](https://www.npmjs.com/package/@zealakit/css-doctor-vite) |
+| `@zealamic/css-doctor-next` | [`@zealakit/css-doctor-next`](https://www.npmjs.com/package/@zealakit/css-doctor-next) |
+| `@zealamic/css-doctor-nuxt` | [`@zealakit/css-doctor-nuxt`](https://www.npmjs.com/package/@zealakit/css-doctor-nuxt) |
+| `@zealamic/css-doctor-remix` | [`@zealakit/css-doctor-remix`](https://www.npmjs.com/package/@zealakit/css-doctor-remix) |
+| `@zealamic/css-doctor-rsbuild` | [`@zealakit/css-doctor-rsbuild`](https://www.npmjs.com/package/@zealakit/css-doctor-rsbuild) |
 
-## Features
+## Migrate
 
-### Native Rust performance
-
-CSS parsing, selector extraction, diagnostics, and splitting run in the Rust
-core. The Node.js surface is a thin NAPI-RS bridge, so analysis stays fast even
-on large stylesheets.
-
-### Zero-config CLI
-
-Run `css-doctor` immediately with `npx`, or install it as a development
-dependency. The published CLI bundles its JavaScript dependencies; only the
-native binding remains a dynamic runtime require.
-
-### Comprehensive diagnostics
-
-The CLI reports:
-
-- syntax warnings;
-- empty or dead rules;
-- duplicate selectors;
-- oversized stylesheets and selector-count thresholds;
-- selector counts, rule counts, declarations, and analysis timing;
-- structured JSON output for CI pipelines.
-
-### Cross-platform native binaries
-
-`@zealamic/css-doctor-binding` resolves prebuilt NAPI binaries for:
-
-| Platform | Architecture  | Target           |
-| -------- | ------------- | ---------------- |
-| macOS    | Apple Silicon | `darwin-arm64`   |
-| macOS    | Intel         | `darwin-x64`     |
-| Linux    | x64 glibc     | `linux-x64-gnu`  |
-| Linux    | x64 musl      | `linux-x64-musl` |
-| Windows  | x64 MSVC      | `win32-x64-msvc` |
-
-No Rust toolchain is required on supported platforms.
-
-### Framework-aware CSS optimization
-
-The integration packages support page-coverage splitting, size budgets, CSS
-variable isolation, dead-code elimination, and safe handling of CSS Modules and
-framework-scoped styles.
-
----
-
-## Quick start
-
-### Run the CLI without installing
+Swap the scope in `package.json` / imports, then reinstall:
 
 ```bash
-npx @zealamic/css-doctor-cli check "src/**/*.css"
+# example: Vite adapter
+pnpm remove @zealamic/css-doctor-vite
+pnpm add -D @zealakit/css-doctor-vite
+
+# example: CLI
+pnpm remove @zealamic/css-doctor-cli
+pnpm add -D @zealakit/css-doctor-cli
 ```
 
-### Install the CLI
+Update imports the same way:
 
-```bash
-pnpm add -D @zealamic/css-doctor-cli
+```diff
+- import { cssDoctor } from "@zealamic/css-doctor-vite";
++ import { cssDoctor } from "@zealakit/css-doctor-vite";
 
-# or
-npm install -D @zealamic/css-doctor-cli
+- import { withCssDoctor } from "@zealamic/css-doctor-next";
++ import { withCssDoctor } from "@zealakit/css-doctor-next";
 ```
 
-### Common commands
+API and behavior are the same project — only the npm scope and repository home
+changed.
 
-```bash
-# Help and version
-css-doctor --help
-css-doctor --version
+## Documentation
 
-# Check a single file
-css-doctor check src/styles/app.css
+Use the active repository:
 
-# Check a quoted glob
-css-doctor check "src/**/*.css"
+- Docs & source: https://github.com/zealakit/css-doctor
+- Issues: https://github.com/zealakit/css-doctor/issues
 
-# Structured output for CI
-css-doctor check "src/**/*.css" --json
+## npm status
 
-# Warn when a file contains more than 500 selectors
-css-doctor check "src/**/*.css" --threshold 500
-```
-
-Example output:
-
-```text
-css-doctor v1.0.0 · check
-patterns src/**/*.css
-────────────────────────────────────────────────────────────
- SUCCESS  src/styles/app.css · 12.4 KB
-  selectors 184 · rules 132 · declarations 421
-  analysis 3.2 ms · read 0.8 ms · total 4.0 ms
-```
-
----
-
-## Framework integrations
-
-| Framework / tool                   | Package                                                                                      | Install                                    |
-| ---------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| Vite, React, Vue, Svelte, TanStack | [`@zealamic/css-doctor-vite`](https://www.npmjs.com/package/@zealamic/css-doctor-vite)       | `pnpm add -D @zealamic/css-doctor-vite`    |
-| Next.js App/Pages Router           | [`@zealamic/css-doctor-next`](https://www.npmjs.com/package/@zealamic/css-doctor-next)       | `pnpm add -D @zealamic/css-doctor-next`    |
-| Nuxt 4                             | [`@zealamic/css-doctor-nuxt`](https://www.npmjs.com/package/@zealamic/css-doctor-nuxt)       | `pnpm add -D @zealamic/css-doctor-nuxt`    |
-| Remix 3                            | [`@zealamic/css-doctor-remix`](https://www.npmjs.com/package/@zealamic/css-doctor-remix)     | `pnpm add @zealamic/css-doctor-remix`      |
-| Rsbuild / Rspack                   | [`@zealamic/css-doctor-rsbuild`](https://www.npmjs.com/package/@zealamic/css-doctor-rsbuild) | `pnpm add -D @zealamic/css-doctor-rsbuild` |
-| CLI                                | [`@zealamic/css-doctor-cli`](https://www.npmjs.com/package/@zealamic/css-doctor-cli)         | `pnpm add -D @zealamic/css-doctor-cli`     |
-| Native binding                     | [`@zealamic/css-doctor-binding`](https://www.npmjs.com/package/@zealamic/css-doctor-binding) | Installed transitively                     |
-
-Each package directory contains English, Vietnamese, and Simplified Chinese
-README files. The root translations remain available at
-[Tiếng Việt](./README_VI.md) and [简体中文](./README_CN.md).
-
-### Vite
-
-```ts
-// vite.config.ts
-import { defineConfig } from "vite";
-import { cssDoctor } from "@zealamic/css-doctor-vite";
-
-export default defineConfig({
-  plugins: [
-    cssDoctor({
-      pageCoverage: {
-        enabled: true,
-        minPageRatio: 0.5,
-        forceCommon: [".app-shell", ".nav-link"],
-      },
-      sizeBudget: {
-        enabled: true,
-        maxChunkSize: 40 * 1024,
-        isolateVariables: true,
-      },
-      minify: true,
-      report: true,
-    }),
-  ],
-});
-```
-
-### Next.js
-
-```js
-// next.config.mjs
-import { withCssDoctor } from "@zealamic/css-doctor-next";
-
-export default withCssDoctor(
-  {
-    reactStrictMode: true,
-  },
-  {
-    pageCoverage: {
-      enabled: true,
-      minPageRatio: 0.5,
-      forceCommon: [".app-shell", ".nav-link"],
-    },
-    sizeBudget: {
-      enabled: true,
-      maxChunkSize: 40 * 1024,
-      isolateVariables: true,
-    },
-    minify: true,
-    report: true,
-  },
-);
-```
-
-### Adapter capabilities
-
-| Adapter                 | Page coverage | Size budget | Variables isolation | Dead code |
-| ----------------------- | ------------- | ----------- | ------------------- | --------- |
-| Vite / Astro / TanStack | Yes           | Yes         | Yes                 | Yes       |
-| Next.js                 | Yes           | Yes         | Yes                 | Yes       |
-| Nuxt 4                  | Yes           | Yes         | Yes                 | Yes       |
-| Rsbuild / Rspack        | Yes           | Yes         | Yes                 | Yes       |
-| Remix 3 runtime         | No            | Yes         | Yes                 | No        |
-
-Remix 3 has no build-time page-to-CSS dependency graph. Its middleware uses
-`sizeBudget`, `isolateVariables`, `minify`, and a response cache instead of
-runtime page coverage.
-
----
-
-## Configuration reference
-
-| Option                        | Type                   | Default                  | Description                                            |
-| ----------------------------- | ---------------------- | ------------------------ | ------------------------------------------------------ |
-| `pageCoverage.enabled`        | `boolean`              | `true`                   | Enable route-based coverage classification.            |
-| `pageCoverage.minPageRatio`   | `number`               | `0.5`                    | Minimum page ratio (`0.0`–`1.0`) for common CSS.       |
-| `pageCoverage.forceCommon`    | `string[]`             | `[]`                     | Selectors or classes forced into the common chunk.     |
-| `sizeBudget.enabled`          | `boolean`              | `true`                   | Enable byte-budget splitting.                          |
-| `sizeBudget.maxChunkSize`     | `number`               | `60 * 1024`              | Maximum bytes per emitted chunk.                       |
-| `sizeBudget.isolateVariables` | `boolean`              | `true`                   | Extract `:root` and Tailwind `@theme` variables first. |
-| `minify`                      | `boolean`              | production/build value   | Minify emitted CSS with LightningCSS.                  |
-| `report`                      | `boolean`              | `true`                   | Print coverage and split diagnostics.                  |
-| `exclude`                     | `(string \| RegExp)[]` | CSS Modules safety rules | Skip matching assets.                                  |
-
-See the individual adapter README files for the complete option set.
-
----
+All `@zealamic/css-doctor*` packages are already marked **deprecated** on the
+npm registry. Installs still work, but print a warning pointing to the matching
+`@zealakit/css-doctor*` package.
 
 ## License
 

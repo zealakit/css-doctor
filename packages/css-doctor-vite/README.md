@@ -10,6 +10,15 @@
 
 ---
 
+
+> **DEPRECATED:** `@zealamic/css-doctor-vite` has moved to [`@zealakit/css-doctor-vite`](https://www.npmjs.com/package/@zealakit/css-doctor-vite).
+>
+> Install the replacement: `pnpm add -D @zealakit/css-doctor-vite`
+>
+> Active docs: https://github.com/zealakit/css-doctor
+>
+> The `@zealamic` packages remain on npm only because existing downloads prevent deletion. They are unmaintained.
+
 ![css doctor](https://github.com/zealamic/css-doctor/blob/main/assets/images/css-doctor.jpg)
 
 ## Installation

@@ -10,6 +10,15 @@
 
 ---
 
+
+> **DEPRECATED:** `@zealamic/css-doctor-binding` đã chuyển sang [`@zealakit/css-doctor-binding`](https://www.npmjs.com/package/@zealakit/css-doctor-binding).
+>
+> Cài package mới: `pnpm add -D @zealakit/css-doctor-binding`
+>
+> Docs hiện hành: https://github.com/zealakit/css-doctor
+>
+> Các package `@zealamic` vẫn giữ trên npm vì đã có download và không thể xóa an toàn. Chúng không còn được duy trì.
+
 ![css doctor](https://github.com/zealamic/css-doctor/blob/main/assets/images/css-doctor.jpg)
 
 ## Cài đặt

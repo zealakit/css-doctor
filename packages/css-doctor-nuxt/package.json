@@ -1,8 +1,8 @@
 {
   "name": "@zealamic/css-doctor-nuxt",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "type": "module",
-  "description": "Official Nuxt 4 module for css-doctor",
+  "description": "[DEPRECATED -> @zealakit] Use @zealakit/css-doctor-nuxt instead. Official Nuxt 4 module for css-doctor",
   "license": "MIT",
   "main": "./dist/index.js",
   "module": "./dist/index.js",

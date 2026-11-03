@@ -1,235 +1,60 @@
 <div align="center">
 
-# css-doctor
+# css-doctor (scope đã deprecated)
 
-**Bộ công cụ chẩn đoán, phân tách và tối ưu CSS native cho các ứng dụng web hiện đại.**
+> **DEPRECATED:** Các package `@zealamic/css-doctor*` đã chuyển sang
+> **`@zealakit/css-doctor*`**.
+>
+> Repo mới: [github.com/zealakit/css-doctor](https://github.com/zealakit/css-doctor) ·
+> npm scope [`@zealakit`](https://www.npmjs.com/org/zealakit)
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](https://nodejs.org)
-[![Rust](https://img.shields.io/badge/rust-stable-b7410e?logo=rust&logoColor=white)](https://www.rust-lang.org)
-
-[English](https://github.com/zealamic/css-doctor/blob/main/README.md) | [Tiếng Việt](https://github.com/zealamic/css-doctor/blob/main/README_VI.md) | [简体中文](https://github.com/zealamic/css-doctor/blob/main/README_CN.md)
+[English](./README.md) | [Tiếng Việt](./README_VI.md) | [简体中文](./README_CN.md)
 
 </div>
 
 ---
 
-![css doctor](https://github.com/zealamic/css-doctor/blob/main/assets/images/css-doctor.jpg)
+## Vì sao scope này bị deprecated?
 
-## Tổng quan
+Dự án đã đổi npm scope từ `@zealamic` sang **`@zealakit`**.
 
-`css-doctor` là bộ công cụ phân tích và tối ưu CSS được xây dựng trên lõi Rust
-native sử dụng **LightningCSS AST**, kết nối với Node.js qua **NAPI-RS**.
+Các package `@zealamic/css-doctor*` cũ vẫn còn trên npm vì đã có lượt download
+và **không thể xóa/unpublish an toàn**. Chúng vẫn cài được để không phá lockfile
+cũ, nhưng **không còn nhận tính năng hay bản sửa lỗi mới**.
 
-Công cụ không chỉ minify. Nó giúp phát hiện selector lỗi, tìm CSS chết, hiểu
-page coverage, tách biến CSS và chia nhỏ stylesheet quá lớn mà không làm hỏng
-CSS Modules hay scoped styles của framework.
+Hãy chuyển sang package mới.
 
-Dự án cung cấp CLI zero-config, native binding và adapter chính thức cho Vite,
-Next.js, Nuxt, Remix và Rsbuild.
+## Bảng mapping
 
----
+| Deprecated (`@zealamic`) | Thay thế (`@zealakit`) |
+| --- | --- |
+| `@zealamic/css-doctor-binding` | [`@zealakit/css-doctor-binding`](https://www.npmjs.com/package/@zealakit/css-doctor-binding) |
+| `@zealamic/css-doctor-cli` | [`@zealakit/css-doctor-cli`](https://www.npmjs.com/package/@zealakit/css-doctor-cli) |
+| `@zealamic/css-doctor-vite` | [`@zealakit/css-doctor-vite`](https://www.npmjs.com/package/@zealakit/css-doctor-vite) |
+| `@zealamic/css-doctor-next` | [`@zealakit/css-doctor-next`](https://www.npmjs.com/package/@zealakit/css-doctor-next) |
+| `@zealamic/css-doctor-nuxt` | [`@zealakit/css-doctor-nuxt`](https://www.npmjs.com/package/@zealakit/css-doctor-nuxt) |
+| `@zealamic/css-doctor-remix` | [`@zealakit/css-doctor-remix`](https://www.npmjs.com/package/@zealakit/css-doctor-remix) |
+| `@zealamic/css-doctor-rsbuild` | [`@zealakit/css-doctor-rsbuild`](https://www.npmjs.com/package/@zealakit/css-doctor-rsbuild) |
 
-## Tính năng nổi bật
+(Các platform binding `*-darwin-*`, `*-linux-*`, `*-win32-*` cũng đổi scope tương tự.)
 
-### Hiệu năng Rust native
-
-Parse, trích xuất selector, chẩn đoán và phân tách CSS đều chạy trong Rust core.
-Bề mặt Node.js chỉ là cầu nối NAPI-RS mỏng, nên phân tích vẫn nhanh với
-stylesheet lớn.
-
-### CLI zero-config
-
-Chạy `css-doctor` ngay bằng `npx`, hoặc cài làm dev dependency. CLI đã bundle
-các JavaScript dependency; chỉ native binding được giữ external và require
-động lúc runtime.
-
-### Chẩn đoán toàn diện
-
-CLI báo cáo:
-
-- cảnh báo cú pháp;
-- rule rỗng hoặc dead rule;
-- selector trùng lặp;
-- stylesheet quá lớn và ngưỡng selector;
-- số selector, rule, declaration và thời gian phân tích;
-- JSON output cho CI.
-
-### Native binary đa nền tảng
-
-`@zealamic/css-doctor-binding` tự phân giải binary NAPI dựng sẵn cho:
-
-| Nền tảng | Kiến trúc | Target |
-| --- | --- | --- |
-| macOS | Apple Silicon | `darwin-arm64` |
-| macOS | Intel | `darwin-x64` |
-| Linux | x64 glibc | `linux-x64-gnu` |
-| Linux | x64 musl | `linux-x64-musl` |
-| Windows | x64 MSVC | `win32-x64-msvc` |
-
-Không cần Rust toolchain trên nền tảng có binary hỗ trợ.
-
-### Tối ưu CSS theo framework
-
-Các integration hỗ trợ page-coverage splitting, size budget, variables
-isolation, dead-code elimination và xử lý an toàn CSS Modules, Vue scoped,
-Svelte scoped, Astro scoped.
-
----
-
-## Bắt đầu nhanh
-
-### Chạy CLI không cần cài đặt
+## Cách migrate
 
 ```bash
-npx @zealamic/css-doctor-cli check "src/**/*.css"
+pnpm remove @zealamic/css-doctor-vite
+pnpm add -D @zealakit/css-doctor-vite
 ```
 
-### Cài CLI
-
-```bash
-pnpm add -D @zealamic/css-doctor-cli
-
-# hoặc
-npm install -D @zealamic/css-doctor-cli
+```diff
+- import { cssDoctor } from "@zealamic/css-doctor-vite";
++ import { cssDoctor } from "@zealakit/css-doctor-vite";
 ```
 
-### Các lệnh thường dùng
+## Tài liệu hiện hành
 
-```bash
-# Trợ giúp và phiên bản
-css-doctor --help
-css-doctor --version
+- Source & docs: https://github.com/zealakit/css-doctor
+- Issues: https://github.com/zealakit/css-doctor/issues
 
-# Kiểm tra một file
-css-doctor check src/styles/app.css
-
-# Kiểm tra glob có quote
-css-doctor check "src/**/*.css"
-
-# JSON output cho CI
-css-doctor check "src/**/*.css" --json
-
-# Cảnh báo khi file có hơn 500 selector
-css-doctor check "src/**/*.css" --threshold 500
-```
-
-Ví dụ output:
-
-```text
-css-doctor v1.0.0 · check
-patterns src/**/*.css
-────────────────────────────────────────────────────────────
- SUCCESS  src/styles/app.css · 12.4 KB
-  selectors 184 · rules 132 · declarations 421
-  analysis 3.2 ms · read 0.8 ms · total 4.0 ms
-```
-
----
-
-## Tích hợp framework
-
-| Framework / tool | Package | Cài đặt |
-| --- | --- | --- |
-| Vite, React, Vue, Svelte, TanStack | [`@zealamic/css-doctor-vite`](https://www.npmjs.com/package/@zealamic/css-doctor-vite) | `pnpm add -D @zealamic/css-doctor-vite` |
-| Next.js App/Pages Router | [`@zealamic/css-doctor-next`](https://www.npmjs.com/package/@zealamic/css-doctor-next) | `pnpm add -D @zealamic/css-doctor-next` |
-| Nuxt 4 | [`@zealamic/css-doctor-nuxt`](https://www.npmjs.com/package/@zealamic/css-doctor-nuxt) | `pnpm add -D @zealamic/css-doctor-nuxt` |
-| Remix 3 | [`@zealamic/css-doctor-remix`](https://www.npmjs.com/package/@zealamic/css-doctor-remix) | `pnpm add @zealamic/css-doctor-remix` |
-| Rsbuild / Rspack | [`@zealamic/css-doctor-rsbuild`](https://www.npmjs.com/package/@zealamic/css-doctor-rsbuild) | `pnpm add -D @zealamic/css-doctor-rsbuild` |
-| CLI | [`@zealamic/css-doctor-cli`](https://www.npmjs.com/package/@zealamic/css-doctor-cli) | `pnpm add -D @zealamic/css-doctor-cli` |
-| Native binding | [`@zealamic/css-doctor-binding`](https://www.npmjs.com/package/@zealamic/css-doctor-binding) | Cài tự động qua dependency |
-
-Mỗi thư mục package có README tiếng Anh, tiếng Việt và tiếng Trung. Bản dịch
-root vẫn có tại [English](./README.md) và [简体中文](./README_CN.md).
-
-### Vite
-
-```ts
-// vite.config.ts
-import { defineConfig } from "vite";
-import { cssDoctor } from "@zealamic/css-doctor-vite";
-
-export default defineConfig({
-  plugins: [
-    cssDoctor({
-      pageCoverage: {
-        enabled: true,
-        minPageRatio: 0.5,
-        forceCommon: [".app-shell", ".nav-link"],
-      },
-      sizeBudget: {
-        enabled: true,
-        maxChunkSize: 40 * 1024,
-        isolateVariables: true,
-      },
-      minify: true,
-      report: true,
-    }),
-  ],
-});
-```
-
-### Next.js
-
-```js
-// next.config.mjs
-import { withCssDoctor } from "@zealamic/css-doctor-next";
-
-export default withCssDoctor(
-  {
-    reactStrictMode: true,
-  },
-  {
-    pageCoverage: {
-      enabled: true,
-      minPageRatio: 0.5,
-      forceCommon: [".app-shell", ".nav-link"],
-    },
-    sizeBudget: {
-      enabled: true,
-      maxChunkSize: 40 * 1024,
-      isolateVariables: true,
-    },
-    minify: true,
-    report: true,
-  },
-);
-```
-
-### Khả năng của adapter
-
-| Adapter | Page coverage | Size budget | Variables isolation | Dead code |
-| --- | --- | --- | --- | --- |
-| Vite / Astro / TanStack | Có | Có | Có | Có |
-| Next.js | Có | Có | Có | Có |
-| Nuxt 4 | Có | Có | Có | Có |
-| Rsbuild / Rspack | Có | Có | Có | Có |
-| Remix 3 runtime | Không | Có | Có | Không |
-
-Remix 3 không có page-to-CSS dependency graph lúc build. Middleware dùng
-`sizeBudget`, `isolateVariables`, `minify` và response cache thay vì page
-coverage runtime.
-
----
-
-## Tham chiếu cấu hình
-
-| Tùy chọn | Kiểu | Mặc định | Mô tả |
-| --- | --- | --- | --- |
-| `pageCoverage.enabled` | `boolean` | `true` | Bật phân loại coverage theo route. |
-| `pageCoverage.minPageRatio` | `number` | `0.5` | Tỷ lệ page tối thiểu (`0.0`–`1.0`) cho common CSS. |
-| `pageCoverage.forceCommon` | `string[]` | `[]` | Selector/class luôn giữ trong common chunk. |
-| `sizeBudget.enabled` | `boolean` | `true` | Bật chia nhỏ theo byte budget. |
-| `sizeBudget.maxChunkSize` | `number` | `60 * 1024` | Số byte tối đa mỗi chunk. |
-| `sizeBudget.isolateVariables` | `boolean` | `true` | Tách biến `:root` và Tailwind `@theme` trước. |
-| `minify` | `boolean` | giá trị production/build | Minify CSS bằng LightningCSS. |
-| `report` | `boolean` | `true` | In chẩn đoán coverage và split. |
-| `exclude` | `(string \| RegExp)[]` | Safety rule CSS Modules | Bỏ qua asset khớp mẫu. |
-
-Xem README của từng adapter để biết đầy đủ danh sách tùy chọn.
-
----
-
-## Giấy phép
+## License
 
 MIT. Xem [LICENSE](./LICENSE).

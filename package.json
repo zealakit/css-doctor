@@ -1,7 +1,7 @@
 {
   "name": "@zealamic/css-doctor-workspace",
-  "version": "1.0.1",
-  "description": "Smart CSS diagnostics, dead code elimination, and intelligent chunk splitting tool.",
+  "version": "1.0.3",
+  "description": "[DEPRECATED -> @zealakit] Workspace moved to @zealakit/css-doctor*. Smart CSS diagnostics, dead code elimination, and intelligent chunk splitting tool.",
   "author": "Zealamic (nqhed - Huy Edward Nguyen)",
   "private": true,
   "packageManager": "pnpm@9.0.0",
@@ -25,7 +25,9 @@
     "prepare": "pnpm build:packages && pnpm prepare:examples",
     "build:fast": "pnpm --filter=\"./packages/**\" --parallel run build",
     "build:examples": "turbo run build --filter=\"./examples/**\"",
-    "build:all": "turbo run build"
+    "build:all": "turbo run build",
+    "publish:npm": "tsx scripts/publish-npm.ts --bump-patch --deprecate --skip-missing",
+    "publish:npm:dry": "tsx scripts/publish-npm.ts --bump-patch --deprecate --skip-missing --dry-run"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.3",

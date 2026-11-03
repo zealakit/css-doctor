@@ -1,8 +1,8 @@
 {
   "name": "@zealamic/css-doctor-rsbuild",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "type": "module",
-  "description": "Rsbuild/Rspack integration for css-doctor page-coverage and size-budget CSS splitting",
+  "description": "[DEPRECATED -> @zealakit] Use @zealakit/css-doctor-rsbuild instead. Rsbuild/Rspack integration for css-doctor page-coverage and size-budget CSS splitting",
   "license": "MIT",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
