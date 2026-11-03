@@ -26,10 +26,10 @@
     "build:fast": "pnpm --filter=\"./packages/**\" --parallel run build",
     "build:examples": "turbo run build --filter=\"./examples/**\"",
     "build:all": "turbo run build",
-    "publish:npm": "tsx scripts/publish-npm.ts --all",
-    "publish:npm:binding": "tsx scripts/publish-npm.ts --binding",
-    "publish:npm:adapters": "tsx scripts/publish-npm.ts --adapters",
-    "publish:npm:dry": "tsx scripts/publish-npm.ts --all --dry-run"
+    "publish:npm": "tsx scripts/publish-npm.ts --all --skip-missing",
+    "publish:npm:binding": "tsx scripts/publish-npm.ts --binding --skip-missing",
+    "publish:npm:adapters": "tsx scripts/publish-npm.ts --adapters --skip-missing",
+    "publish:npm:dry": "tsx scripts/publish-npm.ts --all --skip-missing --dry-run"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.3",
