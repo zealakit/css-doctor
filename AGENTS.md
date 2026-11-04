@@ -12,9 +12,9 @@ Turborepo.
 
 | Path | Role |
 | --- | --- |
-| `crates/core` | Rust engine: parse, selector extraction, usage matrix, page-coverage splitter |
+| `crates/core` | Rust engine: parse, selector extraction, usage matrix, page-coverage splitter, CSS Health Score |
 | `packages/binding` | NAPI-RS bridge exposing `analyzeCss`, `splitCssByPages`, `optimizeCss`, and JS types |
-| `packages/cli` | `css-doctor` terminal CLI (Commander + tsup, ESM) |
+| `packages/cli` | `css-doctor` terminal CLI (`check` + `health`, Commander + tsup, ESM) |
 | `packages/css-doctor-vite` | Vite/Rollup plugin (ESM + CJS + DTS) |
 | `packages/css-doctor-next` | Next.js config wrapper + Webpack plugin (ESM + CJS + DTS) |
 | `packages/css-doctor-rsbuild` | Rsbuild/Rspack plugin (ESM + DTS) |

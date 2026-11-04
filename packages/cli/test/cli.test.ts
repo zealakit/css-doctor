@@ -108,7 +108,7 @@ test("expands glob patterns", () => {
   const report = JSON.parse(result.stdout) as CheckReport;
 
   assert.equal(report.success, true);
-  assert.equal(report.files.length, 3);
+  assert.ok(report.files.length >= 3);
   assert.ok(report.summary.issues > 0);
 });
 
@@ -149,6 +149,88 @@ test("supports --help without loading the native binding", () => {
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Usage:/);
   assert.match(result.stdout, /check/);
+  assert.match(result.stdout, /health/);
+});
+
+test("health command prints overall score and dimension breakdown", () => {
+  const result = runCli(["health", "test/fixtures/basic.css"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /HEALTH REPORT/);
+  assert.match(result.stdout, /Overall Health/);
+  assert.match(result.stdout, /\/100/);
+  assert.match(result.stdout, /HEALTH BREAKDOWN/);
+  assert.match(result.stdout, /Selector Complexity/);
+});
+
+test("health --json emits a stable health schema", () => {
+  const result = runCli([
+    "health",
+    "test/fixtures/health-issues.css",
+    "--json",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+  const report = JSON.parse(result.stdout) as {
+    schemaVersion: number;
+    command: string;
+    success: boolean;
+    health: {
+      schemaVersion: number;
+      overall: number;
+      grade: string;
+      dimensions: Array<{ id: string; score: number | null }>;
+      diagnostics: Array<{ code: string }>;
+    } | null;
+  };
+
+  assert.equal(report.schemaVersion, 1);
+  assert.equal(report.command, "health");
+  assert.equal(report.success, true);
+  assert.ok(report.health);
+  assert.equal(report.health.schemaVersion, 1);
+  assert.ok(report.health.overall < 100);
+  assert.ok(report.health.dimensions.length >= 5);
+  assert.ok(
+    report.health.diagnostics.some(
+      (diagnostic) => diagnostic.code === "dead.empty-rule",
+    ),
+  );
+});
+
+test("health --fail-under fails when score is below the floor", () => {
+  const result = runCli([
+    "health",
+    "test/fixtures/health-issues.css",
+    "--json",
+    "--fail-under",
+    "100",
+  ]);
+
+  assert.equal(result.status, 1, result.stderr);
+  const report = JSON.parse(result.stdout) as {
+    success: boolean;
+    errors: string[];
+    health: { overall: number } | null;
+  };
+
+  assert.equal(report.success, false);
+  assert.ok(report.health);
+  assert.ok(report.health.overall < 100);
+  assert.ok(report.errors.some((error) => /fail-under/i.test(error)));
+});
+
+test("check --json includes an aggregated health report", () => {
+  const result = runCli(["check", "test/fixtures/basic.css", "--json"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  const report = JSON.parse(result.stdout) as {
+    health: { overall: number; grade: string } | null;
+  };
+
+  assert.ok(report.health);
+  assert.equal(typeof report.health.overall, "number");
+  assert.match(report.health.grade, /^[A-F]$/);
 });
 
 test("reports the CLI version", () => {

@@ -83,6 +83,7 @@ pnpm css:check
 css-doctor --help
 css-doctor --version
 css-doctor check --help
+css-doctor health --help
 
 # 单个文件
 css-doctor check src/styles/app.css
@@ -95,6 +96,11 @@ css-doctor check "src/**/*.css"
 
 # 路径与 glob 混用
 css-doctor check styles/global.css "components/**/*.css"
+
+# CSS Health Score
+css-doctor health "src/**/*.css"
+css-doctor health "src/**/*.css" --json
+css-doctor health "src/**/*.css" --fail-under 80
 ```
 
 ## 命令：`check`
@@ -168,7 +174,7 @@ css-doctor check "src/**/*.css" -j --threshold 500
 css-doctor check "src/**/*.css" --json > css-doctor-report.json
 ```
 
-### 退出码
+### 退出码（`check`）
 
 | Code | 含义 |
 | --- | --- |
@@ -178,18 +184,50 @@ css-doctor check "src/**/*.css" --json > css-doctor-report.json
 warning / hint **不会**导致非零退出码。若要在 CI 中根据 warning 失败，请解析
 `--json` 中的 `summary.issues` / `files[].issues`。
 
+`check --json` 还会包含聚合的 `health` 字段（CSS Health Score）。
+
+## 命令：`health`
+
+```text
+css-doctor health [patterns...] [options]
+```
+
+计算确定性的 **CSS Health Score**（0–100），覆盖五个维度：
+
+| 维度 | 权重 | 测量内容 |
+| --- | ---: | --- |
+| Selector Complexity | 20% | 高特异性、深层组合/嵌套、长选择器 |
+| Duplicate Rules | 20% | 重复选择器 / 同规则重复声明 |
+| CSS Size Efficiency | 20% | 大样式表、重规则、选择器压力 |
+| Dead CSS | 25% | 空规则、可恢复语法丢弃 |
+| Variable Consistency | 15% | 重复定义 / `var()` 缺口（启发式） |
+
+等级：**A** 90–100 · **B** 80–89 · **C** 70–79 · **D** 60–69 · **F** 0–59。
+
+| 选项 | 说明 |
+| --- | --- |
+| `-j, --json` | 稳定 health JSON（`schemaVersion: 1`） |
+| `--threshold <n>` | 映射到 `manySelectors` 体积压力阈值 |
+| `--fail-under <n>` | overall `< n` 时退出码为 `1`（CI 门禁） |
+
+该分数**不能**保证视觉/runtime 正确性。未使用变量等 finding 在静态证据不足时
+标记为 `heuristic`。
+
 ### GitHub Actions 示例
 
 ```yaml
 - name: CSS diagnostics
   run: pnpm exec css-doctor check "src/**/*.css" --json --threshold 800
+
+- name: CSS health gate
+  run: pnpm exec css-doctor health "src/**/*.css" --fail-under 80
 ```
 
 ## 安全与限制
 
 - 命令名：`css-doctor`（通过 package `bin` 暴露）。
-- CLI 只做 **分析**。页面覆盖拆分、体积预算、变量隔离属于框架适配器。
-- CSS Modules / 动态 class 不在本命令范围内。
+- CLI 做 **分析** 与 **评分**。页面覆盖拆分、体积预算、变量隔离属于框架适配器。
+- CSS Modules / 动态 class 不在静态检查范围内。
 - 需要对应平台的原生二进制；有预构建包时无需 Rust 工具链。
 
 ## 完整文档

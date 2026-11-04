@@ -41,6 +41,7 @@
 //! ```
 
 mod analyzer;
+mod health;
 mod model;
 mod pipeline;
 mod size_splitter;
@@ -48,6 +49,12 @@ mod splitter;
 mod usage;
 
 pub use analyzer::analyze_css;
+pub use health::{
+    DiagnosticCertainty, DimensionId, DimensionScore, HealthDiagnostic, HealthEvaluationInput,
+    HealthGrade, HealthReport, HealthScoreConfig, HealthScoreSummary, HealthSeverity, HealthStatus,
+    HealthThresholds, HealthWeights, ScoreBand, evaluate_css_health, evaluate_health_report,
+    grade_for_score, merge_health_reports,
+};
 pub use model::{
     AnalysisStats, AnalysisWarning, CssAnalysisResult, SelectorInfo, SelectorKind, SourceLocation,
     Specificity, StyleRuleInfo,

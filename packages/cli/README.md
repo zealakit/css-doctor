@@ -84,6 +84,7 @@ pnpm css:check
 css-doctor --help
 css-doctor --version
 css-doctor check --help
+css-doctor health --help
 
 # Single file
 css-doctor check src/styles/app.css
@@ -96,6 +97,11 @@ css-doctor check "src/**/*.css"
 
 # Mix paths and globs
 css-doctor check styles/global.css "components/**/*.css"
+
+# CSS Health Score (polished report)
+css-doctor health "src/**/*.css"
+css-doctor health "src/**/*.css" --json
+css-doctor health "src/**/*.css" --fail-under 80
 ```
 
 ## Command: `check`
@@ -171,7 +177,7 @@ Pipe or save the report:
 css-doctor check "src/**/*.css" --json > css-doctor-report.json
 ```
 
-### Exit codes
+### Exit codes (`check`)
 
 | Code | Meaning |
 | --- | --- |
@@ -181,20 +187,53 @@ css-doctor check "src/**/*.css" --json > css-doctor-report.json
 Warnings and hints **do not** fail the process. Use `--json` and inspect
 `summary.issues` / `files[].issues` if you want CI gates on warnings.
 
+`check --json` also includes an aggregated `health` field (CSS Health Score).
+
+## Command: `health`
+
+```text
+css-doctor health [patterns...] [options]
+```
+
+Evaluates a deterministic **CSS Health Score** (0–100) across five dimensions:
+
+| Dimension | Weight | Measures |
+| --- | ---: | --- |
+| Selector Complexity | 20% | High specificity, deep combinators/nesting, long chains |
+| Duplicate Rules | 20% | Repeated selectors / intra-rule duplicate declarations |
+| CSS Size Efficiency | 20% | Large sheets, heavy rules, selector pressure |
+| Dead CSS | 25% | Empty rules, recoverable syntax drops |
+| Variable Consistency | 15% | Duplicate/`var()` usage gaps, naming mix (heuristic) |
+
+Grades: **A** 90–100 · **B** 80–89 · **C** 70–79 · **D** 60–69 · **F** 0–59.
+
+| Option | Description |
+| --- | --- |
+| `-j, --json` | Stable health JSON (`schemaVersion: 1`) |
+| `--threshold <n>` | Maps to native `manySelectors` size pressure |
+| `--fail-under <n>` | Exit `1` when overall score `< n` (CI gate) |
+
+The score is **not** a guarantee of visual correctness. Unused-variable and
+cross-file/`var()` findings are marked `heuristic` when static evidence is
+incomplete. Page-usage dead CSS still requires adapters / `pageUsage`.
+
 ### GitHub Actions sketch
 
 ```yaml
 - name: CSS diagnostics
   run: pnpm exec css-doctor check "src/**/*.css" --json --threshold 800
+
+- name: CSS health gate
+  run: pnpm exec css-doctor health "src/**/*.css" --fail-under 80
 ```
 
 ## Safety and limitations
 
 - Binary name: `css-doctor` (package `bin` field).
-- The CLI only **analyzes** CSS. Page-coverage splitting, size budgets, and
-  variable isolation belong to the framework adapters.
-- CSS Modules / dynamic class usage are out of scope for this command; those
-  matter for build plugins, not static file checks.
+- The CLI **analyzes** and **scores** CSS. Page-coverage splitting, size budgets,
+  and variable isolation for production bundles belong to the framework adapters.
+- CSS Modules / dynamic class usage are out of scope for static checks; those
+  matter for build plugins.
 - Native binding must resolve for your platform; no Rust toolchain is required
   when a prebuilt binary is available.
 

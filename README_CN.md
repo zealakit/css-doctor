@@ -50,7 +50,8 @@ CLI 可报告：
 - 重复 selector；
 - 样式表体积与 selector 数量阈值；
 - selector、rule、declaration 数量与耗时；
-- 适用于 CI 的 JSON 输出。
+- 确定性的 **CSS Health Score**（0–100，五个加权维度）；
+- 适用于 CI 的 JSON（`check` 与 `health`）。
 
 ### 跨平台原生二进制
 
@@ -130,18 +131,27 @@ css-doctor check styles/global.css "components/**/*.css"
 # CI：JSON（可加选择器阈值）
 css-doctor check "src/**/*.css" --json
 css-doctor check "src/**/*.css" -j --threshold 500
+
+# CSS Health Score
+css-doctor health "src/**/*.css"
+css-doctor health "src/**/*.css" --json
+css-doctor health "src/**/*.css" --fail-under 80
 ```
 
 | 选项 | 作用 |
 | --- | --- |
-| `-j, --json` | 输出稳定的 `CheckReport` JSON |
-| `--threshold <n>` | 当文件选择器数量超过 `<n>` 时警告 |
+| `-j, --json` | 输出稳定 JSON（`check` 或 `health`） |
+| `--threshold <n>` | 文件选择器超过 `<n>` 时警告 / 体积压力 |
+| `--fail-under <n>` | （`health`）overall `< n` 时退出码为 `1` |
 | `-v, --version` | 打印 CLI 版本 |
 | `-h, --help` | 打印帮助 |
 
-`check` 会报告：`syntax`、`empty-rule`、`duplicate-selector`，以及可选的
-`threshold`。所有匹配文件都分析成功时退出码为 `0`（允许 warning）；初始化/读取/
-分析失败时为 `1`。
+`check` 会报告：`syntax`、`empty-rule`、`duplicate-selector`、可选 `threshold`，
+以及聚合 `health`。所有匹配文件都分析成功时退出码为 `0`（允许 warning）；
+初始化/读取/分析失败时为 `1`。
+
+`health` 评分覆盖选择器复杂度、重复规则、体积效率、死代码与变量一致性。
+它是质量信号，不能保证 runtime/视觉正确性。
 
 终端输出示例：
 

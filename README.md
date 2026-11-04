@@ -44,7 +44,7 @@ Run `css-doctor` immediately with `npx`, or install it as a development
 dependency. The published CLI bundles its JavaScript dependencies; only the
 native binding remains a dynamic runtime require.
 
-### Comprehensive diagnostics
+### Comprehensive diagnostics + CSS Health Score
 
 The CLI reports:
 
@@ -53,7 +53,8 @@ The CLI reports:
 - duplicate selectors;
 - oversized stylesheets and selector-count thresholds;
 - selector counts, rule counts, declarations, and analysis timing;
-- structured JSON output for CI pipelines.
+- a deterministic **CSS Health Score** (0–100) across five weighted dimensions;
+- structured JSON output for CI pipelines (`check` and `health`).
 
 ### Cross-platform native binaries
 
@@ -135,18 +136,28 @@ css-doctor check styles/global.css "components/**/*.css"
 # CI: machine-readable JSON (+ optional selector budget)
 css-doctor check "src/**/*.css" --json
 css-doctor check "src/**/*.css" -j --threshold 500
+
+# CSS Health Score
+css-doctor health "src/**/*.css"
+css-doctor health "src/**/*.css" --json
+css-doctor health "src/**/*.css" --fail-under 80
 ```
 
 | Flag | Purpose |
 | --- | --- |
-| `-j, --json` | Emit a stable `CheckReport` JSON document |
-| `--threshold <n>` | Warn when a file has more than `<n>` selectors |
+| `-j, --json` | Emit a stable JSON document (`check` or `health`) |
+| `--threshold <n>` | Warn / size-pressure when a file has more than `<n>` selectors |
+| `--fail-under <n>` | (`health`) Exit `1` when overall score is below `<n>` |
 | `-v, --version` | Print the CLI version |
 | `-h, --help` | Print help |
 
-What `check` reports: `syntax`, `empty-rule`, `duplicate-selector`, and optional
-`threshold` issues. Exit code `0` when every matched file was analyzed
-(warnings allowed); `1` on setup/read/analyze failures.
+What `check` reports: `syntax`, `empty-rule`, `duplicate-selector`, optional
+`threshold` issues, plus an aggregated `health` score. Exit code `0` when every
+matched file was analyzed (warnings allowed); `1` on setup/read/analyze failures.
+
+`health` scores selector complexity, duplicates, size efficiency, dead CSS, and
+variable consistency. It is a quality signal — not a guarantee of runtime or
+visual correctness.
 
 Example terminal output:
 

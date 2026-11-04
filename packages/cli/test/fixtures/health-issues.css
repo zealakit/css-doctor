@@ -1,0 +1,24 @@
+#app .layout .panel .card .button {
+  color: red;
+}
+
+.box {
+  color: blue;
+}
+
+.box {
+  margin: 0;
+}
+
+.unused {
+}
+
+:root {
+  --brand: red;
+  --brand: darkred;
+  --orphanSpace: 8px;
+}
+
+.ok {
+  color: var(--brand);
+}

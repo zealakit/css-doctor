@@ -667,6 +667,342 @@ impl From<core::CssAnalysisResult> for JsCssAnalysisResult {
     }
 }
 
+/// Optional weights for CSS Health Score dimensions (must be >= 0).
+#[napi(object)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsHealthWeights {
+    pub selector_complexity: Option<f64>,
+    pub duplicate_rules: Option<f64>,
+    pub css_size_efficiency: Option<f64>,
+    pub dead_css: Option<f64>,
+    pub variable_consistency: Option<f64>,
+}
+
+/// Optional thresholds for CSS Health Score analyzers.
+#[napi(object)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsHealthThresholds {
+    pub high_specificity_classes: Option<u32>,
+    pub high_specificity_ids: Option<u32>,
+    pub deep_combinator_count: Option<u32>,
+    pub deep_nesting_depth: Option<u32>,
+    pub long_selector_token_count: Option<u32>,
+    pub large_stylesheet_bytes: Option<u32>,
+    pub critical_stylesheet_bytes: Option<u32>,
+    pub heavy_rule_declarations: Option<u32>,
+    pub many_selectors: Option<u32>,
+}
+
+/// Input for [`evaluate_css_health`].
+#[napi(object)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsHealthInput {
+    pub css_content: String,
+    pub file_path: Option<String>,
+    pub size_bytes: Option<u32>,
+    pub weights: Option<JsHealthWeights>,
+    pub thresholds: Option<JsHealthThresholds>,
+}
+
+/// One health diagnostic finding.
+#[napi(object)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsHealthDiagnostic {
+    pub code: String,
+    pub severity: String,
+    pub category: String,
+    pub message: String,
+    pub file_path: Option<String>,
+    pub location: Option<JsSourceLocation>,
+    pub selector: Option<String>,
+    pub remediation: String,
+    pub certainty: String,
+}
+
+/// Score metadata for one health dimension.
+#[napi(object)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsDimensionScore {
+    pub id: String,
+    pub score: Option<u32>,
+    pub weight: f64,
+    pub effective_weight: f64,
+    pub evaluated: bool,
+    pub issue_count: u32,
+    pub error_count: u32,
+    pub warning_count: u32,
+    pub info_count: u32,
+    pub diagnostic_codes: Vec<String>,
+    pub recommendations: Vec<String>,
+    pub note: Option<String>,
+}
+
+/// Aggregate counters for a health report.
+#[napi(object)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsHealthScoreSummary {
+    pub files: u32,
+    pub rules: u32,
+    pub selectors: u32,
+    pub declarations: u32,
+    pub size_bytes: u32,
+    pub errors: u32,
+    pub warnings: u32,
+    pub suggestions: u32,
+    pub analysis_ms: f64,
+}
+
+/// Complete CSS Health Score report.
+#[napi(object)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsHealthReport {
+    pub schema_version: u32,
+    pub overall: u32,
+    pub grade: String,
+    pub status: String,
+    pub dimensions: Vec<JsDimensionScore>,
+    pub summary: JsHealthScoreSummary,
+    pub diagnostics: Vec<JsHealthDiagnostic>,
+    pub recommendations: Vec<String>,
+}
+
+/// Evaluates CSS Health Score for a single stylesheet.
+///
+/// # Errors
+///
+/// Rejects when configuration is invalid or CSS cannot be parsed.
+#[napi(js_name = "evaluateCssHealth")]
+pub fn evaluate_css_health(input: JsHealthInput) -> Result<JsHealthReport, napi::Error> {
+    let config = build_health_config(input.weights, input.thresholds)?;
+
+    core::evaluate_css_health(
+        &input.css_content,
+        input.file_path.as_deref(),
+        input.size_bytes.map(|value| value as usize),
+        &config,
+    )
+    .map(JsHealthReport::from)
+    .map_err(napi::Error::from_reason)
+}
+
+/// One stylesheet entry for multi-file health evaluation.
+#[napi(object)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsHealthFileInput {
+    pub css_content: String,
+    pub file_path: Option<String>,
+    pub size_bytes: Option<u32>,
+}
+
+/// Multi-file health evaluation input.
+#[napi(object)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsHealthBatchInput {
+    pub files: Vec<JsHealthFileInput>,
+    pub weights: Option<JsHealthWeights>,
+    pub thresholds: Option<JsHealthThresholds>,
+}
+
+/// Evaluates and merges CSS Health Score across multiple stylesheets.
+///
+/// # Errors
+///
+/// Rejects when configuration is invalid or any stylesheet cannot be parsed.
+#[napi(js_name = "evaluateCssHealthBatch")]
+pub fn evaluate_css_health_batch(input: JsHealthBatchInput) -> Result<JsHealthReport, napi::Error> {
+    let config = build_health_config(input.weights, input.thresholds)?;
+
+    if input.files.is_empty() {
+        return Ok(JsHealthReport::from(core::merge_health_reports(
+            &[],
+            &config,
+        )));
+    }
+
+    let mut reports = Vec::with_capacity(input.files.len());
+
+    for file in &input.files {
+        let report = core::evaluate_css_health(
+            &file.css_content,
+            file.file_path.as_deref(),
+            file.size_bytes.map(|value| value as usize),
+            &config,
+        )
+        .map_err(napi::Error::from_reason)?;
+        reports.push(report);
+    }
+
+    Ok(JsHealthReport::from(core::merge_health_reports(
+        &reports, &config,
+    )))
+}
+
+fn build_health_config(
+    weights: Option<JsHealthWeights>,
+    thresholds: Option<JsHealthThresholds>,
+) -> Result<core::HealthScoreConfig, napi::Error> {
+    let mut config = core::HealthScoreConfig::default();
+
+    if let Some(weights) = weights {
+        if let Some(value) = weights.selector_complexity {
+            config.weights.selector_complexity = value;
+        }
+        if let Some(value) = weights.duplicate_rules {
+            config.weights.duplicate_rules = value;
+        }
+        if let Some(value) = weights.css_size_efficiency {
+            config.weights.css_size_efficiency = value;
+        }
+        if let Some(value) = weights.dead_css {
+            config.weights.dead_css = value;
+        }
+        if let Some(value) = weights.variable_consistency {
+            config.weights.variable_consistency = value;
+        }
+    }
+
+    if let Some(thresholds) = thresholds {
+        if let Some(value) = thresholds.high_specificity_classes {
+            config.thresholds.high_specificity_classes = value as u16;
+        }
+        if let Some(value) = thresholds.high_specificity_ids {
+            config.thresholds.high_specificity_ids = value as u16;
+        }
+        if let Some(value) = thresholds.deep_combinator_count {
+            config.thresholds.deep_combinator_count = value as usize;
+        }
+        if let Some(value) = thresholds.deep_nesting_depth {
+            config.thresholds.deep_nesting_depth = value as usize;
+        }
+        if let Some(value) = thresholds.long_selector_token_count {
+            config.thresholds.long_selector_token_count = value as usize;
+        }
+        if let Some(value) = thresholds.large_stylesheet_bytes {
+            config.thresholds.large_stylesheet_bytes = value as usize;
+        }
+        if let Some(value) = thresholds.critical_stylesheet_bytes {
+            config.thresholds.critical_stylesheet_bytes = value as usize;
+        }
+        if let Some(value) = thresholds.heavy_rule_declarations {
+            config.thresholds.heavy_rule_declarations = value as usize;
+        }
+        if let Some(value) = thresholds.many_selectors {
+            config.thresholds.many_selectors = value as usize;
+        }
+    }
+
+    config.validate().map_err(napi::Error::from_reason)?;
+    Ok(config)
+}
+
+impl From<core::HealthReport> for JsHealthReport {
+    fn from(report: core::HealthReport) -> Self {
+        Self {
+            schema_version: report.schema_version,
+            overall: u32::from(report.overall),
+            grade: format!("{:?}", report.grade),
+            status: health_status_name(report.status).to_string(),
+            dimensions: report
+                .dimensions
+                .into_iter()
+                .map(JsDimensionScore::from)
+                .collect(),
+            summary: JsHealthScoreSummary::from(report.summary),
+            diagnostics: report
+                .diagnostics
+                .into_iter()
+                .map(JsHealthDiagnostic::from)
+                .collect(),
+            recommendations: report.recommendations,
+        }
+    }
+}
+
+impl From<core::DimensionScore> for JsDimensionScore {
+    fn from(dimension: core::DimensionScore) -> Self {
+        Self {
+            id: dimension.id.as_str().to_string(),
+            score: dimension.score.map(u32::from),
+            weight: dimension.weight,
+            effective_weight: dimension.effective_weight,
+            evaluated: dimension.evaluated,
+            issue_count: to_u32(dimension.issue_count),
+            error_count: to_u32(dimension.error_count),
+            warning_count: to_u32(dimension.warning_count),
+            info_count: to_u32(dimension.info_count),
+            diagnostic_codes: dimension.diagnostic_codes,
+            recommendations: dimension.recommendations,
+            note: dimension.note,
+        }
+    }
+}
+
+impl From<core::HealthScoreSummary> for JsHealthScoreSummary {
+    fn from(summary: core::HealthScoreSummary) -> Self {
+        Self {
+            files: to_u32(summary.files),
+            rules: to_u32(summary.rules),
+            selectors: to_u32(summary.selectors),
+            declarations: to_u32(summary.declarations),
+            size_bytes: to_u32(summary.size_bytes),
+            errors: to_u32(summary.errors),
+            warnings: to_u32(summary.warnings),
+            suggestions: to_u32(summary.suggestions),
+            analysis_ms: summary.analysis_ms,
+        }
+    }
+}
+
+impl From<core::HealthDiagnostic> for JsHealthDiagnostic {
+    fn from(diagnostic: core::HealthDiagnostic) -> Self {
+        Self {
+            code: diagnostic.code,
+            severity: health_severity_name(diagnostic.severity).to_string(),
+            category: diagnostic.category.as_str().to_string(),
+            message: diagnostic.message,
+            file_path: diagnostic.file_path,
+            location: diagnostic.location.map(|location| JsSourceLocation {
+                line: location.line,
+                column: location.column,
+            }),
+            selector: diagnostic.selector,
+            remediation: diagnostic.remediation,
+            certainty: match diagnostic.certainty {
+                core::DiagnosticCertainty::Confirmed => "confirmed".to_string(),
+                core::DiagnosticCertainty::Heuristic => "heuristic".to_string(),
+            },
+        }
+    }
+}
+
+fn health_severity_name(severity: core::HealthSeverity) -> &'static str {
+    match severity {
+        core::HealthSeverity::Error => "error",
+        core::HealthSeverity::Warning => "warning",
+        core::HealthSeverity::Info => "info",
+    }
+}
+
+fn health_status_name(status: core::HealthStatus) -> &'static str {
+    match status {
+        core::HealthStatus::Excellent => "excellent",
+        core::HealthStatus::Good => "good",
+        core::HealthStatus::Fair => "fair",
+        core::HealthStatus::Poor => "poor",
+        core::HealthStatus::Critical => "critical",
+        core::HealthStatus::InsufficientData => "insufficientData",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -802,6 +1138,28 @@ mod tests {
         );
         assert!(result.warnings.is_empty());
     }
+    #[test]
+    fn maps_health_score_report() {
+        let report = evaluate_css_health(JsHealthInput {
+            css_content: ".dead { } .ok { color: blue; }".to_string(),
+            file_path: Some("demo.css".to_string()),
+            size_bytes: Some(40),
+            weights: None,
+            thresholds: None,
+        })
+        .expect("health succeeds");
+
+        assert_eq!(report.schema_version, 1);
+        assert!(report.overall < 100);
+        assert!(!report.dimensions.is_empty());
+        assert!(
+            report
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == "dead.empty-rule")
+        );
+    }
+
     #[test]
     fn maps_pipeline_output_and_defaults() {
         let input = JsPipelineInput {

@@ -84,6 +84,7 @@ pnpm css:check
 css-doctor --help
 css-doctor --version
 css-doctor check --help
+css-doctor health --help
 
 # Một file
 css-doctor check src/styles/app.css
@@ -96,6 +97,11 @@ css-doctor check "src/**/*.css"
 
 # Trộn path và glob
 css-doctor check styles/global.css "components/**/*.css"
+
+# CSS Health Score
+css-doctor health "src/**/*.css"
+css-doctor health "src/**/*.css" --json
+css-doctor health "src/**/*.css" --fail-under 80
 ```
 
 ## Lệnh: `check`
@@ -172,7 +178,7 @@ Lưu report:
 css-doctor check "src/**/*.css" --json > css-doctor-report.json
 ```
 
-### Exit code
+### Exit code (`check`)
 
 | Code | Ý nghĩa |
 | --- | --- |
@@ -182,19 +188,51 @@ css-doctor check "src/**/*.css" --json > css-doctor-report.json
 Warning / hint **không** làm fail process. Muốn gate CI theo warning, dùng
 `--json` rồi kiểm tra `summary.issues` / `files[].issues`.
 
+`check --json` còn kèm field `health` (CSS Health Score tổng hợp).
+
+## Lệnh: `health`
+
+```text
+css-doctor health [patterns...] [options]
+```
+
+Tính **CSS Health Score** (0–100) theo năm chiều:
+
+| Chiều | Trọng số | Đo lường |
+| --- | ---: | --- |
+| Selector Complexity | 20% | Specificity cao, combinator/nesting sâu, chuỗi dài |
+| Duplicate Rules | 20% | Selector lặp / declaration trùng trong cùng rule |
+| CSS Size Efficiency | 20% | Sheet lớn, rule nặng, áp lực số selector |
+| Dead CSS | 25% | Rule rỗng, cú pháp bị bỏ qua khi recover |
+| Variable Consistency | 15% | Định nghĩa trùng / `var()` thiếu (heuristic) |
+
+Xếp hạng: **A** 90–100 · **B** 80–89 · **C** 70–79 · **D** 60–69 · **F** 0–59.
+
+| Tùy chọn | Mô tả |
+| --- | --- |
+| `-j, --json` | JSON health ổn định (`schemaVersion: 1`) |
+| `--threshold <n>` | Ánh xạ sang ngưỡng `manySelectors` |
+| `--fail-under <n>` | Exit `1` khi overall `< n` (cổng CI) |
+
+Điểm **không** đảm bảo CSS đúng về mặt hình ảnh runtime. Finding kiểu
+unused-variable được gắn `heuristic` khi bằng chứng tĩnh chưa đủ.
+
 ### GitHub Actions (ví dụ)
 
 ```yaml
 - name: CSS diagnostics
   run: pnpm exec css-doctor check "src/**/*.css" --json --threshold 800
+
+- name: CSS health gate
+  run: pnpm exec css-doctor health "src/**/*.css" --fail-under 80
 ```
 
 ## An toàn và giới hạn
 
 - Tên binary: `css-doctor` (trường `bin` của package).
-- CLI chỉ **phân tích** CSS. Page-coverage split, size budget và tách biến thuộc
-  về các adapter framework.
-- CSS Modules / class động nằm ngoài phạm vi lệnh này.
+- CLI **phân tích** và **chấm điểm** CSS. Page-coverage split / size budget /
+  tách biến cho bundle thuộc adapter framework.
+- CSS Modules / class động nằm ngoài phạm vi check tĩnh.
 - Cần binary native đúng nền tảng; không cần Rust toolchain khi đã có prebuild.
 
 ## Tài liệu đầy đủ

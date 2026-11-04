@@ -44,7 +44,7 @@ Chạy `css-doctor` ngay bằng `npx`, hoặc cài làm dev dependency. CLI đã
 các JavaScript dependency; chỉ native binding được giữ external và require
 động lúc runtime.
 
-### Chẩn đoán toàn diện
+### Chẩn đoán toàn diện + CSS Health Score
 
 CLI báo cáo:
 
@@ -53,7 +53,8 @@ CLI báo cáo:
 - selector trùng lặp;
 - stylesheet quá lớn và ngưỡng selector;
 - số selector, rule, declaration và thời gian phân tích;
-- JSON output cho CI.
+- **CSS Health Score** (0–100) theo năm chiều có trọng số;
+- JSON cho CI (`check` và `health`).
 
 ### Native binary đa nền tảng
 
@@ -135,18 +136,27 @@ css-doctor check styles/global.css "components/**/*.css"
 # CI: JSON (+ ngưỡng selector tùy chọn)
 css-doctor check "src/**/*.css" --json
 css-doctor check "src/**/*.css" -j --threshold 500
+
+# CSS Health Score
+css-doctor health "src/**/*.css"
+css-doctor health "src/**/*.css" --json
+css-doctor health "src/**/*.css" --fail-under 80
 ```
 
-| Cờ                | Mục đích                                |
-| ----------------- | --------------------------------------- |
-| `-j, --json`      | Xuất `CheckReport` JSON ổn định         |
-| `--threshold <n>` | Cảnh báo khi file có hơn `<n>` selector |
-| `-v, --version`   | In phiên bản CLI                        |
-| `-h, --help`      | In trợ giúp                             |
+| Cờ | Mục đích |
+| --- | --- |
+| `-j, --json` | Xuất JSON ổn định (`check` hoặc `health`) |
+| `--threshold <n>` | Cảnh báo / áp lực size khi file có hơn `<n>` selector |
+| `--fail-under <n>` | (`health`) Exit `1` khi overall `< n` |
+| `-v, --version` | In phiên bản CLI |
+| `-h, --help` | In trợ giúp |
 
-`check` báo cáo: `syntax`, `empty-rule`, `duplicate-selector`, và tùy chọn
-`threshold`. Exit code `0` khi mọi file khớp đều analyze được (vẫn cho phép
-warning); `1` khi lỗi setup/đọc/analyze.
+`check` báo cáo: `syntax`, `empty-rule`, `duplicate-selector`, tùy chọn
+`threshold`, kèm field `health`. Exit code `0` khi mọi file khớp đều analyze
+được (vẫn cho phép warning); `1` khi lỗi setup/đọc/analyze.
+
+`health` chấm selector complexity, duplicates, size efficiency, dead CSS và
+variable consistency — tín hiệu chất lượng, không đảm bảo runtime/visual.
 
 Ví dụ output terminal:
 

@@ -2,18 +2,22 @@ import { Command, CommanderError } from "commander";
 
 import packageJson from "../package.json";
 import { registerCheckCommand } from "./commands/check";
+import { registerHealthCommand } from "./commands/health";
 
 const program = new Command();
 
 program
   .name("css-doctor")
-  .description("Diagnose CSS stylesheets with a native lightningcss engine")
+  .description(
+    "Diagnose CSS stylesheets and evaluate CSS Health Score with a native lightningcss engine",
+  )
   .version(packageJson.version, "-v, --version", "Output the version number")
   .showHelpAfterError("(run with --help for usage information)")
   .showSuggestionAfterError()
   .exitOverride();
 
 registerCheckCommand(program);
+registerHealthCommand(program);
 
 try {
   await program.parseAsync(process.argv);

@@ -6,11 +6,13 @@ import { InvalidArgumentError, type Command } from "commander";
 
 import type {
   JsCssAnalysisResult,
+  JsHealthReport,
   JsSelectorInfo,
 } from "@zealakit/css-doctor-binding";
 
 import packageJson from "../../package.json";
 import { formatJsonReport } from "../formatters/json";
+import { formatCompactHealthSummary } from "../formatters/health-terminal";
 import { formatTerminalReport, terminalExitCode } from "../formatters/terminal";
 import {
   describeError,
@@ -116,6 +118,8 @@ export type CheckReport = {
   errors: string[];
   files: FileCheckResult[];
   summary: CheckSummary;
+  /** Aggregated CSS Health Score for successfully read files. */
+  health: JsHealthReport | null;
 };
 
 /** Options accepted by the programmatic `runCheck` API. */
@@ -154,7 +158,11 @@ export function registerCheckCommand(program: Command): void {
       if (options.json === true) {
         process.stdout.write(`${formatJsonReport(report)}\n`);
       } else {
-        process.stdout.write(`${formatTerminalReport(report)}\n`);
+        let output = formatTerminalReport(report);
+        if (report.health) {
+          output += `\n${formatCompactHealthSummary(report.health)}\n`;
+        }
+        process.stdout.write(`${output}\n`);
       }
 
       process.exitCode = terminalExitCode(report);
@@ -213,12 +221,42 @@ export async function runCheck(
     }
   }
 
+  let health: JsHealthReport | null = null;
+
   if (errors.length === 0) {
     try {
-      const analyze = loadBinding().analyzeCss;
+      const binding = loadBinding();
+      const analyze = binding.analyzeCss;
 
       for (const file of files) {
         results.push(await checkFile(file, cwd, threshold, analyze));
+      }
+
+      const healthFiles = [];
+
+      for (const file of files) {
+        const read = await readCssFile(file);
+        if (!read.ok) {
+          continue;
+        }
+
+        healthFiles.push({
+          cssContent: read.content,
+          filePath: toDisplayPath(file, cwd),
+          sizeBytes: read.sizeBytes,
+        });
+      }
+
+      if (healthFiles.length > 0) {
+        health = binding.evaluateCssHealthBatch({
+          files: healthFiles,
+          thresholds:
+            threshold === null
+              ? undefined
+              : {
+                  manySelectors: threshold,
+                },
+        });
       }
     } catch (error) {
       errors.push(describeError(error));
@@ -265,6 +303,7 @@ export async function runCheck(
     errors,
     files: results,
     summary,
+    health,
   };
 }
 
