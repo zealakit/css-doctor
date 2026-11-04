@@ -1,6 +1,6 @@
 {
   "name": "@zealakit/css-doctor-vite",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Vite plugin that analyzes emitted CSS assets with the css-doctor native engine",
   "keywords": [
     "css",

@@ -1,6 +1,6 @@
 {
   "name": "@zealakit/css-doctor-next",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Next.js integration for css-doctor page-coverage CSS splitting",
   "keywords": [
     "css",

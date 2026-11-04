@@ -1,6 +1,6 @@
 {
   "name": "@zealakit/css-doctor-workspace",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Smart CSS diagnostics, dead code elimination, and intelligent chunk splitting tool.",
   "author": "nqhed - Huy Edward Nguyen",
   "private": true,

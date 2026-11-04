@@ -1,6 +1,6 @@
 {
   "name": "@zealakit/css-doctor-binding-linux-x64-gnu",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Prebuilt css-doctor native binding for linux-x64-gnu",
   "keywords": [
     "css",
