@@ -1,15 +1,22 @@
 import { Command, CommanderError } from "commander";
 
 import packageJson from "../package.json";
+import { registerBaselineCommand } from "./commands/baseline";
 import { registerCheckCommand } from "./commands/check";
+import { registerDiffCommand } from "./commands/diff";
+import { registerFixCommand } from "./commands/fix";
 import { registerHealthCommand } from "./commands/health";
+import {
+  registerOptimizeCommand,
+  registerSplitCommand,
+} from "./commands/optimize";
 
 const program = new Command();
 
 program
   .name("css-doctor")
   .description(
-    "Diagnose CSS stylesheets and evaluate CSS Health Score with a native lightningcss engine",
+    "Diagnose, score, regress, explain, and safely optimize CSS with a native LightningCSS engine",
   )
   .version(packageJson.version, "-v, --version", "Output the version number")
   .showHelpAfterError("(run with --help for usage information)")
@@ -18,6 +25,11 @@ program
 
 registerCheckCommand(program);
 registerHealthCommand(program);
+registerBaselineCommand(program);
+registerDiffCommand(program);
+registerOptimizeCommand(program);
+registerSplitCommand(program);
+registerFixCommand(program);
 
 try {
   await program.parseAsync(process.argv);

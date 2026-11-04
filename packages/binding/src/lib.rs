@@ -534,10 +534,121 @@ pub struct JsPipelineOutput {
 /// stylesheet/AST cannot be processed.
 #[napi]
 pub fn optimize_css(input: JsPipelineInput) -> Result<JsPipelineOutput, napi::Error> {
+    let core_input = build_pipeline_input(input);
+    core::optimize_css_pipeline(&core_input)
+        .map(JsPipelineOutput::from)
+        .map_err(napi::Error::from_reason)
+}
+
+/// Combined pipeline output + optimization report from a single native run.
+#[napi(object)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsOptimizeExplained {
+    pub pipeline: JsPipelineOutput,
+    pub report_json: String,
+}
+
+/// Runs the optimization pipeline once and returns both chunks and a report.
+///
+/// Prefer this over calling [`optimize_css`] and [`optimize_css_report`]
+/// separately to avoid double parsing/splitting.
+///
+/// # Errors
+///
+/// Rejects when the pipeline or report builder fails.
+#[napi(js_name = "optimizeCssExplained")]
+pub fn optimize_css_explained(
+    input: JsPipelineInput,
+    max_selector_decisions: Option<u32>,
+) -> Result<JsOptimizeExplained, napi::Error> {
+    let started = std::time::Instant::now();
+    let core_input = build_pipeline_input(input);
+    let output = core::optimize_css_pipeline(&core_input).map_err(napi::Error::from_reason)?;
+    let mut explain = core::ExplainOptions::default();
+    if let Some(limit) = max_selector_decisions {
+        explain.max_selector_decisions = limit as usize;
+    }
+    let report = core::build_optimization_report(
+        &core_input,
+        &output,
+        &core::ReportOptions {
+            explain,
+            file_path: None,
+        },
+        started.elapsed().as_secs_f64() * 1000.0,
+    )
+    .map_err(napi::Error::from_reason)?;
+
+    let report_json = serde_json::to_string_pretty(&report)
+        .map_err(|error| napi::Error::from_reason(error.to_string()))?;
+
+    Ok(JsOptimizeExplained {
+        pipeline: JsPipelineOutput::from(output),
+        report_json,
+    })
+}
+
+/// Runs the optimization pipeline and returns a versioned report JSON document
+/// that includes decisions, metrics, and chunk inventory.
+///
+/// # Errors
+///
+/// Rejects when the pipeline or report builder fails.
+#[napi(js_name = "optimizeCssReport")]
+pub fn optimize_css_report(
+    input: JsPipelineInput,
+    max_selector_decisions: Option<u32>,
+) -> Result<String, napi::Error> {
+    Ok(optimize_css_explained(input, max_selector_decisions)?.report_json)
+}
+
+/// Lists built-in autofix rules as JSON.
+#[napi(js_name = "listCssFixes")]
+pub fn list_css_fixes() -> Result<String, napi::Error> {
+    serde_json::to_string_pretty(&core::list_fix_catalog())
+        .map_err(|error| napi::Error::from_reason(error.to_string()))
+}
+
+/// Autofix input.
+#[napi(object)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsFixInput {
+    pub css_content: String,
+    pub file_path: Option<String>,
+    pub dry_run: Option<bool>,
+    pub rules: Option<Vec<String>>,
+    pub include_review: Option<bool>,
+}
+
+/// Plans or applies safe CSS autofixes. Returns a JSON `FixApplicationResult`.
+///
+/// # Errors
+///
+/// Rejects for parse/serialize failures or unsafe rule selection.
+#[napi(js_name = "applyCssFixes")]
+pub fn apply_css_fixes(input: JsFixInput) -> Result<String, napi::Error> {
+    let result = core::apply_css_fixes(
+        &input.css_content,
+        input.file_path.as_deref(),
+        &core::ApplyFixesOptions {
+            dry_run: input.dry_run.unwrap_or(true),
+            rules: input.rules.unwrap_or_default(),
+            include_review: input.include_review.unwrap_or(false),
+        },
+    )
+    .map_err(napi::Error::from_reason)?;
+
+    serde_json::to_string_pretty(&result)
+        .map_err(|error| napi::Error::from_reason(error.to_string()))
+}
+
+fn build_pipeline_input(input: JsPipelineInput) -> core::PipelineInput {
     let page_coverage = input.page_coverage;
     let size_budget = input.size_budget;
 
-    let core_input = core::PipelineInput {
+    core::PipelineInput {
         css_content: input.css_content,
         page_usage: input
             .page_usage
@@ -573,11 +684,7 @@ pub fn optimize_css(input: JsPipelineInput) -> Result<JsPipelineOutput, napi::Er
                 .unwrap_or(true),
         },
         minify: input.minify.unwrap_or(true),
-    };
-
-    core::optimize_css_pipeline(&core_input)
-        .map(JsPipelineOutput::from)
-        .map_err(napi::Error::from_reason)
+    }
 }
 
 impl From<core::PipelineChunkKind> for JsPipelineChunkKind {
@@ -1003,6 +1110,330 @@ fn health_status_name(status: core::HealthStatus) -> &'static str {
     }
 }
 
+/// File entry used when creating a baseline document.
+#[napi(object)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsBaselineFileInput {
+    pub path: String,
+    pub css_content: String,
+    pub size_bytes: Option<u32>,
+}
+
+/// Optional Git metadata for a baseline.
+#[napi(object)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsBaselineGitMetadata {
+    pub commit: Option<String>,
+    pub branch: Option<String>,
+    pub dirty: Option<bool>,
+}
+
+/// Optional project metadata for a baseline.
+#[napi(object)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsBaselineProjectMetadata {
+    pub name: Option<String>,
+    pub root: Option<String>,
+}
+
+/// Input for [`create_baseline`].
+#[napi(object)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsBaselineCreateInput {
+    pub files: Vec<JsBaselineFileInput>,
+    pub tool_version: String,
+    pub created_at: Option<String>,
+    pub patterns: Option<Vec<String>>,
+    pub threshold: Option<u32>,
+    pub project: Option<JsBaselineProjectMetadata>,
+    pub git: Option<JsBaselineGitMetadata>,
+    pub weights: Option<JsHealthWeights>,
+    pub thresholds: Option<JsHealthThresholds>,
+}
+
+/// Validation outcome for a baseline document.
+#[napi(object)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsBaselineValidationResult {
+    pub status: String,
+    pub message: Option<String>,
+}
+
+/// Comparison tolerances for regression detection.
+#[napi(object)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsCompareOptions {
+    pub score_tolerance: Option<u32>,
+    pub size_absolute_tolerance_bytes: Option<u32>,
+    pub size_increase_percent: Option<f64>,
+    pub count_absolute_tolerance: Option<u32>,
+    pub count_increase_percent: Option<f64>,
+}
+
+/// Minimum dimension score gate.
+#[napi(object)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsMinDimensionScore {
+    pub id: String,
+    pub min_score: u32,
+}
+
+/// Quality-gate configuration for regression comparison.
+#[napi(object)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsQualityGateConfig {
+    pub min_score: Option<u32>,
+    pub min_dimension_scores: Option<Vec<JsMinDimensionScore>>,
+    pub max_css_size: Option<u32>,
+    pub max_size_increase_percent: Option<f64>,
+    pub max_new_errors: Option<u32>,
+    pub max_new_warnings: Option<u32>,
+    pub fail_on_regression: Option<bool>,
+    pub fail_on_new_errors: Option<bool>,
+    pub fail_on_new_diagnostics: Option<bool>,
+}
+
+/// Creates a versioned baseline JSON document from CSS files.
+///
+/// # Errors
+///
+/// Rejects when configuration is invalid, CSS cannot be parsed, or
+/// serialization fails.
+#[napi(js_name = "createBaseline")]
+pub fn create_baseline(input: JsBaselineCreateInput) -> Result<String, napi::Error> {
+    let config = build_health_config(input.weights, input.thresholds)?;
+    let created_at = input.created_at.unwrap_or_else(chrono_like_utc_now);
+
+    if input.files.is_empty() {
+        return Err(napi::Error::from_reason(
+            "createBaseline requires at least one CSS file".to_string(),
+        ));
+    }
+
+    let mut reports = Vec::with_capacity(input.files.len());
+    let mut file_entries = Vec::with_capacity(input.files.len());
+
+    for file in &input.files {
+        let report = core::evaluate_css_health(
+            &file.css_content,
+            Some(&file.path),
+            file.size_bytes
+                .map(|value| value as usize)
+                .or(Some(file.css_content.len())),
+            &config,
+        )
+        .map_err(napi::Error::from_reason)?;
+
+        let analysis = core::analyze_css(&file.css_content).map_err(napi::Error::from_reason)?;
+        file_entries.push(core::BaselineFileEntry::from_css(
+            &file.path,
+            &file.css_content,
+            analysis.stats.rule_count,
+            analysis.stats.selector_count,
+            analysis.stats.declaration_count,
+        ));
+        reports.push(report);
+    }
+
+    let merged = core::merge_health_reports(&reports, &config);
+    let project = input.project.unwrap_or_default();
+    let git = input.git.unwrap_or_default();
+    let baseline = core::BaselineDocument::from_health_report(
+        &merged,
+        &input.tool_version,
+        &created_at,
+        core::BaselineConfigSnapshot {
+            patterns: input.patterns.unwrap_or_default(),
+            threshold: input.threshold,
+        },
+        file_entries,
+        core::BaselineProjectMetadata {
+            name: project.name,
+            root: project.root,
+        },
+        core::BaselineGitMetadata {
+            commit: git.commit,
+            branch: git.branch,
+            dirty: git.dirty,
+        },
+    );
+
+    baseline
+        .to_json_pretty()
+        .map_err(|error| napi::Error::from_reason(error.to_string()))
+}
+
+/// Validates a baseline JSON document.
+///
+/// # Errors
+///
+/// Rejects when the JSON cannot be parsed.
+#[napi(js_name = "validateBaseline")]
+pub fn validate_baseline(
+    baseline_json: String,
+    tool_version: String,
+) -> Result<JsBaselineValidationResult, napi::Error> {
+    let baseline = core::BaselineDocument::from_json(&baseline_json)
+        .map_err(|error| napi::Error::from_reason(format!("invalid baseline JSON: {error}")))?;
+
+    Ok(
+        match core::validate_baseline_document(&baseline, &tool_version) {
+            core::BaselineValidation::Compatible => JsBaselineValidationResult {
+                status: "compatible".into(),
+                message: None,
+            },
+            core::BaselineValidation::SoftWarning(message) => JsBaselineValidationResult {
+                status: "softWarning".into(),
+                message: Some(message),
+            },
+            core::BaselineValidation::Incompatible(message) => JsBaselineValidationResult {
+                status: "incompatible".into(),
+                message: Some(message),
+            },
+        },
+    )
+}
+
+/// Compares a stored baseline against a current baseline snapshot.
+///
+/// Returns a versioned regression report as pretty JSON.
+///
+/// # Errors
+///
+/// Rejects when either document is invalid JSON or options are invalid.
+#[napi(js_name = "compareBaselines")]
+pub fn compare_baselines(
+    baseline_json: String,
+    current_json: String,
+    options: Option<JsCompareOptions>,
+    gates: Option<JsQualityGateConfig>,
+) -> Result<String, napi::Error> {
+    let baseline = core::BaselineDocument::from_json(&baseline_json)
+        .map_err(|error| napi::Error::from_reason(format!("invalid baseline JSON: {error}")))?;
+    let current = core::BaselineDocument::from_json(&current_json).map_err(|error| {
+        napi::Error::from_reason(format!("invalid current baseline JSON: {error}"))
+    })?;
+    let compare_options = build_compare_options(options);
+    let gate_config = gates.map(build_quality_gates).transpose()?;
+
+    let report = core::compare_baselines_with_gates(
+        &baseline,
+        &current,
+        &compare_options,
+        gate_config.as_ref(),
+    );
+
+    serde_json::to_string_pretty(&report)
+        .map_err(|error| napi::Error::from_reason(error.to_string()))
+}
+
+fn build_compare_options(options: Option<JsCompareOptions>) -> core::CompareOptions {
+    let mut compare = core::CompareOptions::default();
+    let Some(options) = options else {
+        return compare;
+    };
+
+    if let Some(value) = options.score_tolerance {
+        compare.score_tolerance = value.min(u32::from(u8::MAX)) as u8;
+    }
+    if let Some(value) = options.size_absolute_tolerance_bytes {
+        compare.size_absolute_tolerance_bytes = value as usize;
+    }
+    if let Some(value) = options.size_increase_percent {
+        compare.size_increase_percent = value;
+    }
+    if let Some(value) = options.count_absolute_tolerance {
+        compare.count_absolute_tolerance = value as usize;
+    }
+    if let Some(value) = options.count_increase_percent {
+        compare.count_increase_percent = value;
+    }
+    compare
+}
+
+fn build_quality_gates(gates: JsQualityGateConfig) -> Result<core::QualityGateConfig, napi::Error> {
+    let mut min_dimension_scores = Vec::new();
+    if let Some(requirements) = gates.min_dimension_scores {
+        for requirement in requirements {
+            let id = parse_dimension_id(&requirement.id)?;
+            min_dimension_scores.push(core::MinDimensionScore {
+                id,
+                min_score: requirement.min_score.min(u32::from(u8::MAX)) as u8,
+            });
+        }
+    }
+
+    Ok(core::QualityGateConfig {
+        min_score: gates
+            .min_score
+            .map(|value| value.min(u32::from(u8::MAX)) as u8),
+        min_dimension_scores,
+        max_css_size: gates.max_css_size.map(|value| value as usize),
+        max_size_increase_percent: gates.max_size_increase_percent,
+        max_new_errors: gates.max_new_errors.map(|value| value as usize),
+        max_new_warnings: gates.max_new_warnings.map(|value| value as usize),
+        fail_on_regression: gates.fail_on_regression.unwrap_or(false),
+        fail_on_new_errors: gates.fail_on_new_errors.unwrap_or(false),
+        fail_on_new_diagnostics: gates.fail_on_new_diagnostics.unwrap_or(false),
+    })
+}
+
+fn parse_dimension_id(value: &str) -> Result<core::DimensionId, napi::Error> {
+    match value {
+        "selectorComplexity" | "selector-complexity" => Ok(core::DimensionId::SelectorComplexity),
+        "duplicateRules" | "duplicate-rules" => Ok(core::DimensionId::DuplicateRules),
+        "cssSizeEfficiency" | "css-size-efficiency" => Ok(core::DimensionId::CssSizeEfficiency),
+        "deadCss" | "dead-css" => Ok(core::DimensionId::DeadCss),
+        "variableConsistency" | "variable-consistency" => {
+            Ok(core::DimensionId::VariableConsistency)
+        }
+        other => Err(napi::Error::from_reason(format!(
+            "unknown dimension id `{other}`"
+        ))),
+    }
+}
+
+fn chrono_like_utc_now() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or(0);
+    let days = secs / 86_400;
+    let day_secs = secs % 86_400;
+    let hours = day_secs / 3_600;
+    let minutes = (day_secs % 3_600) / 60;
+    let seconds = day_secs % 60;
+
+    // Civil date from Unix days (proleptic Gregorian), enough for baseline metadata.
+    let (year, month, day) = unix_days_to_ymd(days as i64);
+    format!("{year:04}-{month:02}-{day:02}T{hours:02}:{minutes:02}:{seconds:02}Z")
+}
+
+fn unix_days_to_ymd(days: i64) -> (i32, u32, u32) {
+    // Algorithm from civil_from_days (Howard Hinnant).
+    let z = days + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = (z - era * 146_097) as u64;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = (yoe as i64) + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    (y as i32, m as u32, d as u32)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1158,6 +1589,143 @@ mod tests {
                 .iter()
                 .any(|diagnostic| diagnostic.code == "dead.empty-rule")
         );
+    }
+
+    #[test]
+    fn optimize_report_and_safe_fixes() {
+        let explained = optimize_css_explained(
+            JsPipelineInput {
+                css_content: ".shared { color: red; } .dead { color: blue; }".into(),
+                page_usage: HashMap::from([
+                    ("home".into(), vec!["shared".into()]),
+                    ("about".into(), vec!["shared".into()]),
+                ]),
+                page_coverage: Some(JsPageCoverageConfig {
+                    enabled: Some(true),
+                    min_page_ratio: Some(0.5),
+                    force_common: None,
+                }),
+                size_budget: Some(JsSizeBudgetConfig {
+                    enabled: Some(false),
+                    max_chunk_size: None,
+                    isolate_variables: Some(false),
+                }),
+                minify: Some(true),
+            },
+            Some(20),
+        )
+        .expect("explained");
+        assert!(!explained.pipeline.chunks.is_empty());
+        assert!(explained.report_json.contains("schemaVersion"));
+
+        let report_json = optimize_css_report(
+            JsPipelineInput {
+                css_content:
+                    ":root { --brand: red; } .shared { color: var(--brand); } .dead { color: blue; }"
+                        .into(),
+                page_usage: HashMap::from([
+                    ("home".into(), vec!["shared".into()]),
+                    ("about".into(), vec!["shared".into()]),
+                ]),
+                page_coverage: Some(JsPageCoverageConfig {
+                    enabled: Some(true),
+                    min_page_ratio: Some(0.5),
+                    force_common: None,
+                }),
+                size_budget: Some(JsSizeBudgetConfig {
+                    enabled: Some(true),
+                    max_chunk_size: Some(10_000),
+                    isolate_variables: Some(true),
+                }),
+                minify: Some(true),
+            },
+            Some(20),
+        )
+        .expect("report");
+        let report: serde_json::Value = serde_json::from_str(&report_json).unwrap();
+        assert_eq!(report["schemaVersion"], 1);
+        assert!(report["decisions"].is_array());
+        assert!(
+            report["operations"]["deadCodeEliminated"]
+                .as_bool()
+                .unwrap()
+        );
+
+        let fix_json = apply_css_fixes(JsFixInput {
+            css_content: ".ok { color: red; } .empty { }".into(),
+            file_path: Some("demo.css".into()),
+            dry_run: Some(false),
+            rules: Some(vec!["dead.empty-rule".into()]),
+            include_review: Some(false),
+        })
+        .expect("fix");
+        let fix: serde_json::Value = serde_json::from_str(&fix_json).unwrap();
+        assert_eq!(fix["changed"], true);
+        assert!(!fix["fixedCss"].as_str().unwrap().contains(".empty"));
+    }
+
+    #[test]
+    fn creates_and_compares_baselines() {
+        let baseline = create_baseline(JsBaselineCreateInput {
+            files: vec![JsBaselineFileInput {
+                path: "src/a.css".into(),
+                css_content: ".a { color: red; }".into(),
+                size_bytes: Some(16),
+            }],
+            tool_version: "1.0.0".into(),
+            created_at: Some("2026-11-01T00:00:00Z".into()),
+            patterns: Some(vec!["src/**/*.css".into()]),
+            threshold: None,
+            project: None,
+            git: None,
+            weights: None,
+            thresholds: None,
+        })
+        .expect("baseline create");
+
+        let validation = validate_baseline(baseline.clone(), "1.0.0".into()).expect("validate");
+        assert_eq!(validation.status, "compatible");
+
+        let current = create_baseline(JsBaselineCreateInput {
+            files: vec![JsBaselineFileInput {
+                path: "src/a.css".into(),
+                css_content: ".a { color: red; } .b { color: blue; } .c{}".into(),
+                size_bytes: None,
+            }],
+            tool_version: "1.0.0".into(),
+            created_at: Some("2026-11-04T00:00:00Z".into()),
+            patterns: Some(vec!["src/**/*.css".into()]),
+            threshold: None,
+            project: None,
+            git: None,
+            weights: None,
+            thresholds: None,
+        })
+        .expect("current create");
+
+        let report_json = compare_baselines(
+            baseline,
+            current,
+            Some(JsCompareOptions {
+                score_tolerance: Some(0),
+                size_absolute_tolerance_bytes: Some(0),
+                size_increase_percent: Some(1.0),
+                count_absolute_tolerance: Some(0),
+                count_increase_percent: Some(1.0),
+            }),
+            Some(JsQualityGateConfig {
+                fail_on_regression: Some(true),
+                max_size_increase_percent: Some(5.0),
+                ..JsQualityGateConfig::default()
+            }),
+        )
+        .expect("compare");
+
+        let report: serde_json::Value =
+            serde_json::from_str(&report_json).expect("regression json");
+        assert_eq!(report["schemaVersion"], 1);
+        assert!(report["status"].is_string());
+        assert!(report["qualityGates"].is_object());
     }
 
     #[test]

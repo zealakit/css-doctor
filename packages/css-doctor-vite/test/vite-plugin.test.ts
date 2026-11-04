@@ -414,8 +414,8 @@ test("disables Vite cssMinify when minify is false", async () => {
   assert.match(source, /color: #646cff/);
 });
 
-test("rejects an invalid minPageRatio", () => {
-  assert.throws(() => cssDoctor({ minPageRatio: 1.5 }), /minPageRatio/);
+test("clamps an invalid minPageRatio instead of crashing the build", () => {
+  assert.doesNotThrow(() => cssDoctor({ minPageRatio: 1.5 }));
 });
 
 test("treats direct dynamic route imports as pages", async () => {
@@ -608,9 +608,6 @@ test("honors minify: false", async () => {
   assert.doesNotMatch(common, /\.dead/);
 });
 
-test("rejects an invalid size budget", () => {
-  assert.throws(
-    () => cssDoctor({ sizeBudget: { maxChunkSize: 0 } }),
-    /maxChunkSize/,
-  );
+test("clamps an invalid size budget instead of crashing the build", () => {
+  assert.doesNotThrow(() => cssDoctor({ sizeBudget: { maxChunkSize: 0 } }));
 });

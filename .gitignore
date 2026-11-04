@@ -55,6 +55,7 @@ coverage/
 test-results/
 playwright-report/
 blob-report/
+packages/cli/test/tmp-baseline/
 .eslintcache
 .stylelintcache
 

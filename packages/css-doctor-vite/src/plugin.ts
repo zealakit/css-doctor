@@ -92,24 +92,42 @@ export function cssDoctor(options: CssDoctorViteOptions = {}): Plugin {
     isolateVariables: options.sizeBudget?.isolateVariables ?? true,
   };
   const report = options.report ?? true;
-  const minPageRatio = pageCoverage.minPageRatio ?? DEFAULT_MIN_PAGE_RATIO;
-  const maxChunkSize = sizeBudget.maxChunkSize ?? DEFAULT_MAX_CHUNK_SIZE;
+  const configuredMinPageRatio =
+    pageCoverage.minPageRatio ?? DEFAULT_MIN_PAGE_RATIO;
+  const configuredMaxChunkSize =
+    sizeBudget.maxChunkSize ?? DEFAULT_MAX_CHUNK_SIZE;
+  const configurationWarnings: string[] = [];
+  const minPageRatio =
+    Number.isFinite(configuredMinPageRatio) &&
+    configuredMinPageRatio >= 0 &&
+    configuredMinPageRatio <= 1
+      ? configuredMinPageRatio
+      : DEFAULT_MIN_PAGE_RATIO;
+  const maxChunkSize =
+    Number.isFinite(configuredMaxChunkSize) &&
+    Number.isInteger(configuredMaxChunkSize) &&
+    configuredMaxChunkSize > 0
+      ? configuredMaxChunkSize
+      : DEFAULT_MAX_CHUNK_SIZE;
   let base = "/";
   let minify = options.minify ?? true;
 
-  if (!Number.isFinite(minPageRatio) || minPageRatio < 0 || minPageRatio > 1) {
-    throw new RangeError(
-      "css-doctor: minPageRatio must be a number between 0 and 1",
+  if (minPageRatio !== configuredMinPageRatio) {
+    configurationWarnings.push(
+      "minPageRatio must be a number between 0 and 1; using 0.5",
     );
   }
 
-  if (
-    !Number.isFinite(maxChunkSize) ||
-    !Number.isInteger(maxChunkSize) ||
-    maxChunkSize <= 0
-  ) {
-    throw new RangeError("css-doctor: maxChunkSize must be a positive integer");
+  if (maxChunkSize !== configuredMaxChunkSize) {
+    configurationWarnings.push(
+      "maxChunkSize must be a positive integer; using 61440",
+    );
   }
+
+  // Keep resolved configs aligned with clamped values so optimizeCss never
+  // receives invalid numbers from a bad factory configuration.
+  pageCoverage.minPageRatio = minPageRatio;
+  sizeBudget.maxChunkSize = maxChunkSize;
 
   const filter = createFilter(options.include, options.exclude, {
     resolve: false,
@@ -162,6 +180,11 @@ export function cssDoctor(options: CssDoctorViteOptions = {}): Plugin {
             wrapCommonImports: options.wrapCommonImports ?? false,
           },
         );
+
+        for (const warning of configurationWarnings) {
+          this.warn(`[css-doctor] ${warning}`);
+          diagnostics.errors.push(warning);
+        }
 
         if (options.onDiagnostics) {
           try {

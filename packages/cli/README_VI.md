@@ -102,6 +102,17 @@ css-doctor check styles/global.css "components/**/*.css"
 css-doctor health "src/**/*.css"
 css-doctor health "src/**/*.css" --json
 css-doctor health "src/**/*.css" --fail-under 80
+css-doctor check "src/**/*.css" --fail-under 85
+
+# Baseline + regression
+css-doctor baseline create "src/**/*.css"
+css-doctor baseline show
+css-doctor diff "src/**/*.css" --fail-on-regression
+
+# Optimization intelligence
+css-doctor optimize "src/**/*.css" --dry-run --explain --json
+css-doctor fix --list
+css-doctor fix "src/**/*.css" --dry-run --rule dead.empty-rule
 ```
 
 ## Lệnh: `check`
@@ -115,6 +126,7 @@ css-doctor check [patterns...] [options]
 | `patterns...` | Một hoặc nhiều đường dẫn file CSS hoặc glob. **Bắt buộc.** |
 | `-j, --json` | In JSON `CheckReport` ra stdout (dùng cho CI) |
 | `--threshold <n>` | Cảnh báo khi file có hơn `<n>` selector (`n` là số nguyên ≥ 0) |
+| `--fail-under <n>` | Exit `1` khi Health Score tổng thể `< n` (0–100) |
 | `-v, --version` | In phiên bản CLI |
 | `-h, --help` | In trợ giúp |
 
@@ -183,10 +195,11 @@ css-doctor check "src/**/*.css" --json > css-doctor-report.json
 | Code | Ý nghĩa |
 | --- | --- |
 | `0` | Setup OK và mọi file khớp đều đọc + analyze được (warning vẫn được phép) |
-| `1` | Lỗi setup, không khớp file, không load binding, hoặc một file đọc/analyze thất bại |
+| `1` | Lỗi setup, không khớp file, không load binding, file đọc/analyze thất bại, hoặc `--fail-under` không đạt |
 
-Warning / hint **không** làm fail process. Muốn gate CI theo warning, dùng
-`--json` rồi kiểm tra `summary.issues` / `files[].issues`.
+Warning / hint **không** làm fail process trừ khi bạn cũng đặt `--fail-under`.
+Muốn gate CI theo warning, dùng `--json` rồi kiểm tra `summary.issues` /
+`files[].issues`.
 
 `check --json` còn kèm field `health` (CSS Health Score tổng hợp).
 
@@ -225,7 +238,63 @@ unused-variable được gắn `heuristic` khi bằng chứng tĩnh chưa đủ.
 
 - name: CSS health gate
   run: pnpm exec css-doctor health "src/**/*.css" --fail-under 80
+
+- name: CSS regression gate
+  run: pnpm exec css-doctor diff "src/**/*.css" --fail-on-regression --fail-on-new-errors
 ```
+
+Hãy khởi tạo và commit `.css-doctor/baseline.json` trên nhánh mặc định trước khi
+bật regression gate.
+
+## Lệnh: `baseline`
+
+```text
+css-doctor baseline create|show|validate|remove [options]
+```
+
+Tạo baseline JSON có version (mặc định `.css-doctor/baseline.json`) gồm điểm
+Health Score, fingerprint file/diagnostic (không lưu source CSS).
+
+| Subcommand | Mục đích |
+| --- | --- |
+| `create [patterns...]` | Analyze CSS và ghi baseline (`-o/--output` để đổi path) |
+| `show` | Hiển thị metadata và điểm |
+| `validate` | Kiểm tra tương thích schema |
+| `remove` | Xóa file baseline |
+
+## Lệnh: `diff`
+
+```text
+css-doctor diff [patterns...] [options]
+```
+
+So sánh phân tích hiện tại với baseline; status:
+`healthy` | `improved` | `regressed` | `mixed` | `inconclusive`.
+
+| Tùy chọn | Mô tả |
+| --- | --- |
+| `-b, --baseline <path>` | Path baseline (mặc định `.css-doctor/baseline.json`) |
+| `--fail-on-regression` | Exit `1` khi status `regressed` hoặc `mixed` |
+| `--fail-on-new-errors` | Exit `1` khi có diagnostic error mới |
+| `--fail-on-new-diagnostics` | Exit `1` khi có bất kỳ diagnostic mới |
+| `--max-size-increase <n%>` | Fail khi tổng byte CSS tăng vượt phần trăm |
+| `--max-new-errors <n>` / `--max-new-warnings <n>` | Giới hạn số issue mới |
+| `--min-score <n>` | Fail khi overall hiện tại `< n` |
+| `-v, --verbose` / `-j, --json` | Chi tiết / JSON ổn định (`schemaVersion: 1`) |
+
+Diagnostic được khớp bằng fingerprint `code|path|selector|severity` nên lệch số
+dòng không làm mọi finding trở thành “mới”.
+
+Config tùy chọn: `.css-doctor/config.json`. **Thứ tự ưu tiên:** flag CLI >
+config > mặc định.
+
+## Lệnh: `optimize` / `split` / `fix`
+
+- `optimize` / `split`: báo cáo tối ưu + giải thích quyết định; mặc định dry-run;
+  `--write --out-dir` để ghi chunk.
+- Metric tách byte loại bỏ khỏi byte phân tán do split.
+- `fix --list` / `fix --dry-run` / `fix --write`: chỉ áp dụng fix **Safe**
+  (`dead.empty-rule`, `duplicate.declaration`). Review/Unsafe không áp dụng im lặng.
 
 ## An toàn và giới hạn
 

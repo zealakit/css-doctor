@@ -2,6 +2,18 @@
   "name": "@zealakit/css-doctor-binding-darwin-arm64",
   "version": "1.0.0",
   "description": "Prebuilt css-doctor native binding for darwin-arm64",
+  "keywords": [
+    "css",
+    "css-doctor",
+    "native-addon",
+    "napi",
+    "darwin",
+    "arm64",
+    "apple-silicon",
+    "macos",
+    "prebuilt-binary",
+    "nodejs"
+  ],
   "author": "nqhed - Huy Edward Nguyen",
   "license": "MIT",
   "main": "css-doctor-binding.darwin-arm64.node",

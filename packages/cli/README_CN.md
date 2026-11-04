@@ -101,6 +101,17 @@ css-doctor check styles/global.css "components/**/*.css"
 css-doctor health "src/**/*.css"
 css-doctor health "src/**/*.css" --json
 css-doctor health "src/**/*.css" --fail-under 80
+css-doctor check "src/**/*.css" --fail-under 85
+
+# 基线 + 回归
+css-doctor baseline create "src/**/*.css"
+css-doctor baseline show
+css-doctor diff "src/**/*.css" --fail-on-regression
+
+# 优化智能
+css-doctor optimize "src/**/*.css" --dry-run --explain --json
+css-doctor fix --list
+css-doctor fix "src/**/*.css" --dry-run --rule dead.empty-rule
 ```
 
 ## 命令：`check`
@@ -114,6 +125,7 @@ css-doctor check [patterns...] [options]
 | `patterns...` | 一个或多个 CSS 路径或 glob。**必填。** |
 | `-j, --json` | 向 stdout 输出结构化 `CheckReport` JSON |
 | `--threshold <n>` | 当文件选择器数量超过 `<n>` 时警告（非负整数） |
+| `--fail-under <n>` | 总体 Health Score `< n`（0–100）时退出码为 `1` |
 | `-v, --version` | 打印 CLI 版本 |
 | `-h, --help` | 打印帮助 |
 
@@ -179,10 +191,11 @@ css-doctor check "src/**/*.css" --json > css-doctor-report.json
 | Code | 含义 |
 | --- | --- |
 | `0` | 初始化成功，且所有匹配文件均已读取并分析（允许 warning） |
-| `1` | 初始化失败、无匹配、无法加载绑定，或某文件读取/分析失败 |
+| `1` | 初始化失败、无匹配、无法加载绑定、某文件读取/分析失败，或 `--fail-under` 未通过 |
 
-warning / hint **不会**导致非零退出码。若要在 CI 中根据 warning 失败，请解析
-`--json` 中的 `summary.issues` / `files[].issues`。
+warning / hint **不会**单独导致非零退出码，除非同时设置 `--fail-under`。
+若要在 CI 中根据 warning 失败，请解析 `--json` 中的 `summary.issues` /
+`files[].issues`。
 
 `check --json` 还会包含聚合的 `health` 字段（CSS Health Score）。
 
@@ -221,7 +234,60 @@ css-doctor health [patterns...] [options]
 
 - name: CSS health gate
   run: pnpm exec css-doctor health "src/**/*.css" --fail-under 80
+
+- name: CSS regression gate
+  run: pnpm exec css-doctor diff "src/**/*.css" --fail-on-regression --fail-on-new-errors
 ```
+
+启用回归门禁前，请先在默认分支创建并提交 `.css-doctor/baseline.json`。
+
+## 命令：`baseline`
+
+```text
+css-doctor baseline create|show|validate|remove [options]
+```
+
+创建版本化 JSON 基线（默认 `.css-doctor/baseline.json`），包含 Health Score、
+文件/诊断指纹（不保存 CSS 源码）。
+
+| 子命令 | 作用 |
+| --- | --- |
+| `create [patterns...]` | 分析 CSS 并写入基线（`-o/--output` 可自定义路径） |
+| `show` | 显示元数据与分数 |
+| `validate` | 校验 schema 兼容性 |
+| `remove` | 删除基线文件 |
+
+## 命令：`diff`
+
+```text
+css-doctor diff [patterns...] [options]
+```
+
+将当前分析与基线对比；状态为
+`healthy` | `improved` | `regressed` | `mixed` | `inconclusive`。
+
+| 选项 | 说明 |
+| --- | --- |
+| `-b, --baseline <path>` | 基线路径（默认 `.css-doctor/baseline.json`） |
+| `--fail-on-regression` | 状态为 `regressed` 或 `mixed` 时退出码为 `1` |
+| `--fail-on-new-errors` | 出现新的 error 诊断时退出码为 `1` |
+| `--fail-on-new-diagnostics` | 出现任意新诊断时退出码为 `1` |
+| `--max-size-increase <n%>` | CSS 总字节增长超过百分比时失败 |
+| `--max-new-errors <n>` / `--max-new-warnings <n>` | 新问题数量上限 |
+| `--min-score <n>` | 当前 overall `< n` 时失败 |
+| `-v, --verbose` / `-j, --json` | 详细输出 / 稳定 JSON（`schemaVersion: 1`） |
+
+诊断匹配使用 `code|path|selector|severity` 指纹，行号漂移不会把后续 finding
+全部标为“新增”。
+
+可选配置：`.css-doctor/config.json`。**优先级：** CLI 参数 > 配置文件 > 默认值。
+
+## 命令：`optimize` / `split` / `fix`
+
+- `optimize` / `split`：优化报告与决策解释；默认 dry-run；`--write --out-dir` 写出分块。
+- 指标区分消除字节与拆分重分布字节。
+- `fix --list` / `--dry-run` / `--write`：默认只应用 **Safe** 修复
+  （`dead.empty-rule`、`duplicate.declaration`）；Review/Unsafe 不会静默应用。
 
 ## 安全与限制
 

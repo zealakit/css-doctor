@@ -2,17 +2,18 @@
 //!
 //! `css_doctor_core` parses CSS with [`lightningcss`], walks the resulting AST
 //! with a visitor, and exposes every selector in a serializable form. The
-//! result is designed to be consumed by three future layers:
+//! Public layers built on this crate:
 //!
 //! * **Usage analysis** — [`UsageMatrix`] counts selectors and the symbols they
 //!   reference.
-//! * **Dead-code detection** — the structured selector data and the usage
-//!   matrix can be compared against symbols found in HTML/JS.
-//! * **AST optimization** — [`StyleRuleInfo`] keeps source locations, nesting
-//!   depth and parent links so rules can be rewritten without re-parsing.
+//! * **Health Score / regression** — [`evaluate_css_health`], baselines, and
+//!   quality gates.
+//! * **Optimization intelligence** — explanations, reports, and Safe autofixes.
 //! * **Page-coverage chunk splitting** — [`split_css_by_pages`] turns a
 //!   stylesheet plus per-page class usage into common/page CSS chunks and
 //!   drops dead selectors.
+//! * **Two-tier pipeline** — [`optimize_css_pipeline`] combines coverage, size
+//!   budget, variable isolation, and minification.
 //!
 //! # Example
 //!
@@ -43,7 +44,9 @@
 mod analyzer;
 mod health;
 mod model;
+mod optimization;
 mod pipeline;
+mod regression;
 mod size_splitter;
 mod splitter;
 mod usage;
@@ -59,9 +62,26 @@ pub use model::{
     AnalysisStats, AnalysisWarning, CssAnalysisResult, SelectorInfo, SelectorKind, SourceLocation,
     Specificity, StyleRuleInfo,
 };
+pub use optimization::{
+    ApplyFixesOptions, DecisionCategory, DecisionConfidence, DecisionType, ExplainOptions,
+    FixApplicationResult, FixCatalogEntry, FixPlan, FixPlanItem, FixSafety, OptimizationDecision,
+    OptimizationImpact, OptimizationMetrics, OptimizationOperations, OptimizationReport,
+    OptimizationSource, ReportOptions, apply_css_fixes, build_optimization_report,
+    explain_pipeline, list_fix_catalog, plan_css_fixes,
+};
 pub use pipeline::{
     PageCoverageConfig, PipelineChunk, PipelineChunkKind, PipelineInput, PipelineOutput,
     SizeBudgetConfig, optimize_css_pipeline,
+};
+pub use regression::{
+    BaselineConfigSnapshot, BaselineDiagnostic, BaselineDimensionScore, BaselineDocument,
+    BaselineFileEntry, BaselineGitMetadata, BaselineHealthSnapshot, BaselineProjectMetadata,
+    BaselineValidation, CURRENT_BASELINE_SCHEMA, CompareOptions, CountDelta, DiagnosticChangeSet,
+    DiagnosticDiffEntry, DimensionDelta, FileChangeSet, FileDiffEntry, GateCheckResult,
+    GateEvaluation, MinDimensionScore, QualityGateConfig, RegressionChanges, RegressionReport,
+    RegressionStatus, SizeDelta, SnapshotRef, compare_baselines, compare_baselines_with_gates,
+    content_fingerprint, diagnostic_fingerprint, evaluate_quality_gates, normalize_relative_path,
+    validate_baseline_document,
 };
 pub use size_splitter::{SizeSplitOutput, SizeSplitterConfig, split_css_by_size};
 pub use splitter::{ChunkConfig, SelectorStat, SplitInput, SplitOutput, split_css_by_pages};

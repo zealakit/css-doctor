@@ -70,26 +70,34 @@ type ResolvedOptions = {
  */
 export class CssDoctorRspackPlugin {
   private readonly options: ResolvedOptions;
+  private readonly configurationWarnings: string[] = [];
 
   constructor(options: CssDoctorRsbuildOptions = {}) {
-    const minPageRatio =
+    const configuredMinPageRatio =
       options.pageCoverage?.minPageRatio ?? DEFAULT_MIN_PAGE_RATIO;
-    const maxChunkSize =
+    const configuredMaxChunkSize =
       options.sizeBudget?.maxChunkSize ?? DEFAULT_MAX_CHUNK_SIZE;
 
-    if (
-      !Number.isFinite(minPageRatio) ||
-      minPageRatio < 0 ||
-      minPageRatio > 1
-    ) {
-      throw new RangeError(
-        "css-doctor: minPageRatio must be a number between 0 and 1",
+    const minPageRatio =
+      Number.isFinite(configuredMinPageRatio) &&
+      configuredMinPageRatio >= 0 &&
+      configuredMinPageRatio <= 1
+        ? configuredMinPageRatio
+        : DEFAULT_MIN_PAGE_RATIO;
+    const maxChunkSize =
+      Number.isInteger(configuredMaxChunkSize) && configuredMaxChunkSize > 0
+        ? configuredMaxChunkSize
+        : DEFAULT_MAX_CHUNK_SIZE;
+
+    if (minPageRatio !== configuredMinPageRatio) {
+      this.configurationWarnings.push(
+        "minPageRatio must be a number between 0 and 1; using 0.5",
       );
     }
 
-    if (!Number.isInteger(maxChunkSize) || maxChunkSize <= 0) {
-      throw new RangeError(
-        "css-doctor: maxChunkSize must be a positive integer",
+    if (maxChunkSize !== configuredMaxChunkSize) {
+      this.configurationWarnings.push(
+        "maxChunkSize must be a positive integer; using 61440",
       );
     }
 
@@ -141,6 +149,9 @@ export class CssDoctorRspackPlugin {
   ): Promise<void> {
     const startedAt = performance.now();
     const logger = compilation.getLogger(PLUGIN_NAME);
+    for (const warning of this.configurationWarnings) {
+      logger.warn(`[css-doctor] ${warning}`);
+    }
     const pagesResult = await collectPages(compilation);
     const pageNames = pagesResult.pages.map((page) => page.name);
     const allPages = new Set(pageNames);

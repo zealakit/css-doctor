@@ -2,6 +2,18 @@
   "name": "@zealakit/css-doctor-binding-linux-x64-musl",
   "version": "1.0.0",
   "description": "Prebuilt css-doctor native binding for linux-x64-musl",
+  "keywords": [
+    "css",
+    "css-doctor",
+    "native-addon",
+    "napi",
+    "linux",
+    "x64",
+    "musl",
+    "alpine",
+    "prebuilt-binary",
+    "nodejs"
+  ],
   "author": "nqhed - Huy Edward Nguyen",
   "license": "MIT",
   "main": "css-doctor-binding.linux-x64-musl.node",

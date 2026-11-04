@@ -55,6 +55,8 @@ export const assets = withCssDoctorAssets(baseAssets, {
 ## 安全与限制
 
 - 不支持 pageCoverage：Remix 3 没有构建期 route-to-CSS 图。
+- Size budget 可能在内部拆成多个 chunk，但中间件仍返回**单个拼接后的 CSS
+  响应**（变量 + body parts），不会为每个 part 暴露独立 HTTP URL。
 - 优化成功的 text/css GET 响应，失败时回退原始响应。
 - 使用基于 URL、源 ETag 和内容哈希的 LRU 缓存。
 - 按 controller action 加载页面 module 样式，不要硬编码到全局 document head。

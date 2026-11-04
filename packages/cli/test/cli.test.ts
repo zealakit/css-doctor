@@ -239,3 +239,277 @@ test("reports the CLI version", () => {
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout.trim(), /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/);
 });
+
+test("baseline create/show/validate/remove round-trip", () => {
+  const baselinePath = join(
+    "test",
+    "tmp-baseline",
+    `baseline-${process.pid}.json`,
+  );
+
+  const created = runCli([
+    "baseline",
+    "create",
+    "test/fixtures/basic.css",
+    "--output",
+    baselinePath,
+    "--json",
+  ]);
+  assert.equal(created.status, 0, created.stderr);
+  const createReport = JSON.parse(created.stdout) as {
+    success: boolean;
+    action: string;
+    baseline: { schemaVersion: number; health: { overall: number } } | null;
+  };
+  assert.equal(createReport.success, true);
+  assert.equal(createReport.action, "create");
+  assert.ok(createReport.baseline);
+  assert.equal(createReport.baseline.schemaVersion, 1);
+
+  const shown = runCli([
+    "baseline",
+    "show",
+    "--baseline",
+    baselinePath,
+    "--json",
+  ]);
+  assert.equal(shown.status, 0, shown.stderr);
+
+  const validated = runCli([
+    "baseline",
+    "validate",
+    "--baseline",
+    baselinePath,
+    "--json",
+  ]);
+  assert.equal(validated.status, 0, validated.stderr);
+
+  const removed = runCli([
+    "baseline",
+    "remove",
+    "--baseline",
+    baselinePath,
+    "--json",
+  ]);
+  assert.equal(removed.status, 0, removed.stderr);
+});
+
+test("diff reports healthy status against an identical baseline", () => {
+  const baselinePath = join(
+    "test",
+    "tmp-baseline",
+    `diff-healthy-${process.pid}.json`,
+  );
+
+  const created = runCli([
+    "baseline",
+    "create",
+    "test/fixtures/basic.css",
+    "--output",
+    baselinePath,
+  ]);
+  assert.equal(created.status, 0, created.stderr);
+
+  const diff = runCli([
+    "diff",
+    "test/fixtures/basic.css",
+    "--baseline",
+    baselinePath,
+    "--json",
+  ]);
+  assert.equal(diff.status, 0, diff.stderr);
+  const report = JSON.parse(diff.stdout) as {
+    success: boolean;
+    regression: {
+      status: string;
+      schemaVersion: number;
+      changes: { score: number };
+    } | null;
+  };
+  assert.equal(report.success, true);
+  assert.ok(report.regression);
+  assert.equal(report.regression.schemaVersion, 1);
+  assert.equal(report.regression.status, "healthy");
+  assert.equal(report.regression.changes.score, 0);
+
+  runCli(["baseline", "remove", "--baseline", baselinePath]);
+});
+
+test("diff --fail-on-regression exits 1 when CSS quality deteriorates", () => {
+  const baselinePath = join(
+    "test",
+    "tmp-baseline",
+    `diff-regress-${process.pid}.json`,
+  );
+
+  const created = runCli([
+    "baseline",
+    "create",
+    "test/fixtures/basic.css",
+    "--output",
+    baselinePath,
+  ]);
+  assert.equal(created.status, 0, created.stderr);
+
+  const diff = runCli([
+    "diff",
+    "test/fixtures/health-issues.css",
+    "--baseline",
+    baselinePath,
+    "--fail-on-regression",
+    "--json",
+  ]);
+  assert.equal(diff.status, 1, diff.stderr);
+  const report = JSON.parse(diff.stdout) as {
+    success: boolean;
+    regression: { status: string; qualityGates?: { passed: boolean } } | null;
+  };
+  assert.equal(report.success, false);
+  assert.ok(report.regression);
+  assert.match(report.regression.status, /regressed|mixed/);
+  assert.equal(report.regression.qualityGates?.passed, false);
+
+  runCli(["baseline", "remove", "--baseline", baselinePath]);
+});
+
+test("diff fails clearly when baseline is missing", () => {
+  const result = runCli([
+    "diff",
+    "test/fixtures/basic.css",
+    "--baseline",
+    "test/tmp-baseline/does-not-exist.json",
+    "--json",
+  ]);
+  assert.equal(result.status, 1);
+  const report = JSON.parse(result.stdout) as {
+    success: boolean;
+    errors: string[];
+    regression: null;
+  };
+  assert.equal(report.success, false);
+  assert.equal(report.regression, null);
+  assert.ok(report.errors.some((error) => /Baseline not found/i.test(error)));
+});
+
+test("check --fail-under fails when score is below the floor", () => {
+  const result = runCli([
+    "check",
+    "test/fixtures/health-issues.css",
+    "--json",
+    "--fail-under",
+    "100",
+  ]);
+
+  assert.equal(result.status, 1, result.stderr);
+  const report = JSON.parse(result.stdout) as {
+    success: boolean;
+    failUnder: number | null;
+    errors: string[];
+    health: { overall: number } | null;
+  };
+
+  assert.equal(report.success, false);
+  assert.equal(report.failUnder, 100);
+  assert.ok(report.health);
+  assert.ok(report.health.overall < 100);
+  assert.ok(report.errors.some((error) => /fail-under/i.test(error)));
+});
+
+test("help lists baseline and diff commands", () => {
+  const result = runCli(["--help"]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /baseline/);
+  assert.match(result.stdout, /diff/);
+});
+
+test("optimize --dry-run emits an optimization report without writing", () => {
+  const result = runCli([
+    "optimize",
+    "test/fixtures/basic.css",
+    "--dry-run",
+    "--json",
+    "--no-page-coverage",
+    "--no-size-budget",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+  const report = JSON.parse(result.stdout) as {
+    success: boolean;
+    dryRun: boolean;
+    files: Array<{
+      report: { schemaVersion: number; operations: { minified: boolean } };
+    }>;
+  };
+  assert.equal(report.success, true);
+  assert.equal(report.dryRun, true);
+  assert.ok(report.files[0]);
+  assert.equal(report.files[0].report.schemaVersion, 1);
+  assert.equal(report.files[0].report.operations.minified, true);
+});
+
+test("optimize rejects --write together with --dry-run", () => {
+  const result = runCli([
+    "optimize",
+    "test/fixtures/basic.css",
+    "--write",
+    "--dry-run",
+    "--out-dir",
+    "test/tmp-baseline/out",
+  ]);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /mutually exclusive/i);
+});
+
+test("optimize rejects invalid --page-usage shapes", () => {
+  const result = runCli([
+    "optimize",
+    "test/fixtures/basic.css",
+    "--dry-run",
+    "--json",
+    "--page-usage",
+    '{"home":"not-an-array"}',
+  ]);
+  assert.equal(result.status, 1);
+  const report = JSON.parse(result.stdout) as {
+    success: boolean;
+    errors: string[];
+  };
+  assert.equal(report.success, false);
+  assert.ok(report.errors.some((error) => /page-usage/i.test(error)));
+});
+
+test("fix --list shows safe and unsafe rules", () => {
+  const result = runCli(["fix", "--list"]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /dead\.empty-rule/);
+  assert.match(result.stdout, /\[safe\]/);
+  assert.match(result.stdout, /\[unsafe\]/);
+});
+
+test("fix --dry-run previews empty-rule removal", () => {
+  const result = runCli([
+    "fix",
+    "test/fixtures/health-issues.css",
+    "--dry-run",
+    "--json",
+    "--rule",
+    "dead.empty-rule",
+  ]);
+  assert.equal(result.status, 0, result.stderr);
+  const report = JSON.parse(result.stdout) as {
+    success: boolean;
+    dryRun: boolean;
+    files: Array<{ result: { changed: boolean; dryRun: boolean } }>;
+  };
+  assert.equal(report.success, true);
+  assert.equal(report.dryRun, true);
+  assert.ok(report.files.some((file) => file.result.changed));
+});
+
+test("help lists optimize and fix commands", () => {
+  const result = runCli(["--help"]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /optimize/);
+  assert.match(result.stdout, /split/);
+  assert.match(result.stdout, /fix/);
+});

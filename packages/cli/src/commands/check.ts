@@ -114,6 +114,7 @@ export type CheckReport = {
   cwd: string;
   patterns: string[];
   threshold: number | null;
+  failUnder: number | null;
   success: boolean;
   errors: string[];
   files: FileCheckResult[];
@@ -128,11 +129,14 @@ export type CheckRunOptions = {
   cwd?: string;
   /** Warn when a file contains more selectors than this value. */
   threshold?: number;
+  /** Fail when overall Health Score is below this floor (0-100). */
+  failUnder?: number;
 };
 
 type CheckCliOptions = {
   json?: boolean;
   threshold?: number;
+  failUnder?: number;
 };
 
 /** Registers `css-doctor check` on a Commander program. */
@@ -150,9 +154,15 @@ export function registerCheckCommand(program: Command): void {
       "Warn when a file contains more than <number> selectors",
       parseThreshold,
     )
+    .option(
+      "--fail-under <number>",
+      "Exit with code 1 when overall health score is below <number> (0-100)",
+      parseScore,
+    )
     .action(async (patterns: string[], options: CheckCliOptions) => {
       const report = await runCheck(patterns ?? [], {
         threshold: options.threshold,
+        failUnder: options.failUnder,
       });
 
       if (options.json === true) {
@@ -179,6 +189,16 @@ function parseThreshold(value: string): number {
   return parsed;
 }
 
+function parseScore(value: string): number {
+  const parsed = Number(value);
+
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 100) {
+    throw new InvalidArgumentError("must be an integer between 0 and 100");
+  }
+
+  return parsed;
+}
+
 /**
  * Runs the full check pipeline and returns a structured report.
  *
@@ -193,6 +213,7 @@ export async function runCheck(
   const startedAt = performance.now();
   const cwd = resolve(options.cwd ?? process.cwd());
   const threshold = options.threshold ?? null;
+  const failUnder = options.failUnder ?? null;
   const errors: string[] = [];
   const results: FileCheckResult[] = [];
 
@@ -200,6 +221,10 @@ export async function runCheck(
 
   if (threshold !== null && (!Number.isInteger(threshold) || threshold < 0)) {
     errors.push("Threshold must be a non-negative integer.");
+  }
+
+  if (failUnder !== null && (failUnder < 0 || failUnder > 100)) {
+    errors.push("--fail-under must be an integer between 0 and 100.");
   }
 
   if (patterns.length === 0) {
@@ -291,6 +316,13 @@ export async function runCheck(
     totalMs: elapsedMs(startedAt),
   };
 
+  const belowFloor =
+    failUnder !== null && health !== null && health.overall < failUnder
+      ? [
+          `Overall health score ${health.overall} is below --fail-under ${failUnder}.`,
+        ]
+      : [];
+
   return {
     schemaVersion: 1,
     command: "check",
@@ -299,8 +331,9 @@ export async function runCheck(
     cwd,
     patterns,
     threshold,
-    success: errors.length === 0 && failed === 0,
-    errors,
+    failUnder,
+    success: errors.length === 0 && failed === 0 && belowFloor.length === 0,
+    errors: [...errors, ...belowFloor],
     files: results,
     summary,
     health,

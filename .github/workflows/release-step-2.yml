@@ -72,69 +72,21 @@ jobs:
           echo "NPM_TAG=${npm_tag}" >> "$GITHUB_ENV"
           echo "Target Release Version: ${release_version} (dist-tag: ${npm_tag})"
 
-      - name: Ensure Complete Binding Declarations
+      - name: Rebuild binding declarations from NAPI sources
         shell: bash
         run: |
           set -euo pipefail
-          echo "Writing fully compliant type declarations into packages/binding/index.d.ts..."
-          cat << 'EOF' > packages/binding/index.d.ts
-          export interface JsSelectorStat {
-            selector: string;
-            count: number;
-            totalOccurrences: number;
-            specificity: number[];
-          }
-
-          export interface JsCssAnalysisResult {
-            unusedSelectors: string[];
-            duplicateRules: number;
-            selectorStats: JsSelectorStat[];
-            totalRules: number;
-            compressedSize: number;
-            stats: any;
-            warnings: any[];
-          }
-
-          export interface JsOptimizeChunk {
-            name: string;
-            css: string;
-            page?: string;
-            sourceChunk: string;
-            kind?: string;
-            variables: boolean;
-            part?: number;
-            sizeBytes: number;
-            oversized: boolean;
-            splitDueToSize: boolean;
-            isEntry?: boolean;
-          }
-
-          export interface JsChunkOutput {
-            name: string;
-            css: string;
-            page?: string;
-            sourceChunk?: string;
-            kind?: string;
-            variables?: boolean;
-            part?: number;
-            sizeBytes?: number;
-            oversized?: boolean;
-            splitDueToSize?: boolean;
-            isEntry?: boolean;
-            [key: string]: any;
-          }
-
-          export interface JsOptimizeResult {
-            css: string;
-            chunks: JsOptimizeChunk[];
-            deadCodeCount: number;
-            stats: JsSelectorStat[];
-            warnings: any[];
-          }
-
-          export function analyzeCss(css: string, htmls?: string[]): JsCssAnalysisResult;
-          export function optimizeCss(input: any, options?: any): JsOptimizeResult;
-          EOF
+          # Never hand-write index.d.ts — adapters must typecheck against the
+          # real NAPI-generated surface from packages/binding/src/lib.rs.
+          pnpm --filter @zealakit/css-doctor-binding build
+          test -f packages/binding/index.d.ts
+          test -f packages/binding/index.js
+          grep -q "export declare function optimizeCss" packages/binding/index.d.ts
+          grep -q "export declare function analyzeCss" packages/binding/index.d.ts
+          if grep -q "unusedSelectors" packages/binding/index.d.ts; then
+            echo "Binding declarations look stale (unusedSelectors found)" >&2
+            exit 1
+          fi
 
       - name: Build CLI and adapters
         run: |

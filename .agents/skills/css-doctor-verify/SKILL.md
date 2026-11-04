@@ -86,8 +86,8 @@ pnpm exec turbo build --dry-run
 pnpm --filter @zealakit/css-doctor-next test:next
 ```
 
-This runs Next 14 App Router with `app/**/page`, layouts, global CSS, and the
-plugin wrapper. Confirm:
+This runs the Next App Router fixture (Next 15) with `app/**/page`, layouts,
+global CSS, and the plugin wrapper. Confirm:
 
 - build exits `0`;
 - common hashed CSS contains shared/layout classes;

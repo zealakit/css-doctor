@@ -88,9 +88,17 @@ classes are detected so empty usage cannot wipe the stylesheet.
 - ESM, `tsup`, Commander.
 - Entry: `src/index.ts`; built to `dist/index.js` with shebang.
 - No hand-written JS source; tests are TS run with `tsx --test`.
-- `css-doctor check` supports paths/globs, `-j/--json`, `--threshold`.
-- Exit code: `1` for fatal setup/read/analyze failures; warnings/hints keep `0`
-  unless future flags change this contract.
+- Commands: `check`, `health`, `baseline` (create/show/validate/remove), `diff`,
+  `optimize`, `split`, `fix`.
+- `check` / `health` support `--fail-under`; `diff` owns regression quality gates
+  (`--fail-on-regression`, `--max-size-increase`, `--fail-on-new-errors`, …).
+- `optimize` / `split` explain pipeline decisions and support `--dry-run` /
+  `--write --out-dir`; `fix` applies Safe AST autofixes only by default.
+- Baselines default to `.css-doctor/baseline.json`; optional project config is
+  `.css-doctor/config.json` (CLI flags > config > defaults). Framework adapters
+  do not persist baselines; they keep calling `optimizeCss` unchanged.
+- Exit code `1` for setup/analysis failures or failed quality gates; ordinary
+  diagnostics warnings alone keep `0` unless a gate is configured.
 - Use lazy binding loading so `--help`/`--version` work before the native build.
 - Verify:
 

@@ -136,6 +136,60 @@ async function main(): Promise<void> {
     ),
   );
 
+  const optimizeReport = JSON.parse(
+    binding.optimizeCssReport(
+      {
+        cssContent: ".shared { color: red; } .dead { color: blue; }",
+        pageUsage: {
+          home: ["shared"],
+          about: ["shared"],
+        },
+        pageCoverage: { enabled: true, minPageRatio: 0.5 },
+        sizeBudget: { enabled: false },
+        minify: true,
+      },
+      20,
+    ),
+  ) as {
+    schemaVersion: number;
+    operations: { deadCodeEliminated: boolean };
+  };
+  assert.equal(optimizeReport.schemaVersion, 1);
+  assert.equal(optimizeReport.operations.deadCodeEliminated, true);
+
+  const fixResult = JSON.parse(
+    binding.applyCssFixes({
+      cssContent: ".ok { color: red; } .empty {}",
+      filePath: "demo.css",
+      dryRun: true,
+      rules: ["dead.empty-rule"],
+    }),
+  ) as { changed: boolean; dryRun: boolean };
+  assert.equal(fixResult.dryRun, true);
+  assert.equal(fixResult.changed, true);
+
+  const baseline = binding.createBaseline({
+    files: [
+      {
+        path: "demo.css",
+        cssContent: ".ok { color: blue; } .dead { }",
+        sizeBytes: 32,
+      },
+    ],
+    toolVersion: "1.0.0",
+    createdAt: "2026-11-04T00:00:00Z",
+    patterns: ["demo.css"],
+  });
+  const validation = binding.validateBaseline(baseline, "1.0.0");
+  assert.equal(validation.status, "compatible");
+  const regression = JSON.parse(
+    binding.compareBaselines(baseline, baseline, null, {
+      failOnRegression: true,
+    }),
+  ) as { status: string; schemaVersion: number };
+  assert.equal(regression.schemaVersion, 1);
+  assert.equal(regression.status, "healthy");
+
   console.log("\n✅ css-doctor NAPI binding OK");
   console.log(
     `   ${result.stats.ruleCount} rules, ${result.stats.selectorCount} selectors, ` +

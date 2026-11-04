@@ -5,7 +5,7 @@
 **面向现代 Web 应用的原生 CSS 诊断、智能分割与生产级优化工具链。**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D18-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![Rust](https://img.shields.io/badge/rust-stable-b7410e?logo=rust&logoColor=white)](https://www.rust-lang.org)
 
 [English](https://github.com/zealakit/css-doctor/blob/main/README.md) | [Tiếng Việt](https://github.com/zealakit/css-doctor/blob/main/README_VI.md) | [简体中文](https://github.com/zealakit/css-doctor/blob/main/README_CN.md)
@@ -51,7 +51,9 @@ CLI 可报告：
 - 样式表体积与 selector 数量阈值；
 - selector、rule、declaration 数量与耗时；
 - 确定性的 **CSS Health Score**（0–100，五个加权维度）；
-- 适用于 CI 的 JSON（`check` 与 `health`）。
+- **基线与回归检测**（`baseline` / `diff`）用于 CI 质量门禁；
+- **优化智能**（`optimize` / `split` / `fix`）：决策解释、dry-run 预览与 Safe 自动修复；
+- 适用于 CI 的 JSON（`check`、`health`、`baseline`、`diff`、`optimize`、`fix`）。
 
 ### 跨平台原生二进制
 
@@ -76,8 +78,8 @@ CSS Modules、Vue scoped、Svelte scoped、Astro scoped 的安全处理。
 
 ## 快速开始 — CLI
 
-CLI 用于**静态诊断**（语法、空规则、重复选择器、选择器数量阈值）。它不会在构建时
-minify 或拆分 CSS — 构建期优化请使用框架适配器。
+CLI 覆盖**静态诊断**、Health Score、基线/回归、优化 dry-run 预览与 Safe autofix。
+构建期 **CSS 产物注入**（HTML/JS chunk 链接）仍由框架适配器负责。
 
 完整 CLI 指南：
 [`packages/cli/README_CN.md`](https://github.com/zealakit/css-doctor/blob/main/packages/cli/README_CN.md)
@@ -136,22 +138,53 @@ css-doctor check "src/**/*.css" -j --threshold 500
 css-doctor health "src/**/*.css"
 css-doctor health "src/**/*.css" --json
 css-doctor health "src/**/*.css" --fail-under 80
+css-doctor check "src/**/*.css" --fail-under 85
+
+# 基线 + 回归（在 main 提交基线）
+css-doctor baseline create "src/**/*.css"
+css-doctor baseline show
+css-doctor diff "src/**/*.css" --fail-on-regression --max-size-increase 10%
+
+# 优化智能（默认 dry-run）
+css-doctor optimize "src/**/*.css" --dry-run --explain
+css-doctor fix --list
+css-doctor fix "src/**/*.css" --dry-run --rule dead.empty-rule
 ```
 
 | 选项 | 作用 |
 | --- | --- |
-| `-j, --json` | 输出稳定 JSON（`check` 或 `health`） |
+| `-j, --json` | 输出稳定 JSON（`check`、`health`、`baseline`、`diff`） |
 | `--threshold <n>` | 文件选择器超过 `<n>` 时警告 / 体积压力 |
-| `--fail-under <n>` | （`health`）overall `< n` 时退出码为 `1` |
+| `--fail-under <n>` | （`check` / `health`）overall `< n` 时退出码为 `1` |
+| `--fail-on-regression` | （`diff`）状态为 `regressed` 或 `mixed` 时退出码为 `1` |
+| `--max-size-increase <n%>` | （`diff`）CSS 总体积增长超过限制时失败 |
 | `-v, --version` | 打印 CLI 版本 |
 | `-h, --help` | 打印帮助 |
 
 `check` 会报告：`syntax`、`empty-rule`、`duplicate-selector`、可选 `threshold`，
 以及聚合 `health`。所有匹配文件都分析成功时退出码为 `0`（允许 warning）；
-初始化/读取/分析失败时为 `1`。
+初始化/读取/分析失败或 `--fail-under` 未通过时为 `1`。
 
 `health` 评分覆盖选择器复杂度、重复规则、体积效率、死代码与变量一致性。
 它是质量信号，不能保证 runtime/视觉正确性。
+
+### 基线与回归
+
+将版本化快照存入 `.css-doctor/baseline.json`（不保存 CSS 源码），然后用
+`css-doctor diff` 对比 PR：
+
+1. 在 `main`：`css-doctor baseline create "src/**/*.css"` 并提交该文件。
+2. 在 PR：`css-doctor diff --fail-on-regression --fail-on-new-errors`。
+3. 有意变更 CSS 后：重新创建并提交基线。
+
+可选配置：`.css-doctor/config.json`（CLI 参数 > 配置文件 > 默认值）。
+框架适配器继续复用共享健康评分引擎；基线持久化由 CLI/CI 负责。
+
+### 优化智能
+
+`optimize` / `split` 基于实测 metadata 解释流水线决策（绝不虚构覆盖率）。指标
+区分 **消除** 字节与因拆分产生的 **重分布** 字节。`fix` 默认只应用 **Safe**
+AST 变换；Review/Unsafe 绝不会静默应用。Dry-run 不写任何文件。
 
 终端输出示例：
 

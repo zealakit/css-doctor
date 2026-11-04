@@ -14,7 +14,7 @@ Turborepo.
 | --- | --- |
 | `crates/core` | Rust engine: parse, selector extraction, usage matrix, page-coverage splitter, CSS Health Score |
 | `packages/binding` | NAPI-RS bridge exposing `analyzeCss`, `splitCssByPages`, `optimizeCss`, and JS types |
-| `packages/cli` | `css-doctor` terminal CLI (`check` + `health`, Commander + tsup, ESM) |
+| `packages/cli` | `css-doctor` terminal CLI (`check`, `health`, `baseline`, `diff`, `optimize`, `split`, `fix`; Commander + tsup, ESM) |
 | `packages/css-doctor-vite` | Vite/Rollup plugin (ESM + CJS + DTS) |
 | `packages/css-doctor-next` | Next.js config wrapper + Webpack plugin (ESM + CJS + DTS) |
 | `packages/css-doctor-rsbuild` | Rsbuild/Rspack plugin (ESM + DTS) |
@@ -147,6 +147,15 @@ target directory is involved.
   `minify: false` to preserve readable output. The Vite plugin also sets
   `build.cssMinify: false` when `minify: false`, otherwise Vite would minify
   the emitted assets afterwards.
+- CSS Health Score and regression comparison live in `crates/core/src/health`
+  and `crates/core/src/regression`. Baselines are versioned JSON fingerprints
+  (no CSS source). The CLI owns baseline persistence
+  (`.css-doctor/baseline.json` + optional `.css-doctor/config.json`); framework
+  adapters reuse the shared scoring engine and do not need to persist baselines.
+- Optimization intelligence lives in `crates/core/src/optimization`: explanations
+  and reports are derived from `optimize_css_pipeline` metadata; Safe autofixes
+  use LightningCSS AST rewrites. Do not count split redistribution as byte
+  savings. Never silently apply Review/Unsafe fixes.
 
 ### Integration semantics
 

@@ -55,6 +55,9 @@ export const assets = withCssDoctorAssets(baseAssets, {
 ## Safety and limitations
 
 - No pageCoverage: Remix 3 has no build-time route-to-CSS graph.
+- Size-budget splitting may produce multiple internal chunks, but the middleware
+  still returns **one concatenated CSS response** for the requested URL (variables
+  + body parts). Clients do not receive separate HTTP URLs per part.
 - Optimizes successful text/css GET responses and falls back to the original response on failure.
 - Uses an LRU cache based on URL, source ETag, and content hash.
 - Load page-specific module stylesheets from controller actions, not a global document head.

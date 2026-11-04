@@ -5,7 +5,7 @@
 **Bộ công cụ chẩn đoán, phân tách và tối ưu CSS native cho các ứng dụng web hiện đại.**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D18-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![Rust](https://img.shields.io/badge/rust-stable-b7410e?logo=rust&logoColor=white)](https://www.rust-lang.org)
 
 [English](https://github.com/zealakit/css-doctor/blob/main/README.md) | [Tiếng Việt](https://github.com/zealakit/css-doctor/blob/main/README_VI.md) | [简体中文](https://github.com/zealakit/css-doctor/blob/main/README_CN.md)
@@ -54,7 +54,10 @@ CLI báo cáo:
 - stylesheet quá lớn và ngưỡng selector;
 - số selector, rule, declaration và thời gian phân tích;
 - **CSS Health Score** (0–100) theo năm chiều có trọng số;
-- JSON cho CI (`check` và `health`).
+- **baseline và phát hiện regression** (`baseline` / `diff`) cho quality gate CI;
+- **optimization intelligence** (`optimize` / `split` / `fix`) với giải thích,
+  dry-run và autofix Safe;
+- JSON cho CI (`check`, `health`, `baseline`, `diff`, `optimize`, `fix`).
 
 ### Native binary đa nền tảng
 
@@ -80,9 +83,9 @@ Svelte scoped, Astro scoped.
 
 ## Bắt đầu nhanh — CLI
 
-CLI dùng để **chẩn đoán tĩnh** (cú pháp, rule rỗng, selector trùng, ngưỡng số
-selector). Nó không minify hay chia CSS lúc build — muốn tối ưu build thì dùng
-adapter framework.
+CLI gồm **chẩn đoán tĩnh**, Health Score, baseline/regression, preview tối ưu
+(dry-run) và autofix Safe. Việc **emit CSS lúc build** (gắn chunk vào HTML/JS)
+vẫn thuộc adapter framework.
 
 Hướng dẫn CLI đầy đủ:
 [`packages/cli/README_VI.md`](https://github.com/zealakit/css-doctor/blob/main/packages/cli/README_VI.md)
@@ -141,22 +144,55 @@ css-doctor check "src/**/*.css" -j --threshold 500
 css-doctor health "src/**/*.css"
 css-doctor health "src/**/*.css" --json
 css-doctor health "src/**/*.css" --fail-under 80
+css-doctor check "src/**/*.css" --fail-under 85
+
+# Baseline + regression (commit baseline trên main)
+css-doctor baseline create "src/**/*.css"
+css-doctor baseline show
+css-doctor diff "src/**/*.css" --fail-on-regression --max-size-increase 10%
+
+# Optimization intelligence (dry-run mặc định)
+css-doctor optimize "src/**/*.css" --dry-run --explain
+css-doctor fix --list
+css-doctor fix "src/**/*.css" --dry-run --rule dead.empty-rule
 ```
 
 | Cờ | Mục đích |
 | --- | --- |
-| `-j, --json` | Xuất JSON ổn định (`check` hoặc `health`) |
+| `-j, --json` | Xuất JSON ổn định (`check`, `health`, `baseline`, `diff`) |
 | `--threshold <n>` | Cảnh báo / áp lực size khi file có hơn `<n>` selector |
-| `--fail-under <n>` | (`health`) Exit `1` khi overall `< n` |
+| `--fail-under <n>` | (`check` / `health`) Exit `1` khi overall `< n` |
+| `--fail-on-regression` | (`diff`) Exit `1` khi status là `regressed` hoặc `mixed` |
+| `--max-size-increase <n%>` | (`diff`) Fail khi tổng kích thước CSS tăng vượt hạn mức |
 | `-v, --version` | In phiên bản CLI |
 | `-h, --help` | In trợ giúp |
 
 `check` báo cáo: `syntax`, `empty-rule`, `duplicate-selector`, tùy chọn
 `threshold`, kèm field `health`. Exit code `0` khi mọi file khớp đều analyze
-được (vẫn cho phép warning); `1` khi lỗi setup/đọc/analyze.
+được (vẫn cho phép warning); `1` khi lỗi setup/đọc/analyze hoặc `--fail-under`
+không đạt.
 
 `health` chấm selector complexity, duplicates, size efficiency, dead CSS và
 variable consistency — tín hiệu chất lượng, không đảm bảo runtime/visual.
+
+### Baseline và regression
+
+Lưu snapshot có version tại `.css-doctor/baseline.json` (không lưu source CSS),
+rồi so sánh pull request bằng `css-doctor diff`:
+
+1. Trên `main`: `css-doctor baseline create "src/**/*.css"` và commit file.
+2. Trên PR: `css-doctor diff --fail-on-regression --fail-on-new-errors`.
+3. Sau thay đổi CSS cố ý: tạo lại baseline và commit.
+
+Config tùy chọn: `.css-doctor/config.json` (flag CLI > config > mặc định).
+Adapter framework tái sử dụng health engine; persistence baseline thuộc CLI/CI.
+
+### Optimization intelligence
+
+`optimize` / `split` giải thích quyết định pipeline từ metadata đo được (không
+bịa coverage). Metric tách byte **loại bỏ** khỏi byte **phân tán** do split.
+`fix` chỉ áp dụng transform **Safe** mặc định; Review/Unsafe không bao giờ
+áp dụng im lặng. Dry-run không ghi file.
 
 Ví dụ output terminal:
 

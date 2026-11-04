@@ -5,7 +5,7 @@
 **Native CSS diagnostics, intelligent splitting, and production-grade optimization for modern web applications.**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D18-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![Rust](https://img.shields.io/badge/rust-stable-b7410e?logo=rust&logoColor=white)](https://www.rust-lang.org)
 
 [English](https://github.com/zealakit/css-doctor/blob/main/README.md) | [Tiếng Việt](https://github.com/zealakit/css-doctor/blob/main/README_VI.md) | [简体中文](https://github.com/zealakit/css-doctor/blob/main/README_CN.md)
@@ -54,7 +54,11 @@ The CLI reports:
 - oversized stylesheets and selector-count thresholds;
 - selector counts, rule counts, declarations, and analysis timing;
 - a deterministic **CSS Health Score** (0–100) across five weighted dimensions;
-- structured JSON output for CI pipelines (`check` and `health`).
+- **baselines and regression detection** (`baseline` / `diff`) for CI quality gates;
+- **optimization intelligence** (`optimize` / `split` / `fix`) with explanations,
+  dry-run previews, and Safe autofixes;
+- structured JSON output for CI pipelines (`check`, `health`, `baseline`, `diff`,
+  `optimize`, `fix`).
 
 ### Cross-platform native binaries
 
@@ -80,9 +84,9 @@ framework-scoped styles.
 
 ## Quick start — CLI
 
-The CLI is for **static diagnostics** (syntax, empty rules, duplicate selectors,
-selector thresholds). It does not minify or split CSS at build time — use a
-framework adapter for that.
+The CLI covers **static diagnostics**, Health Score, baselines/regression, dry-run
+optimization previews, and Safe autofixes. Production **build-time** CSS emission
+(HTML/JS injection of chunks) still belongs to the framework adapters.
 
 Full CLI guide:
 [`packages/cli/README.md`](https://github.com/zealakit/css-doctor/blob/main/packages/cli/README.md)
@@ -141,23 +145,60 @@ css-doctor check "src/**/*.css" -j --threshold 500
 css-doctor health "src/**/*.css"
 css-doctor health "src/**/*.css" --json
 css-doctor health "src/**/*.css" --fail-under 80
+css-doctor check "src/**/*.css" --fail-under 85
+
+# Baseline + regression (commit the baseline on main)
+css-doctor baseline create "src/**/*.css"
+css-doctor baseline show
+css-doctor diff "src/**/*.css" --fail-on-regression --max-size-increase 10%
+
+# Optimization intelligence (dry-run by default)
+css-doctor optimize "src/**/*.css" --dry-run --explain
+css-doctor split "src/**/*.css" --dry-run --page-usage '{"home":["btn"]}'
+css-doctor fix --list
+css-doctor fix "src/**/*.css" --dry-run --rule dead.empty-rule
 ```
 
 | Flag | Purpose |
 | --- | --- |
-| `-j, --json` | Emit a stable JSON document (`check` or `health`) |
+| `-j, --json` | Emit a stable JSON document (`check`, `health`, `baseline`, `diff`) |
 | `--threshold <n>` | Warn / size-pressure when a file has more than `<n>` selectors |
-| `--fail-under <n>` | (`health`) Exit `1` when overall score is below `<n>` |
+| `--fail-under <n>` | (`check` / `health`) Exit `1` when overall score is below `<n>` |
+| `--fail-on-regression` | (`diff`) Exit `1` when status is `regressed` or `mixed` |
+| `--max-size-increase <n%>` | (`diff`) Fail when total CSS size grows beyond the limit |
 | `-v, --version` | Print the CLI version |
 | `-h, --help` | Print help |
 
 What `check` reports: `syntax`, `empty-rule`, `duplicate-selector`, optional
 `threshold` issues, plus an aggregated `health` score. Exit code `0` when every
-matched file was analyzed (warnings allowed); `1` on setup/read/analyze failures.
+matched file was analyzed (warnings allowed); `1` on setup/read/analyze failures
+or a failed `--fail-under` gate.
 
 `health` scores selector complexity, duplicates, size efficiency, dead CSS, and
 variable consistency. It is a quality signal — not a guarantee of runtime or
 visual correctness.
+
+### Baselines and regression
+
+Store a versioned snapshot in `.css-doctor/baseline.json` (no CSS source), then
+compare pull requests with `css-doctor diff`:
+
+1. On `main`: `css-doctor baseline create "src/**/*.css"` and commit the file.
+2. On PRs: `css-doctor diff --fail-on-regression --fail-on-new-errors`.
+3. After intentional CSS changes: recreate and commit an updated baseline.
+
+Optional project config: `.css-doctor/config.json` (CLI flags override config,
+config overrides defaults). Framework adapters keep using the shared health
+engine; baseline persistence stays a CLI/CI concern.
+
+### Optimization intelligence
+
+`optimize` / `split` explain pipeline decisions (page coverage, size budget,
+variable isolation, dead-code removal, minify) from measured metadata — never
+fabricated coverage. Metrics separate **eliminated** bytes from **redistributed**
+bytes caused by splitting. `fix` applies only **Safe** AST transforms by default
+(`dead.empty-rule`, `duplicate.declaration`); Review/Unsafe rules are listed but
+never silently applied. Dry-run never writes source or build artifacts.
 
 Example terminal output:
 

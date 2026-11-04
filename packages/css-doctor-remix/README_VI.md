@@ -55,6 +55,8 @@ export const assets = withCssDoctorAssets(baseAssets, {
 ## An toàn và giới hạn
 
 - Không có pageCoverage: Remix 3 không có route-to-CSS graph lúc build.
+- Size-budget có thể tạo nhiều chunk nội bộ, nhưng middleware vẫn trả **một**
+  response CSS đã nối (variables + body parts), không phải nhiều URL HTTP.
 - Tối ưu response text/css thành công và fallback response gốc khi lỗi.
 - Dùng LRU cache theo URL, ETag gốc và content hash.
 - Nạp stylesheet module theo action controller, không hardcode toàn bộ vào document head.
