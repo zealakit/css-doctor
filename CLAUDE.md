@@ -15,5 +15,6 @@
   binding must be rebuilt before TypeScript tests.
 - Keep generated files (`packages/binding/index.*`, `*.node`, `dist/`, `.next/`,
   `target/`) out of edits and commits.
-- When done, report exact commands run and any known limitations. Do not claim
-  page CSS is auto-linked into Vite/Next output; it is emitted only.
+- When done, report exact commands run and any known limitations. Common CSS is
+  linked from HTML or `@import` wrappers; page CSS is loaded from a JS loader
+  prepended to each page chunk (not every-route HTML preload links).

@@ -59,13 +59,13 @@ CLI báo cáo:
 
 `@zealakit/css-doctor-binding` tự phân giải binary NAPI dựng sẵn cho:
 
-| Nền tảng | Kiến trúc | Target |
-| --- | --- | --- |
-| macOS | Apple Silicon | `darwin-arm64` |
-| macOS | Intel | `darwin-x64` |
-| Linux | x64 glibc | `linux-x64-gnu` |
-| Linux | x64 musl | `linux-x64-musl` |
-| Windows | x64 MSVC | `win32-x64-msvc` |
+| Nền tảng | Kiến trúc     | Target           |
+| -------- | ------------- | ---------------- |
+| macOS    | Apple Silicon | `darwin-arm64`   |
+| macOS    | Intel         | `darwin-x64`     |
+| Linux    | x64 glibc     | `linux-x64-gnu`  |
+| Linux    | x64 musl      | `linux-x64-musl` |
+| Windows  | x64 MSVC      | `win32-x64-msvc` |
 
 Không cần Rust toolchain trên nền tảng có binary hỗ trợ.
 
@@ -77,15 +77,24 @@ Svelte scoped, Astro scoped.
 
 ---
 
-## Bắt đầu nhanh
+## Bắt đầu nhanh — CLI
 
-### Chạy CLI không cần cài đặt
+CLI dùng để **chẩn đoán tĩnh** (cú pháp, rule rỗng, selector trùng, ngưỡng số
+selector). Nó không minify hay chia CSS lúc build — muốn tối ưu build thì dùng
+adapter framework.
+
+Hướng dẫn CLI đầy đủ:
+[`packages/cli/README_VI.md`](https://github.com/zealakit/css-doctor/blob/main/packages/cli/README_VI.md)
+([English](https://github.com/zealakit/css-doctor/blob/main/packages/cli/README.md) ·
+[简体中文](https://github.com/zealakit/css-doctor/blob/main/packages/cli/README_CN.md)).
+
+### Chạy không cần cài
 
 ```bash
 npx @zealakit/css-doctor-cli check "src/**/*.css"
 ```
 
-### Cài CLI
+### Cài làm dev dependency
 
 ```bash
 pnpm add -D @zealakit/css-doctor-cli
@@ -94,50 +103,78 @@ pnpm add -D @zealakit/css-doctor-cli
 npm install -D @zealakit/css-doctor-cli
 ```
 
-### Các lệnh thường dùng
+Script gợi ý trong `package.json`:
+
+```json
+{
+  "scripts": {
+    "css:check": "css-doctor check \"src/**/*.css\"",
+    "css:check:ci": "css-doctor check \"src/**/*.css\" --json --threshold 500"
+  }
+}
+```
+
+### Bảng lệnh thường dùng
 
 ```bash
 # Trợ giúp và phiên bản
 css-doctor --help
 css-doctor --version
+css-doctor check --help
 
-# Kiểm tra một file
+# Một file hoặc nhiều path
 css-doctor check src/styles/app.css
+css-doctor check src/a.css src/b.css
 
-# Kiểm tra glob có quote
+# Glob — luôn quote để shell không expand trước
 css-doctor check "src/**/*.css"
 
-# JSON output cho CI
-css-doctor check "src/**/*.css" --json
+# Trộn file và glob
+css-doctor check styles/global.css "components/**/*.css"
 
-# Cảnh báo khi file có hơn 500 selector
-css-doctor check "src/**/*.css" --threshold 500
+# CI: JSON (+ ngưỡng selector tùy chọn)
+css-doctor check "src/**/*.css" --json
+css-doctor check "src/**/*.css" -j --threshold 500
 ```
 
-Ví dụ output:
+| Cờ                | Mục đích                                |
+| ----------------- | --------------------------------------- |
+| `-j, --json`      | Xuất `CheckReport` JSON ổn định         |
+| `--threshold <n>` | Cảnh báo khi file có hơn `<n>` selector |
+| `-v, --version`   | In phiên bản CLI                        |
+| `-h, --help`      | In trợ giúp                             |
+
+`check` báo cáo: `syntax`, `empty-rule`, `duplicate-selector`, và tùy chọn
+`threshold`. Exit code `0` khi mọi file khớp đều analyze được (vẫn cho phép
+warning); `1` khi lỗi setup/đọc/analyze.
+
+Ví dụ output terminal:
 
 ```text
 css-doctor v1.0.0 · check
 patterns src/**/*.css
-────────────────────────────────────────────────────────────
+────────────────────────────────────────────────────────────────
  SUCCESS  src/styles/app.css · 12.4 KB
   selectors 184 · rules 132 · declarations 421
   analysis 3.2 ms · read 0.8 ms · total 4.0 ms
+  Top selectors
+    #app .card:hover
+    .nav-link.is-active
 ```
 
 ---
 
 ## Tích hợp framework
 
-| Framework / tool | Package | Cài đặt |
-| --- | --- | --- |
-| Vite, React, Vue, Svelte, TanStack | [`@zealakit/css-doctor-vite`](https://www.npmjs.com/package/@zealakit/css-doctor-vite) | `pnpm add -D @zealakit/css-doctor-vite` |
-| Next.js App/Pages Router | [`@zealakit/css-doctor-next`](https://www.npmjs.com/package/@zealakit/css-doctor-next) | `pnpm add -D @zealakit/css-doctor-next` |
-| Nuxt 4 | [`@zealakit/css-doctor-nuxt`](https://www.npmjs.com/package/@zealakit/css-doctor-nuxt) | `pnpm add -D @zealakit/css-doctor-nuxt` |
-| Remix 3 | [`@zealakit/css-doctor-remix`](https://www.npmjs.com/package/@zealakit/css-doctor-remix) | `pnpm add @zealakit/css-doctor-remix` |
-| Rsbuild / Rspack | [`@zealakit/css-doctor-rsbuild`](https://www.npmjs.com/package/@zealakit/css-doctor-rsbuild) | `pnpm add -D @zealakit/css-doctor-rsbuild` |
-| CLI | [`@zealakit/css-doctor-cli`](https://www.npmjs.com/package/@zealakit/css-doctor-cli) | `pnpm add -D @zealakit/css-doctor-cli` |
-| Native binding | [`@zealakit/css-doctor-binding`](https://www.npmjs.com/package/@zealakit/css-doctor-binding) | Cài tự động qua dependency |
+| Framework / tool                   | Package                                                                                      | Cài đặt                                    |
+| ---------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| Vite, React, Vue, Svelte, TanStack | [`@zealakit/css-doctor-vite`](https://www.npmjs.com/package/@zealakit/css-doctor-vite)       | `pnpm add -D @zealakit/css-doctor-vite`    |
+| Next.js App/Pages Router           | [`@zealakit/css-doctor-next`](https://www.npmjs.com/package/@zealakit/css-doctor-next)       | `pnpm add -D @zealakit/css-doctor-next`    |
+| Nuxt 4                             | [`@zealakit/css-doctor-nuxt`](https://www.npmjs.com/package/@zealakit/css-doctor-nuxt)       | `pnpm add -D @zealakit/css-doctor-nuxt`    |
+| Remix 3                            | [`@zealakit/css-doctor-remix`](https://www.npmjs.com/package/@zealakit/css-doctor-remix)     | `pnpm add @zealakit/css-doctor-remix`      |
+| Rsbuild / Rspack                   | [`@zealakit/css-doctor-rsbuild`](https://www.npmjs.com/package/@zealakit/css-doctor-rsbuild) | `pnpm add -D @zealakit/css-doctor-rsbuild` |
+| CLI                                | [`@zealakit/css-doctor-cli`](https://www.npmjs.com/package/@zealakit/css-doctor-cli)         | `pnpm add -D @zealakit/css-doctor-cli`     |
+| Native binding                     | [`@zealakit/css-doctor-binding`](https://www.npmjs.com/package/@zealakit/css-doctor-binding) | Cài tự động qua dependency                 |
 
 Mỗi thư mục package có README tiếng Anh, tiếng Việt và tiếng Trung. Bản dịch
 root vẫn có tại [English](./README.md) và [简体中文](./README_CN.md).
@@ -198,13 +235,13 @@ export default withCssDoctor(
 
 ### Khả năng của adapter
 
-| Adapter | Page coverage | Size budget | Variables isolation | Dead code |
-| --- | --- | --- | --- | --- |
-| Vite / Astro / TanStack | Có | Có | Có | Có |
-| Next.js | Có | Có | Có | Có |
-| Nuxt 4 | Có | Có | Có | Có |
-| Rsbuild / Rspack | Có | Có | Có | Có |
-| Remix 3 runtime | Không | Có | Có | Không |
+| Adapter                 | Page coverage | Size budget | Variables isolation | Dead code |
+| ----------------------- | ------------- | ----------- | ------------------- | --------- |
+| Vite / Astro / TanStack | Có            | Có          | Có                  | Có        |
+| Next.js                 | Có            | Có          | Có                  | Có        |
+| Nuxt 4                  | Có            | Có          | Có                  | Có        |
+| Rsbuild / Rspack        | Có            | Có          | Có                  | Có        |
+| Remix 3 runtime         | Không         | Có          | Có                  | Không     |
 
 Remix 3 không có page-to-CSS dependency graph lúc build. Middleware dùng
 `sizeBudget`, `isolateVariables`, `minify` và response cache thay vì page
@@ -214,17 +251,17 @@ coverage runtime.
 
 ## Tham chiếu cấu hình
 
-| Tùy chọn | Kiểu | Mặc định | Mô tả |
-| --- | --- | --- | --- |
-| `pageCoverage.enabled` | `boolean` | `true` | Bật phân loại coverage theo route. |
-| `pageCoverage.minPageRatio` | `number` | `0.5` | Tỷ lệ page tối thiểu (`0.0`–`1.0`) cho common CSS. |
-| `pageCoverage.forceCommon` | `string[]` | `[]` | Selector/class luôn giữ trong common chunk. |
-| `sizeBudget.enabled` | `boolean` | `true` | Bật chia nhỏ theo byte budget. |
-| `sizeBudget.maxChunkSize` | `number` | `60 * 1024` | Số byte tối đa mỗi chunk. |
-| `sizeBudget.isolateVariables` | `boolean` | `true` | Tách biến `:root` và Tailwind `@theme` trước. |
-| `minify` | `boolean` | giá trị production/build | Minify CSS bằng LightningCSS. |
-| `report` | `boolean` | `true` | In chẩn đoán coverage và split. |
-| `exclude` | `(string \| RegExp)[]` | Safety rule CSS Modules | Bỏ qua asset khớp mẫu. |
+| Tùy chọn                      | Kiểu                   | Mặc định                 | Mô tả                                              |
+| ----------------------------- | ---------------------- | ------------------------ | -------------------------------------------------- |
+| `pageCoverage.enabled`        | `boolean`              | `true`                   | Bật phân loại coverage theo route.                 |
+| `pageCoverage.minPageRatio`   | `number`               | `0.5`                    | Tỷ lệ page tối thiểu (`0.0`–`1.0`) cho common CSS. |
+| `pageCoverage.forceCommon`    | `string[]`             | `[]`                     | Selector/class luôn giữ trong common chunk.        |
+| `sizeBudget.enabled`          | `boolean`              | `true`                   | Bật chia nhỏ theo byte budget.                     |
+| `sizeBudget.maxChunkSize`     | `number`               | `60 * 1024`              | Số byte tối đa mỗi chunk.                          |
+| `sizeBudget.isolateVariables` | `boolean`              | `true`                   | Tách biến `:root` và Tailwind `@theme` trước.      |
+| `minify`                      | `boolean`              | giá trị production/build | Minify CSS bằng LightningCSS.                      |
+| `report`                      | `boolean`              | `true`                   | In chẩn đoán coverage và split.                    |
+| `exclude`                     | `(string \| RegExp)[]` | Safety rule CSS Modules  | Bỏ qua asset khớp mẫu.                             |
 
 Xem README của từng adapter để biết đầy đủ danh sách tùy chọn.
 

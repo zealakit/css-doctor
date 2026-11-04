@@ -114,6 +114,19 @@ async function runWebpack(
     assets.set(fileName, await readFile(join(outputPath, fileName), "utf8"));
   }
 
+  const compilationAssets = stats.compilation.getAssets();
+
+  for (const asset of compilationAssets) {
+    if (!asset.name.endsWith(".js")) {
+      continue;
+    }
+
+    assets.set(
+      asset.name,
+      await readFile(join(outputPath, asset.name), "utf8"),
+    );
+  }
+
   await rm(outputPath, { recursive: true, force: true });
 
   return { stats, diagnostics, assets };
@@ -309,12 +322,37 @@ test("splits CSS assets inside a real webpack compilation", async () => {
   assert.equal(aboutStat.targetChunk, "page:about");
   assert.equal(aboutStat.pageCount, 1);
 
+  const mainJs = [...assets.entries()].find(([name]) => name.endsWith(".js"));
+  assert.ok(mainJs, "expected a JS asset for page CSS loader injection");
+  assert.match(mainJs[1], /__cssDoctorPageStyles/);
+  assert.match(mainJs[1], /page-about\.[a-f0-9]{8}\.css/);
+
   const report = formatDiagnostics(diagnostics, { color: false });
   assert.match(report, /\[css-doctor\]/);
   assert.match(report, /Usage Matrix/);
   assert.match(report, /Assigned Chunk/);
   assert.match(report, /page-about\.[a-f0-9]{8}\.css/);
   assert.match(report, /Dead code eliminated/);
+});
+
+test("skips page coverage when pageUsage has no classes", async () => {
+  const original =
+    ".shared { color: red; } .about-only { color: blue; } .dead { display: none; }";
+  const { diagnostics, assets } = await runWebpack(original, {
+    sizeBudget: { enabled: false },
+    minify: false,
+    pageUsage: {
+      home: [],
+      about: [],
+    },
+  });
+
+  assert.equal(diagnostics.splitApplied, false);
+  assert.equal(diagnostics.deadCodeCount, 0);
+  assert.equal(diagnostics.emittedPageChunks.length, 0);
+  const css = assets.get("static/css/app.css") ?? "";
+  assert.match(css, /\.shared/);
+  assert.match(css, /\.dead/);
 });
 
 test("skips CSS Modules assets", async () => {

@@ -161,6 +161,45 @@ test("splits CSS assets during a real Vite build", async () => {
   assert.match(pageA.targetChunk, /^page:/);
 });
 
+test("skips page coverage when no page classes are detected", async () => {
+  const captured: CssDoctorDiagnostics[] = [];
+  const emitted: EmittedAsset[] = [];
+  const plugin = cssDoctor({
+    report: false,
+    sizeBudget: { enabled: false },
+    minify: false,
+    pageUsage: {
+      home: [],
+      about: [],
+    },
+    onDiagnostics: (result) => {
+      captured.push(result);
+    },
+  });
+
+  const original =
+    ".shared { color: red; } .about-only { color: blue; } .dead { display: none; }";
+  const bundle: Record<string, unknown> = {
+    "assets/all.css": asset("assets/all.css", original),
+  };
+
+  await hookFor(plugin).call(directContext(emitted), {}, bundle);
+
+  const diagnostics = captured[0];
+  assert.ok(diagnostics);
+  assert.equal(diagnostics.splitApplied, false);
+  assert.equal(diagnostics.deadCodeCount, 0);
+  assert.equal(diagnostics.emittedPageChunks.length, 0);
+  assert.match(
+    String((bundle["assets/all.css"] as { source: unknown }).source),
+    /\.shared/,
+  );
+  assert.match(
+    String((bundle["assets/all.css"] as { source: unknown }).source),
+    /\.dead/,
+  );
+});
+
 test("splits CSS using explicit pageUsage", async () => {
   const captured: CssDoctorDiagnostics[] = [];
   const emitted: EmittedAsset[] = [];

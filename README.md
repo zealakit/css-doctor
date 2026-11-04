@@ -77,15 +77,24 @@ framework-scoped styles.
 
 ---
 
-## Quick start
+## Quick start — CLI
 
-### Run the CLI without installing
+The CLI is for **static diagnostics** (syntax, empty rules, duplicate selectors,
+selector thresholds). It does not minify or split CSS at build time — use a
+framework adapter for that.
+
+Full CLI guide:
+[`packages/cli/README.md`](https://github.com/zealakit/css-doctor/blob/main/packages/cli/README.md)
+([Tiếng Việt](https://github.com/zealakit/css-doctor/blob/main/packages/cli/README_VI.md) ·
+[简体中文](https://github.com/zealakit/css-doctor/blob/main/packages/cli/README_CN.md)).
+
+### Run without installing
 
 ```bash
 npx @zealakit/css-doctor-cli check "src/**/*.css"
 ```
 
-### Install the CLI
+### Install as a dev dependency
 
 ```bash
 pnpm add -D @zealakit/css-doctor-cli
@@ -94,35 +103,63 @@ pnpm add -D @zealakit/css-doctor-cli
 npm install -D @zealakit/css-doctor-cli
 ```
 
-### Common commands
+Optional `package.json` scripts:
+
+```json
+{
+  "scripts": {
+    "css:check": "css-doctor check \"src/**/*.css\"",
+    "css:check:ci": "css-doctor check \"src/**/*.css\" --json --threshold 500"
+  }
+}
+```
+
+### Command cheat sheet
 
 ```bash
 # Help and version
 css-doctor --help
 css-doctor --version
+css-doctor check --help
 
-# Check a single file
+# Single file or multiple paths
 css-doctor check src/styles/app.css
+css-doctor check src/a.css src/b.css
 
-# Check a quoted glob
+# Glob — always quote so the shell does not expand first
 css-doctor check "src/**/*.css"
 
-# Structured output for CI
-css-doctor check "src/**/*.css" --json
+# Mix a file and a glob
+css-doctor check styles/global.css "components/**/*.css"
 
-# Warn when a file contains more than 500 selectors
-css-doctor check "src/**/*.css" --threshold 500
+# CI: machine-readable JSON (+ optional selector budget)
+css-doctor check "src/**/*.css" --json
+css-doctor check "src/**/*.css" -j --threshold 500
 ```
 
-Example output:
+| Flag | Purpose |
+| --- | --- |
+| `-j, --json` | Emit a stable `CheckReport` JSON document |
+| `--threshold <n>` | Warn when a file has more than `<n>` selectors |
+| `-v, --version` | Print the CLI version |
+| `-h, --help` | Print help |
+
+What `check` reports: `syntax`, `empty-rule`, `duplicate-selector`, and optional
+`threshold` issues. Exit code `0` when every matched file was analyzed
+(warnings allowed); `1` on setup/read/analyze failures.
+
+Example terminal output:
 
 ```text
 css-doctor v1.0.0 · check
 patterns src/**/*.css
-────────────────────────────────────────────────────────────
+────────────────────────────────────────────────────────────────
  SUCCESS  src/styles/app.css · 12.4 KB
   selectors 184 · rules 132 · declarations 421
   analysis 3.2 ms · read 0.8 ms · total 4.0 ms
+  Top selectors
+    #app .card:hover
+    .nav-link.is-active
 ```
 
 ---

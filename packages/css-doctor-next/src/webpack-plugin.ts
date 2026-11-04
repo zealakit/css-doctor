@@ -157,8 +157,10 @@ export class CssDoctorWebpackPlugin {
       pageUsageCounts[page.name] = classes.length;
     }
 
-    const pageCoverageApplied =
-      this.pageCoverage.enabled && pageNames.length > 0;
+    const hasPageClasses = pagesResult.pages.some(
+      (page) => page.classes.size > 0,
+    );
+    const pageCoverageApplied = this.pageCoverage.enabled && hasPageClasses;
     const diagnostics: CssDoctorNextDiagnostics = {
       plugin: "css-doctor-next",
       generatedAt: new Date().toISOString(),
@@ -268,7 +270,7 @@ export class CssDoctorWebpackPlugin {
           cssContent: originalCss,
           pageUsage,
           pageCoverage: {
-            enabled: this.pageCoverage.enabled,
+            enabled: pageCoverageApplied,
             minPageRatio: this.pageCoverage.minPageRatio,
             forceCommon: this.pageCoverage.forceCommon,
           },
@@ -616,6 +618,7 @@ async function collectPages(
   const pageEntries: PageEntry[] = [];
   const sharedEntries: Entrypoint[] = [];
   const fallbackEntries: PageEntry[] = [];
+  const loaderFallbackEntries: PageEntry[] = [];
 
   for (const entry of entries) {
     const name = entryName(entry);
@@ -635,6 +638,14 @@ async function collectPages(
         name: routeNameForEntry(name) ?? name,
         sourceName: name,
       });
+    } else {
+      // Internal entries (e.g. `main`) are not scanned as pages, but remain a
+      // last-resort JS injection target for direct `pageUsage` fixtures.
+      loaderFallbackEntries.push({
+        entry,
+        name: routeNameForEntry(name) ?? name,
+        sourceName: name,
+      });
     }
   }
 
@@ -644,6 +655,7 @@ async function collectPages(
     : false;
   const pages = new Map<string, PageInfo>();
   const pagesByCss = new Map<string, Set<string>>();
+  const projectRoot = compilation.compiler?.context ?? process.cwd();
 
   if (direct && directPageUsage) {
     for (const [rawName, classes] of Object.entries(directPageUsage)) {
@@ -660,11 +672,33 @@ async function collectPages(
         jsFiles: new Set(),
       });
     }
+
+    attachEntryAssetsToPages(pages, selectedPages);
+
+    const orphanPages = [...pages.values()].filter(
+      (page) => page.jsFiles.size === 0,
+    );
+
+    if (orphanPages.length > 0) {
+      const loaderEntries =
+        selectedPages.length > 0 ? selectedPages : loaderFallbackEntries;
+      const fallbackJs = new Set<string>();
+
+      for (const { entry } of loaderEntries) {
+        for (const jsFile of collectEntryJsFiles(entry)) {
+          fallbackJs.add(jsFile);
+        }
+      }
+
+      for (const page of orphanPages) {
+        for (const jsFile of fallbackJs) {
+          page.jsFiles.add(jsFile);
+        }
+      }
+    }
   } else {
     const sourceCache = new Map<string, Promise<string | undefined>>();
     const sharedClasses = new Set<string>();
-
-    const projectRoot = process.cwd();
 
     for (const entry of sharedEntries) {
       for (const className of await collectEntryClasses(
@@ -727,22 +761,11 @@ async function collectPages(
 
   for (const { entry, name } of selectedPages) {
     const cssFiles = collectEntryCssFiles(entry);
+    const page = findPageForEntry(pages, name);
 
-    if (direct) {
-      const directPage = pages.get(name);
-
-      if (directPage) {
-        for (const cssFile of cssFiles) {
-          directPage.cssFiles.add(cssFile);
-        }
-      }
-    } else {
-      const page = pages.get(name);
-
-      if (page) {
-        for (const cssFile of cssFiles) {
-          page.cssFiles.add(cssFile);
-        }
+    if (page) {
+      for (const cssFile of cssFiles) {
+        page.cssFiles.add(cssFile);
       }
     }
   }
@@ -773,6 +796,48 @@ async function collectPages(
   };
 }
 
+function attachEntryAssetsToPages(
+  pages: Map<string, PageInfo>,
+  selectedPages: PageEntry[],
+): void {
+  for (const { entry, name } of selectedPages) {
+    const page = findPageForEntry(pages, name);
+
+    if (!page) {
+      continue;
+    }
+
+    for (const jsFile of collectEntryJsFiles(entry)) {
+      page.jsFiles.add(jsFile);
+    }
+
+    for (const cssFile of collectEntryCssFiles(entry)) {
+      page.cssFiles.add(cssFile);
+    }
+  }
+}
+
+function findPageForEntry(
+  pages: Map<string, PageInfo>,
+  entryNameValue: string,
+): PageInfo | undefined {
+  const direct = pages.get(entryNameValue);
+
+  if (direct) {
+    return direct;
+  }
+
+  const normalized = normalizeSlashes(entryNameValue).replace(/^\/+/, "");
+  const bare = normalized.replace(/^\//, "");
+
+  return (
+    pages.get(normalized) ??
+    pages.get(`/${bare}`) ??
+    pages.get(bare) ??
+    pages.get(bare.replace(/\//g, "-"))
+  );
+}
+
 async function collectPageSourceClasses(
   entryName: string,
   projectRoot: string,
@@ -781,6 +846,7 @@ async function collectPageSourceClasses(
   const classes = new Set<string>();
   const visited = new Set<string>();
   const normalized = normalizeSlashes(entryName);
+  const roots = projectSourceRoots(projectRoot);
   const candidates: string[] = [];
 
   if (normalized.startsWith("app/")) {
@@ -788,10 +854,15 @@ async function collectPageSourceClasses(
 
     if (path === "page" || path.endsWith("/page")) {
       const pagePath = path === "page" ? "app/page" : `app/${path}`;
-      candidates.push(resolve(projectRoot, pagePath));
+
+      for (const root of roots) {
+        candidates.push(resolve(root, pagePath));
+      }
 
       if (path === "_not-found/page") {
-        candidates.push(resolve(projectRoot, "app/not-found"));
+        for (const root of roots) {
+          candidates.push(resolve(root, "app/not-found"));
+        }
       }
 
       const directories = path.split("/").slice(0, -1).filter(Boolean);
@@ -802,16 +873,24 @@ async function collectPageSourceClasses(
       }
 
       for (const layoutPath of layoutPaths) {
-        candidates.push(resolve(projectRoot, `${layoutPath}/layout`));
+        for (const root of roots) {
+          candidates.push(resolve(root, `${layoutPath}/layout`));
+        }
       }
     } else {
-      candidates.push(resolve(projectRoot, normalized));
+      for (const root of roots) {
+        candidates.push(resolve(root, normalized));
+      }
     }
   } else if (normalized.startsWith("pages/")) {
-    candidates.push(resolve(projectRoot, normalized));
-    candidates.push(resolve(projectRoot, "pages/_app"));
+    for (const root of roots) {
+      candidates.push(resolve(root, normalized));
+      candidates.push(resolve(root, "pages/_app"));
+    }
   } else {
-    candidates.push(resolve(projectRoot, normalized));
+    for (const root of roots) {
+      candidates.push(resolve(root, normalized));
+    }
   }
 
   for (const candidate of candidates) {
@@ -832,14 +911,28 @@ async function collectNameSourceClasses(
 ): Promise<Set<string>> {
   const classes = new Set<string>();
   const visited = new Set<string>();
-  const candidate = resolve(projectRoot, normalizeSlashes(entryName));
-  const file = findSourceFile(candidate);
+  const relative = normalizeSlashes(entryName);
 
-  if (file) {
-    await scanSourceFile(file, classes, projectRoot, sourceCache, visited);
+  for (const root of projectSourceRoots(projectRoot)) {
+    const file = findSourceFile(resolve(root, relative));
+
+    if (file) {
+      await scanSourceFile(file, classes, projectRoot, sourceCache, visited);
+    }
   }
 
   return classes;
+}
+
+function projectSourceRoots(projectRoot: string): string[] {
+  const roots = [projectRoot];
+  const srcRoot = resolve(projectRoot, "src");
+
+  if (srcRoot !== projectRoot && existsSync(srcRoot)) {
+    roots.push(srcRoot);
+  }
+
+  return roots;
 }
 
 async function scanSourceFile(
@@ -957,21 +1050,37 @@ function resolveImportSpecifier(
   fromFile: string,
   projectRoot: string,
 ): string | null {
-  let basePath: string;
-
   if (specifier.startsWith("@/")) {
-    basePath = resolve(projectRoot, specifier.slice(2));
-  } else if (specifier.startsWith("./") || specifier.startsWith("../")) {
-    basePath = resolve(dirname(fromFile), specifier);
-  } else {
+    const relative = specifier.slice(2);
+
+    for (const root of projectSourceRoots(projectRoot)) {
+      const basePath = resolve(root, relative);
+
+      if (isStyleFile(basePath)) {
+        return null;
+      }
+
+      const found = findSourceFile(basePath);
+
+      if (found) {
+        return found;
+      }
+    }
+
     return null;
   }
 
-  if (isStyleFile(basePath)) {
-    return null;
+  if (specifier.startsWith("./") || specifier.startsWith("../")) {
+    const basePath = resolve(dirname(fromFile), specifier);
+
+    if (isStyleFile(basePath)) {
+      return null;
+    }
+
+    return findSourceFile(basePath);
   }
 
-  return findSourceFile(basePath);
+  return null;
 }
 
 async function collectEntryClasses(
@@ -1221,12 +1330,25 @@ function scanClasses(source: string, classes: Set<string>): void {
       }
 
       for (const token of value.split(/\s+/)) {
-        if (/^-?[_a-zA-Z][\w-]*$/.test(token)) {
+        if (isClassToken(token)) {
           classes.add(token.toLowerCase());
         }
       }
     }
   }
+}
+
+/** Accept Tailwind-style tokens (`md:flex`, `w-1/2`, `w-[10px]`, `!p-2`). */
+function isClassToken(token: string): boolean {
+  if (!token || token.length > 256) {
+    return false;
+  }
+
+  if (/[`${}]/.test(token)) {
+    return false;
+  }
+
+  return /[A-Za-z_]/.test(token);
 }
 
 function addCssOwner(

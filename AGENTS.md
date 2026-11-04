@@ -117,8 +117,10 @@ target directory is involved.
 ### Core semantics
 
 - Class matching is ASCII/Unicode case-insensitive.
-- A selector is considered used by a page when **at least one** of its classes
-  appears in that page's usage. This is intentionally conservative for dead
+- A selector is considered used by a page when **at least one positively
+  required class** appears in that page's usage. Classes inside `:not()` are
+  not required; `:is()` / `:where()` / `:any()` with a classless alternative
+  contribute no required classes. This is intentionally conservative for dead
   code elimination.
 - Selectors with no class (`:root`, `html`, `body`, `*`, element resets) are
   global and go to the common chunk.
@@ -132,6 +134,7 @@ target directory is involved.
   common. Conditional at-rules (`@media`, `@supports`, `@layer`, `@container`,
   `@scope`, `@starting-style`, `@-moz-document`) are recursively split.
 - Nested style rules are recursively split and keep parent-selector context.
+  Classless nests under a page-specific parent ride along with that page.
 - `total_occurrences` in the matrix means matched class-hit frequency across
   pages, not raw occurrences in the CSS file.
 - The high-level pipeline runs tier 1 (page coverage + dead code) and then tier
@@ -167,7 +170,9 @@ target directory is involved.
   `minify: false`, the plugin removes Next's CSS minimizer so output stays
   readable.
 - Next route source scanning covers App Router `app/**/page` + layouts, Pages
-  Router `pages/**` + `_app`, relative imports, and `@/` aliases.
+  Router `pages/**` + `_app` (root and `src/`), relative imports, and `@/`
+  aliases resolved against the project root and `src/`. Page coverage is
+  skipped when no page classes are detected.
 - Vite emits hashed assets via `emitFile({ name })` + `getFileName()`.
   Common chunks are linked from HTML; page CSS is loaded lazily by a small
   loader prepended to each page chunk, so a fresh page load requests only the
@@ -178,8 +183,10 @@ target directory is involved.
 
 ### Known limitations
 
-- CSS Modules (`styles.foo`) and fully dynamic class names are not resolved by
-  static source scanning. Use `pageUsage` or `forceCommonSelectors`.
+- CSS Modules (`styles.foo`) and helper-built class strings (`cn`/`clsx`) are
+  not fully resolved by static source scanning. Literal Tailwind tokens in
+  `class`/`className` strings are accepted. Use `pageUsage` or
+  `forceCommonSelectors` for the rest.
 - Next path aliases beyond `@/` need explicit `pageUsage`.
 - A selector with multiple classes is matched conservatively by any class.
 - `@keyframes` are always common; animation usage is not tracked per page.

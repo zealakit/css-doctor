@@ -78,8 +78,10 @@ level loading.
 
 Class usage is case-insensitive. A selector counts for a page if at least one
 of its classes appears in that page's usage. Global selectors with no classes
-go to common. Page chunks are **emitted but not linked into HTML/manifests
-yet** — state this limitation explicitly in docs and final answers.
+go to common. Common CSS is linked from HTML or kept reachable via `@import`
+wrappers. Page CSS is loaded from a loader prepended to each page JS chunk
+(visited page CSS stays cached in the DOM). Skip page coverage when no page
+classes are detected so empty usage cannot wipe the stylesheet.
 
 ## CLI (`packages/cli`)
 
@@ -153,11 +155,15 @@ yet** — state this limitation explicitly in docs and final answers.
 ## Known limitations
 
 - Vite/Next load page CSS from the route/page JS chunk, not as a preload in the
-  initial HTML. Visited page CSS stays cached in the DOM.
+  initial HTML. SSR/SSG first paint therefore lacks page-specific rules until
+  hydration. Visited page CSS stays cached in the DOM.
+- Class scanners accept Tailwind-style tokens (`md:flex`, `w-1/2`, `!p-2`) in
+  literal `class`/`className`/`classList` strings, but still miss `cn()`/`clsx()`
+  and fully dynamic names — use `pageUsage` or `forceCommonSelectors`.
 - Next skips CSS Modules entirely; dynamic class names require `pageUsage` or
   `forceCommonSelectors`.
-- Next alias resolution supports relative imports and `@/`; other aliases need
-  explicit usage.
+- Next scans root and `src/` App/Pages Router trees; `@/` resolves against the
+  project root and `src/`. Other path aliases need explicit usage.
 - Multi-class selectors use conservative any-class matching.
 - `@keyframes` are common; per-page animation tracking is not implemented.
 

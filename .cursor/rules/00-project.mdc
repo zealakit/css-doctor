@@ -23,5 +23,6 @@ Read `AGENTS.md` for the canonical guide and use the skills in
   - `packages/*/dist/**`, `.next/**`, `target/**`, coverage
 - Do not add hand-written `.js`/`.cjs`/`.mjs` source. TypeScript and Rust only.
 - Preserve error boundaries in Vite/Next; diagnostics must not crash builds.
-- Page CSS chunks are emitted but not auto-linked into HTML/manifests yet.
+- Common CSS is linked from HTML (or `@import` wrappers); page CSS is loaded
+  lazily from a loader prepended to each page JS chunk.
 - Before handoff run the relevant checks plus `git status`; no generated files.

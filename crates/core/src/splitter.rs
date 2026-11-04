@@ -386,6 +386,10 @@ fn split_style_rule<'i>(
     };
 
     let mut targets: BTreeSet<Target> = selector_groups.keys().cloned().collect();
+    // Classless nested rules (`&:hover`, nested declarations, nested `@media`
+    // with no classes) land in Common. When the parent is page-specific they
+    // must ride along with those page fragments or they are dropped.
+    redistribute_common_nested_to_pages(&mut nested, &targets);
     targets.extend(nested.targets());
 
     let mut fragments = BTreeMap::new();
@@ -420,6 +424,41 @@ fn split_style_rule<'i>(
     }
 
     Ok(fragments)
+}
+
+fn redistribute_common_nested_to_pages<'i>(
+    nested: &mut RuleGroups<'i>,
+    parent_targets: &BTreeSet<Target>,
+) {
+    if nested.common.is_empty() {
+        return;
+    }
+
+    let parent_pages: Vec<String> = parent_targets
+        .iter()
+        .filter_map(|target| match target {
+            Target::Page(page) => Some(page.clone()),
+            Target::Common => None,
+        })
+        .collect();
+
+    if parent_pages.is_empty() {
+        return;
+    }
+
+    let parent_has_common = parent_targets.contains(&Target::Common);
+
+    for page in &parent_pages {
+        nested
+            .pages
+            .entry(page.clone())
+            .or_default()
+            .extend(nested.common.iter().cloned());
+    }
+
+    if !parent_has_common {
+        nested.common.clear();
+    }
 }
 
 fn is_context_selector(target: &Target, decision: &SelectorClassification) -> bool {
@@ -545,32 +584,67 @@ where
     wrapped
 }
 
+/// Collects classes that are positively required for a selector to match.
+///
+/// Classes inside `:not()` are ignored (they must be absent, not present).
+/// For `:is()` / `:where()` / `:any()`, if any alternative can match without a
+/// class the whole functional pseudo contributes no required classes — otherwise
+/// the union of required classes from every alternative is kept. This keeps DCE
+/// conservative: `div:not(.hidden)` and `:is(.unused, div)` stay alive.
 fn collect_classes(selector: &Selector<'_>, classes: &mut BTreeSet<String>) {
+    let _ = collect_required_classes(selector, classes);
+}
+
+/// Returns `true` when the selector can match without any of the collected classes.
+fn collect_required_classes(selector: &Selector<'_>, classes: &mut BTreeSet<String>) -> bool {
+    let mut local = BTreeSet::new();
+
     for component in selector.iter_raw_match_order() {
         match component {
             Component::Class(name) => {
-                classes.insert(name.0.to_lowercase());
+                local.insert(name.0.to_lowercase());
             }
-            Component::Negation(selectors)
-            | Component::Is(selectors)
+            Component::Negation(_) => {
+                // Excluded classes are not usage requirements.
+            }
+            Component::Is(selectors)
             | Component::Where(selectors)
-            | Component::Has(selectors)
             | Component::Any(_, selectors) => {
-                for selector in selectors.iter() {
-                    collect_classes(selector, classes);
+                let mut union = BTreeSet::new();
+                let mut any_classless = false;
+
+                for inner in selectors.iter() {
+                    let mut inner_classes = BTreeSet::new();
+                    if collect_required_classes(inner, &mut inner_classes) {
+                        any_classless = true;
+                    }
+                    union.extend(inner_classes);
+                }
+
+                if !any_classless {
+                    local.extend(union);
+                }
+            }
+            Component::Has(selectors) => {
+                for inner in selectors.iter() {
+                    collect_required_classes(inner, &mut local);
                 }
             }
             Component::NthOf(data) => {
-                for selector in data.selectors() {
-                    collect_classes(selector, classes);
+                for inner in data.selectors() {
+                    collect_required_classes(inner, &mut local);
                 }
             }
-            Component::Host(Some(selector)) | Component::Slotted(selector) => {
-                collect_classes(selector, classes);
+            Component::Host(Some(inner)) | Component::Slotted(inner) => {
+                collect_required_classes(inner, &mut local);
             }
             _ => {}
         }
     }
+
+    let classless = local.is_empty();
+    classes.extend(local);
+    classless
 }
 
 fn selector_to_css(selector: &Selector<'_>) -> Result<String, String> {
@@ -827,6 +901,114 @@ mod tests {
         // selector context in the home chunk.
         assert!(output.common_css.contains(".card"));
         assert!(output.page_chunks["home"].contains(".title"));
+    }
+
+    #[test]
+    fn keeps_classless_nests_under_page_specific_parents() {
+        let output = split(
+            r#"
+            .card {
+                color: red;
+                &:hover { outline: 1px solid blue; }
+                > p { margin: 0; }
+            }
+            "#,
+            pages(&[
+                ("home", &["card"]),
+                ("about", &["other"]),
+                ("contact", &["other"]),
+            ]),
+        );
+
+        let home = &output.page_chunks["home"];
+        assert!(
+            home.contains(".card"),
+            "home missing .card: {home:?} common={:?}",
+            output.common_css
+        );
+        assert!(
+            home.contains(":hover") || home.contains("hover"),
+            "expected nested :hover in home chunk, got {home}"
+        );
+        assert!(
+            home.contains("p") && home.contains("margin"),
+            "expected nested > p rule in home chunk, got {home}"
+        );
+        assert!(!output.common_css.contains(".card"));
+    }
+
+    #[test]
+    fn keeps_trailing_nested_declarations_under_page_parents() {
+        let output = split(
+            r#"
+            .card {
+                .title { font-weight: bold; }
+                color: red;
+            }
+            "#,
+            pages(&[
+                ("home", &["card", "title"]),
+                ("about", &["other"]),
+                ("contact", &["other"]),
+            ]),
+        );
+
+        let home = &output.page_chunks["home"];
+        assert!(
+            home.contains(".title") || home.contains("title"),
+            "expected .title in home, got {home:?} common={:?}",
+            output.common_css
+        );
+        assert!(
+            home.contains("color") && home.contains("red"),
+            "trailing nested declaration must stay with page parent, got {home}"
+        );
+    }
+
+    #[test]
+    fn does_not_treat_negation_classes_as_required() {
+        let output = split(
+            "div:not(.hidden) { display: block; } .unused { color: red; }",
+            pages(&[("home", &["visible"]), ("about", &["visible"])]),
+        );
+
+        assert!(
+            output.common_css.contains(":not") || output.common_css.contains("not"),
+            "div:not(.hidden) must stay alive, got common={}",
+            output.common_css
+        );
+        let dead = output
+            .stats
+            .iter()
+            .find(|stat| stat.selector.contains("unused"))
+            .expect("unused selector stat");
+        assert_eq!(dead.target_chunk, "dead");
+
+        let kept = output
+            .stats
+            .iter()
+            .find(|stat| stat.selector.contains(":not") || stat.selector.contains("not("))
+            .expect(":not selector stat");
+        assert_eq!(kept.target_chunk, "common");
+    }
+
+    #[test]
+    fn treats_is_with_classless_alternative_as_global() {
+        let output = split(
+            ":is(.nope, div) { color: blue; }",
+            pages(&[("home", &["other"]), ("about", &["other"])]),
+        );
+
+        assert!(
+            !output.common_css.is_empty(),
+            ":is(.nope, div) must not be dead-code eliminated"
+        );
+        let kept = output
+            .stats
+            .iter()
+            .find(|stat| stat.selector.contains(":is") || stat.selector.contains("is("))
+            .expect(":is selector stat");
+        assert_eq!(kept.target_chunk, "common");
     }
 
     #[test]

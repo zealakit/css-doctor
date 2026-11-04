@@ -390,6 +390,7 @@ fn split_rules<'i>(
             .pop()
             .ok_or_else(|| "internal rule buffer error".to_string())?;
         chunks.push(render_rules(&current, minify)?);
+        current.clear();
         current.push(last);
 
         let single = render_rules(&current, minify)?;
@@ -429,6 +430,8 @@ fn render_rules<'i>(rules: &[CssRule<'i>], minify: bool) -> Result<String, Strin
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use super::*;
 
     #[test]
@@ -622,5 +625,38 @@ mod tests {
 
         assert!(!output.split);
         assert_eq!(output.chunks, vec![".a{color:red}".to_string()]);
+    }
+
+    #[test]
+    fn does_not_duplicate_rules_across_size_chunks() {
+        let css =
+            ".a{color:red}.b{color:blue}.c{color:green}.d{color:#000}.e{color:#fff}.f{color:navy}";
+        let output = split_css_by_size(
+            css,
+            &SizeSplitterConfig {
+                max_chunk_size: 30,
+                isolate_variables: false,
+                minify: true,
+            },
+        )
+        .expect("split succeeds");
+
+        assert!(output.split);
+        assert!(output.chunks.len() > 1);
+
+        let mut seen = HashSet::new();
+        for chunk in &output.chunks {
+            for selector in [".a", ".b", ".c", ".d", ".e", ".f"] {
+                if chunk.contains(selector) {
+                    assert!(
+                        seen.insert(selector),
+                        "selector {selector} duplicated across chunks: {chunks:?}",
+                        chunks = output.chunks
+                    );
+                }
+            }
+        }
+
+        assert_eq!(seen.len(), 6, "every input selector should appear once");
     }
 }

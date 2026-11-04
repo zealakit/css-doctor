@@ -796,12 +796,25 @@ function scanClasses(source: string, classes: Set<string>): void {
       }
 
       for (const token of value.split(/\s+/)) {
-        if (/^-?[_a-zA-Z][\w-]*$/.test(token)) {
+        if (isClassToken(token)) {
           classes.add(token.toLowerCase());
         }
       }
     }
   }
+}
+
+/** Accept Tailwind-style tokens (`md:flex`, `w-1/2`, `w-[10px]`, `!p-2`). */
+function isClassToken(token: string): boolean {
+  if (!token || token.length > 256) {
+    return false;
+  }
+
+  if (/[`${}]/.test(token)) {
+    return false;
+  }
+
+  return /[A-Za-z_]/.test(token);
 }
 
 function injectPageCssLoaders(

@@ -25,7 +25,10 @@ globs: packages/css-doctor-vite/**/*.ts,packages/css-doctor-next/**/*.ts,package
   relative/`@/` import traversal.
 - `cssd.config.*` is loaded via jiti only when no inline options are passed.
 - Never let split/report/callback failures abort the host build.
-- Page chunks are emitted but not injected into HTML/manifests. State this
-  limitation; use `pageUsage`/`forceCommonSelectors` for CSS Modules/dynamic
-  classes.
+- Common CSS is linked from HTML (Vite) or kept reachable via `@import`
+  wrappers (Next/Nuxt). Page CSS is loaded from a loader prepended to each
+  page JS chunk — not preloaded as every-route HTML links. Use
+  `pageUsage`/`forceCommonSelectors` for CSS Modules/dynamic classes.
+- Disable page coverage when scanned/direct usage has no classes, so empty
+  usage cannot wipe the stylesheet as dead code.
 - Run the package test and, for Next, `test:next`.

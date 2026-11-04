@@ -23,4 +23,5 @@ Rules:
 - Never edit generated `packages/binding/index.*`, `*.node`, `dist/`, `.next/`,
   or `target/` files.
 - Preserve Vite/Next error boundaries; diagnostics must not crash builds.
-- Page-specific CSS is emitted but not auto-linked into HTML/manifests yet.
+- Common CSS is linked from HTML or `@import` wrappers; page CSS is loaded from
+  a JS loader prepended to each page chunk.

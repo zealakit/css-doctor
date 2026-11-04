@@ -39,10 +39,16 @@ API changes intentional and propagate them to `packages/binding`.
 ## Non-negotiable semantics
 
 - Class matching is case-insensitive; normalize with lowercase for comparison.
-- A selector is used by a page if **at least one class** in it is present in that
-  page's usage set. This is conservative for dead-code removal.
+- A selector is used by a page if **at least one positively required class** in
+  it is present in that page's usage set. Classes inside `:not()` are not
+  required. For `:is()` / `:where()` / `:any()`, a classless alternative makes
+  the whole functional pseudo contribute no required classes (keeps
+  `div:not(.hidden)` and `:is(.unused, div)` alive). This is conservative for
+  dead-code removal.
 - A selector with no class (`:root`, `html`, `body`, `*`, resets) is global and
   goes to the common chunk.
+- Classless nested rules (`&:hover`, nested declarations, nested `@media` with
+  no classes) under a page-specific parent ride along with that page fragment.
 - `force_common_selectors` matches a full selector or a class name
   (case-insensitive, optional leading dot) and keeps it in common.
 - `coverage = used_pages / total_pages`.

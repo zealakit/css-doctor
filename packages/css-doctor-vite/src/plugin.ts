@@ -228,7 +228,8 @@ async function analyzeAndSplit(
     pageUsageCounts[page.name] = classes.length;
   }
 
-  const splitApplied = options.pageCoverage.enabled && pageNames.length > 0;
+  const hasPageClasses = pages.some((page) => page.classes.size > 0);
+  const splitApplied = options.pageCoverage.enabled && hasPageClasses;
   const diagnostics: CssDoctorDiagnostics = {
     plugin: "vite-plugin-css-doctor",
     generatedAt: new Date().toISOString(),
@@ -317,7 +318,7 @@ async function analyzeAndSplit(
         cssContent: originalContent,
         pageUsage,
         pageCoverage: {
-          enabled: options.pageCoverage.enabled,
+          enabled: splitApplied,
           minPageRatio: options.pageCoverage.minPageRatio,
           forceCommon: options.pageCoverage.forceCommon,
         },
@@ -873,12 +874,26 @@ function scanClasses(source: string, classes: Set<string>): void {
       }
 
       for (const token of value.split(/\s+/)) {
-        if (/^-?[_a-zA-Z][\w-]*$/.test(token)) {
+        if (isClassToken(token)) {
           classes.add(token.toLowerCase());
         }
       }
     }
   }
+}
+
+/** Accept Tailwind-style tokens (`md:flex`, `w-1/2`, `w-[10px]`, `!p-2`). */
+function isClassToken(token: string): boolean {
+  if (!token || token.length > 256) {
+    return false;
+  }
+
+  // Reject template/expression leftovers while allowing arbitrary-value brackets.
+  if (/[`${}]/.test(token)) {
+    return false;
+  }
+
+  return /[A-Za-z_]/.test(token);
 }
 
 function isInternalPageEntry(chunk: ViteChunkLike): boolean {

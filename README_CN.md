@@ -73,15 +73,23 @@ CSS Modules、Vue scoped、Svelte scoped、Astro scoped 的安全处理。
 
 ---
 
-## 快速开始
+## 快速开始 — CLI
 
-### 直接运行 CLI
+CLI 用于**静态诊断**（语法、空规则、重复选择器、选择器数量阈值）。它不会在构建时
+minify 或拆分 CSS — 构建期优化请使用框架适配器。
+
+完整 CLI 指南：
+[`packages/cli/README_CN.md`](https://github.com/zealakit/css-doctor/blob/main/packages/cli/README_CN.md)
+([English](https://github.com/zealakit/css-doctor/blob/main/packages/cli/README.md) ·
+[Tiếng Việt](https://github.com/zealakit/css-doctor/blob/main/packages/cli/README_VI.md))。
+
+### 无需安装直接运行
 
 ```bash
 npx @zealakit/css-doctor-cli check "src/**/*.css"
 ```
 
-### 安装 CLI
+### 安装为开发依赖
 
 ```bash
 pnpm add -D @zealakit/css-doctor-cli
@@ -90,35 +98,63 @@ pnpm add -D @zealakit/css-doctor-cli
 npm install -D @zealakit/css-doctor-cli
 ```
 
-### 常用命令
+可选 `package.json` scripts：
+
+```json
+{
+  "scripts": {
+    "css:check": "css-doctor check \"src/**/*.css\"",
+    "css:check:ci": "css-doctor check \"src/**/*.css\" --json --threshold 500"
+  }
+}
+```
+
+### 常用命令速查
 
 ```bash
 # 帮助与版本
 css-doctor --help
 css-doctor --version
+css-doctor check --help
 
-# 检查单个文件
+# 单个或多个路径
 css-doctor check src/styles/app.css
+css-doctor check src/a.css src/b.css
 
-# 检查带引号的 glob
+# Glob — 务必加引号，避免 shell 先展开
 css-doctor check "src/**/*.css"
 
-# CI 使用的 JSON 输出
-css-doctor check "src/**/*.css" --json
+# 文件与 glob 混用
+css-doctor check styles/global.css "components/**/*.css"
 
-# selector 超过 500 时警告
-css-doctor check "src/**/*.css" --threshold 500
+# CI：JSON（可加选择器阈值）
+css-doctor check "src/**/*.css" --json
+css-doctor check "src/**/*.css" -j --threshold 500
 ```
 
-示例输出：
+| 选项 | 作用 |
+| --- | --- |
+| `-j, --json` | 输出稳定的 `CheckReport` JSON |
+| `--threshold <n>` | 当文件选择器数量超过 `<n>` 时警告 |
+| `-v, --version` | 打印 CLI 版本 |
+| `-h, --help` | 打印帮助 |
+
+`check` 会报告：`syntax`、`empty-rule`、`duplicate-selector`，以及可选的
+`threshold`。所有匹配文件都分析成功时退出码为 `0`（允许 warning）；初始化/读取/
+分析失败时为 `1`。
+
+终端输出示例：
 
 ```text
 css-doctor v1.0.0 · check
 patterns src/**/*.css
-────────────────────────────────────────────────────────────
+────────────────────────────────────────────────────────────────
  SUCCESS  src/styles/app.css · 12.4 KB
   selectors 184 · rules 132 · declarations 421
   analysis 3.2 ms · read 0.8 ms · total 4.0 ms
+  Top selectors
+    #app .card:hover
+    .nav-link.is-active
 ```
 
 ---
