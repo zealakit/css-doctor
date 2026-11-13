@@ -12,7 +12,7 @@ const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 /**
  * Resolves a built CSS Doctor desktop binary/app without starting Web mode.
- * Desktop requires a prior `pnpm --filter css-doctor-gui desktop:build`.
+ * Desktop requires a prior `pnpm --filter @zealakit/css-doctor-gui desktop:build`.
  */
 export function resolveDesktopApp(): DesktopLaunchResult {
   const override = process.env.CSS_DOCTOR_GUI_DESKTOP?.trim();
@@ -39,9 +39,9 @@ export function resolveDesktopApp(): DesktopLaunchResult {
     code: "not_installed",
     message:
       "Desktop app is not installed or built for this machine.\n" +
-      "Build it with: pnpm --filter css-doctor-gui desktop:build\n" +
+      "Build it with: pnpm --filter @zealakit/css-doctor-gui desktop:build\n" +
       "Or set CSS_DOCTOR_GUI_DESKTOP to the app/binary path.\n" +
-      "Web mode: css-doctor gui   (omit --desktop)",
+      "Web mode does not need Tauri/Rust: css-doctor gui  (omit --desktop)",
   };
 }
 
@@ -67,7 +67,7 @@ function desktopCandidates(): string[] {
   if (os === "darwin") {
     return [
       join(bundle, "macos/CSS Doctor.app"),
-      join(release, "css-doctor-gui"),
+      join(release, "@zealakit/css-doctor-gui"),
     ];
   }
   if (os === "win32") {
@@ -79,7 +79,7 @@ function desktopCandidates(): string[] {
   }
   return [
     join(bundle, "appimage/css-doctor-gui.AppImage"),
-    join(release, "css-doctor-gui"),
+    join(release, "@zealakit/css-doctor-gui"),
   ];
 }
 

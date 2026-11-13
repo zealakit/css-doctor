@@ -114,7 +114,55 @@ css-doctor optimize "src/**/*.css" --dry-run --explain --json
 css-doctor split "src/**/*.css" --dry-run
 css-doctor fix --list
 css-doctor fix "src/**/*.css" --dry-run --rule dead.empty-rule
+
+# Local report viewer (optional package)
+pnpm add -D @zealakit/css-doctor-gui
+css-doctor gui
+css-doctor gui --port 4173 --no-open --strict-port
+css-doctor gui --desktop
 ```
+
+## Command: `gui`
+
+Opens the optional **css-doctor-gui** report viewer. The CLI does not analyze CSS
+for this command; it loads an already produced report (or lets you open one in
+the UI).
+
+### Install (optional)
+
+```bash
+pnpm add -D @zealakit/css-doctor-gui
+# npm: npm install -D @zealakit/css-doctor-gui
+```
+
+`@zealakit/css-doctor-gui` is an **optional** peer of `@zealakit/css-doctor-cli`. Existing
+commands (`check`, `health`, …) work without it.
+
+### Usage
+
+```bash
+css-doctor gui
+css-doctor gui --port 4173
+css-doctor gui --no-open
+css-doctor gui --strict-port
+css-doctor gui --report ./report.json
+css-doctor gui --desktop
+```
+
+| Option | Behavior |
+| --- | --- |
+| `-p, --port <number>` | Request a listen port (default `4193` with fallback) |
+| `--host <host>` | Bind host (default `127.0.0.1`) |
+| `--no-open` | Do not open a browser |
+| `--strict-port` | Fail if the requested port is busy |
+| `-r, --report <path>` | Preload CLI JSON report (Web mode) |
+| `--desktop` | Launch the optional Desktop app (no Web fallback) |
+
+**Web** is the default runtime and does not require Tauri or Rust. **Desktop**
+needs a prior desktop build (or `CSS_DOCTOR_GUI_DESKTOP`).
+
+Persist analysis for the viewer with CLI `--save` / `--out` (see
+[`docs/report-contract.md`](../../docs/report-contract.md)).
 
 ## Command: `check`
 

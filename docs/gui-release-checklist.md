@@ -4,15 +4,15 @@ Do not mark an item complete without command evidence from the current checkout.
 
 ## Workspace
 
-- [ ] `pnpm --filter css-doctor-gui typecheck`
-- [ ] `pnpm --filter css-doctor-gui check`
-- [ ] `pnpm --filter css-doctor-gui test`
+- [ ] `pnpm --filter @zealakit/css-doctor-gui typecheck`
+- [ ] `pnpm --filter @zealakit/css-doctor-gui check`
+- [ ] `pnpm --filter @zealakit/css-doctor-gui test`
 - [ ] `pnpm --filter @zealakit/css-doctor-cli test`
 - [ ] Related Core/binding/adapters not regressed for this change set
 
 ## Web production
 
-- [ ] `pnpm --filter css-doctor-gui build` produces `dist/` + `dist-server/`
+- [ ] `pnpm --filter @zealakit/css-doctor-gui build` produces `dist/` + `dist-server/`
 - [ ] `css-doctor gui --no-open` prints a `127.0.0.1` URL
 - [ ] Port fallback works when preferred port is busy
 - [ ] `--strict-port` fails instead of falling back
@@ -23,7 +23,7 @@ Do not mark an item complete without command evidence from the current checkout.
 ## Desktop
 
 - [ ] Tauri CLI + Rust toolchain available on the build host
-- [ ] `pnpm --filter css-doctor-gui desktop:build` succeeds on that host
+- [ ] `pnpm --filter @zealakit/css-doctor-gui desktop:build` succeeds on that host
 - [ ] App launches and shows the SPA
 - [ ] Node sidecar starts and `/api/health` responds
 - [ ] Closing the app stops the sidecar (no orphan `node` process)
@@ -42,8 +42,12 @@ Do not mark an item complete without command evidence from the current checkout.
 
 - [ ] `packages/css-doctor-gui/README.md` matches verified capabilities
 - [ ] Root README GUI section matches Web/Desktop status
-- [ ] Package remains private unless publish strategy is intentional
+- [ ] CLI treats `@zealakit/css-doctor-gui` as optional peer (lazy resolve from project)
+- [ ] Consumer-style install layout can launch `css-doctor gui` (node_modules link or published tarball)
+- [ ] `node packages/css-doctor-gui/scripts/verify-consumer-pack.mjs` passes (packed tarballs outside monorepo)
+- [ ] Packed `package.json` has no `workspace:` protocol and no unnecessary React runtime deps
 - [ ] No version bump / publish performed accidentally
+- [ ] Readiness doc + changelog reviewed (`docs/gui-release-readiness.md`, `docs/gui-changelog.md`)
 
 ## Status key for release notes
 

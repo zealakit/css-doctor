@@ -110,7 +110,7 @@ export function ConsoleLayout() {
             <NavLink to={ROUTES.SETTINGS} className="console-layout__settings">
               Settings
             </NavLink>
-            <span className="console-layout__badge">Phase 6</span>
+            <span className="console-layout__badge">Phase 7</span>
           </div>
         </header>
         <main

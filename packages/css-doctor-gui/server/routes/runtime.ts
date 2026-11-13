@@ -15,16 +15,17 @@ export function handleRuntimeInfo(
       uploadReport: true,
       reloadReport: source?.reloadable === true,
       generateCheck: true,
+      discoverReports: true,
       selectProject: false,
       openExternal: false,
       settings: true,
       recentReports: true,
       desktopSidecar: true,
     },
-    phase: 6,
+    phase: 7,
     hasReport: getCurrentReport() !== null,
     source,
-    note: "Phase 6: release readiness — Web production + optional Tauri Node sidecar.",
+    note: "Phase 7: CLI JSON envelopes are the shared report source; GUI discovers/loads them (generate-check is optional).",
   };
   const payload = JSON.stringify(body);
   res.writeHead(200, {

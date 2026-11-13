@@ -51,8 +51,13 @@ complete without command evidence from the current checkout.
 - Additional NAPI targets require an explicit multi-platform build matrix before
   claiming support in release notes.
 
-## GUI (when shipping css-doctor-gui)
+## GUI (when shipping @zealakit/css-doctor-gui)
 
 - [ ] Follow [`docs/gui-release-checklist.md`](./gui-release-checklist.md)
+- [ ] Readiness decision recorded in [`docs/gui-release-readiness.md`](./gui-release-readiness.md)
+- [ ] Changelog drafted in [`docs/gui-changelog.md`](./gui-changelog.md)
+- [ ] `node packages/css-doctor-gui/scripts/verify-consumer-pack.mjs` passes
 - [ ] Web production path verified on at least one host
 - [ ] Desktop claims limited to platforms actually packaged
+- [ ] Report contract docs match CLI `--save` / GUI discover behavior
+  ([`docs/report-contract.md`](./report-contract.md))

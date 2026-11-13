@@ -32,7 +32,7 @@ pub fn run() {
   let cli_js = package_root.join("dist-server/cli.js");
   if !cli_js.is_file() {
     eprintln!(
-      "css-doctor-gui desktop: missing production server at {}.\nRun `pnpm --filter css-doctor-gui build` first.",
+      "css-doctor-gui desktop: missing production server at {}.\nRun `pnpm --filter @zealakit/css-doctor-gui build` first.",
       cli_js.display()
     );
     std::process::exit(1);

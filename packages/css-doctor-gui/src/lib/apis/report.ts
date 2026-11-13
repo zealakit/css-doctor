@@ -117,6 +117,64 @@ export async function reloadReport(): Promise<
   return parseReportResponse(response);
 }
 
+export type DiscoveredReport = {
+  path: string;
+  command: string | null;
+  kind: "latest" | "other";
+  mtimeMs: number | null;
+  sizeBytes: number | null;
+};
+
+export async function discoverReports(
+  input: { cwd?: string } = {},
+): Promise<
+  | { ok: true; cwd: string; reports: DiscoveredReport[]; note?: string }
+  | ReportApiError
+> {
+  const params = new URLSearchParams();
+  if (input.cwd) {
+    params.set("cwd", input.cwd);
+  }
+  const query = params.toString();
+  const response = await fetch(
+    `/api/report/discover${query ? `?${query}` : ""}`,
+    {
+      headers: { accept: "application/json" },
+    },
+  );
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    return {
+      ok: false,
+      code: "invalid_json",
+      message: `Unexpected response (${response.status})`,
+    };
+  }
+  if (
+    body &&
+    typeof body === "object" &&
+    "ok" in body &&
+    (body as { ok: unknown }).ok === true &&
+    "reports" in body
+  ) {
+    return body as {
+      ok: true;
+      cwd: string;
+      reports: DiscoveredReport[];
+      note?: string;
+    };
+  }
+  const record =
+    body && typeof body === "object" ? (body as ReportApiError) : null;
+  return {
+    ok: false,
+    code: record?.code ?? `http_${response.status}`,
+    message: record?.message ?? `Request failed (${response.status})`,
+  };
+}
+
 export async function clearReport(): Promise<{ ok: true } | ReportApiError> {
   const response = await fetch("/api/report/clear", {
     method: "POST",

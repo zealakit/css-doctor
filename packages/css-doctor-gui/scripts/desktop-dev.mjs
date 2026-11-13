@@ -16,7 +16,7 @@ if (!existsSync(cargoToml)) {
   process.exit(1);
 }
 
-const build = spawnSync("pnpm", ["--filter", "css-doctor-gui", "build"], {
+const build = spawnSync("pnpm", ["--filter", "@zealakit/css-doctor-gui", "build"], {
   cwd: root,
   stdio: "inherit",
   shell: process.platform === "win32",
@@ -69,12 +69,12 @@ Tauri CLI is not available.
 Desktop strategy (Option B): Tauri webview + Node HTTP sidecar (NAPI).
 Install one of:
 
-  pnpm --filter css-doctor-gui add -D @tauri-apps/cli@2
+  pnpm --filter @zealakit/css-doctor-gui add -D @tauri-apps/cli@2
   cargo install tauri-cli --version "^2.0.0"
 
 Web mode remains available without Tauri:
 
-  pnpm --filter css-doctor-gui build
+  pnpm --filter @zealakit/css-doctor-gui build
   css-doctor gui
 `);
 }

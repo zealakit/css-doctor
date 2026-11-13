@@ -11,6 +11,8 @@ export { launchDesktopApp, resolveDesktopApp } from "./desktop";
 export type { DesktopLaunchResult } from "./desktop";
 export { loadReportFromFile } from "./report/load-file";
 export { generateCheckReport } from "./report/generate-check";
+export { discoverProjectReports } from "./report/discover";
+export type { DiscoveredReport } from "./report/discover";
 export {
   clearReportSession,
   getCurrentReport,

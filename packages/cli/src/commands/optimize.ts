@@ -1,15 +1,15 @@
 import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 
 import { InvalidArgumentError, type Command } from "commander";
 
-import { formatJsonReport } from "../formatters/json";
 import {
   formatOptimizationTerminalReport,
   formatUnifiedDiff,
 } from "../formatters/optimization-terminal";
 import type { OptimizationReport } from "../types/optimization";
 import { loadBinding } from "../utils/binding";
+import { emitCliReport } from "../utils/emit-report";
 import {
   describeError,
   isDirectory,
@@ -43,6 +43,7 @@ export type OptimizeRunOptions = {
   verbose?: boolean;
   diff?: boolean;
   report?: string;
+  save?: boolean;
   outDir?: string;
   minify?: boolean;
   pageUsage?: string;
@@ -100,7 +101,14 @@ function registerOptimizeLikeCommand(
     .option("--diff", "Include concise unified diffs for emitted CSS")
     .option("-v, --verbose", "Show more decisions and chunks")
     .option("-j, --json", "Emit JSON")
-    .option("--report <path>", "Write the JSON report to a file")
+    .option(
+      "--report <path>",
+      "Atomically write the JSON envelope to a file (alias of --out)",
+    )
+    .option(
+      "--save",
+      `On success, atomically write .css-doctor/reports/${name}-latest.json`,
+    )
     .option("--out-dir <path>", "Directory for emitted chunks when writing")
     .option("--minify", "Minify emitted CSS")
     .option("--no-minify", "Disable minification")
@@ -142,53 +150,42 @@ function registerOptimizeLikeCommand(
           minify: options.minify !== false,
         });
 
-        if (options.report) {
-          const reportPath = resolve(
-            options.cwd ?? process.cwd(),
-            options.report,
-          );
-          try {
-            await mkdir(dirname(reportPath), { recursive: true });
-            await writeFile(
-              reportPath,
-              `${formatJsonReport(report)}\n`,
-              "utf8",
-            );
-          } catch (error) {
-            process.stderr.write(
-              `css-doctor: failed to write --report ${reportPath}: ${describeError(error)}\n`,
-            );
-            process.exitCode = 1;
-            return;
-          }
-        }
-
-        if (options.json === true) {
-          process.stdout.write(`${formatJsonReport(report)}\n`);
-        } else if (report.files.length > 0) {
-          for (const file of report.files) {
-            process.stdout.write(
-              `${formatOptimizationTerminalReport(file.report, {
-                dryRun: report.dryRun,
-                verbose: options.verbose === true || options.explain === true,
-              })}\n`,
-            );
-            if (options.diff === true && file.diff) {
-              process.stdout.write(`${file.diff}\n`);
+        await emitCliReport(
+          report,
+          {
+            json: options.json,
+            out: options.report,
+            save: options.save,
+            cwd: options.cwd,
+          },
+          () => {
+            if (report.files.length > 0) {
+              for (const file of report.files) {
+                process.stdout.write(
+                  `${formatOptimizationTerminalReport(file.report, {
+                    dryRun: report.dryRun,
+                    verbose:
+                      options.verbose === true || options.explain === true,
+                  })}\n`,
+                );
+                if (options.diff === true && file.diff) {
+                  process.stdout.write(`${file.diff}\n`);
+                }
+              }
+              if (report.errors.length > 0) {
+                process.stderr.write(
+                  `css-doctor: ${report.errors.join("\ncss-doctor: ")}\n`,
+                );
+              }
+              return;
             }
-          }
-          if (report.errors.length > 0) {
-            process.stderr.write(
-              `css-doctor: ${report.errors.join("\ncss-doctor: ")}\n`,
+            process.stdout.write(
+              `css-doctor ${name} failed:\n${report.errors
+                .map((error) => `  - ${error}`)
+                .join("\n")}\n`,
             );
-          }
-        } else {
-          process.stdout.write(
-            `css-doctor ${name} failed:\n${report.errors
-              .map((error) => `  - ${error}`)
-              .join("\n")}\n`,
-          );
-        }
+          },
+        );
 
         process.exitCode = report.success ? 0 : 1;
       },

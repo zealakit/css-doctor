@@ -122,16 +122,21 @@ Optional `package.json` scripts:
 ### Local report viewer (GUI)
 
 ```bash
-# Build the GUI package, then open the local Web viewer
-pnpm --filter css-doctor-gui build
+# Optional package — not required for check/health/optimize/…
+pnpm add -D @zealakit/css-doctor-gui @zealakit/css-doctor-cli
+
+css-doctor check "src/**/*.css" --json --save
 css-doctor gui
+css-doctor gui --port 4173 --no-open --strict-port
 css-doctor gui --report ./report.json
+css-doctor gui --desktop   # optional; requires desktop build
 ```
 
-Web mode serves a React report console on `127.0.0.1:4193` (with port fallback).
-Desktop mode (`css-doctor gui --desktop`) launches a built Tauri shell that
-spawns the same Node sidecar — see
-[`packages/css-doctor-gui/README.md`](./packages/css-doctor-gui/README.md) and
+Web mode (default) serves the React report console on `127.0.0.1:4193` (with
+port fallback) and does **not** need Tauri or Rust. Desktop mode launches a
+built Tauri shell only when `--desktop` is passed — see
+[`packages/css-doctor-gui/README.md`](./packages/css-doctor-gui/README.md),
+[`docs/report-contract.md`](./docs/report-contract.md), and
 [`docs/gui-release-checklist.md`](./docs/gui-release-checklist.md).
 
 ### Command cheat sheet

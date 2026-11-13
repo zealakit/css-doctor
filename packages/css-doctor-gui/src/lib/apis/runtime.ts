@@ -8,6 +8,7 @@ export type RuntimeInfo = {
     uploadReport: boolean;
     reloadReport: boolean;
     generateCheck: boolean;
+    discoverReports: boolean;
     selectProject: boolean;
     openExternal: boolean;
     settings: boolean;

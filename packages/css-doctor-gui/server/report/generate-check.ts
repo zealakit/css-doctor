@@ -22,8 +22,9 @@ function loadBinding(): BindingModule {
     return cachedBinding;
   } catch (error) {
     throw new Error(
-      "Unable to load @zealakit/css-doctor-binding. Build it with " +
-        "`pnpm --filter @zealakit/css-doctor-binding build`.\n" +
+      "Unable to load @zealakit/css-doctor-binding. " +
+        "Reinstall css-doctor-gui / the CLI so the native binding is present " +
+        "(monorepo: `pnpm --filter @zealakit/css-doctor-binding build`).\n" +
         (error instanceof Error ? error.message : String(error)),
     );
   }

@@ -1,6 +1,6 @@
 {
   "name": "vite-react-tailwind",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,7 +11,8 @@
     "test": "tsc --noEmit",
     "format": "biome format --write src",
     "format:check": "biome format src",
-    "check": "biome check src"
+    "check": "biome check src",
+    "css:gui": "css-doctor gui --no-open"
   },
   "dependencies": {
     "react": "^19.3.1",
@@ -24,7 +25,9 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^4.7.0",
+    "@zealakit/css-doctor-cli": "workspace:*",
     "@zealakit/css-doctor-vite": "workspace:*",
+    "@zealakit/css-doctor-gui": "workspace:*",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
     "vite": "^6.0.0"

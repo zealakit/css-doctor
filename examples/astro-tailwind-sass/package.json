@@ -1,6 +1,6 @@
 {
   "name": "astro-tailwind-sass",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,7 +9,8 @@
     "preview": "astro preview",
     "format": "biome format --write .",
     "format:check": "biome format .",
-    "check": "biome check ."
+    "check": "biome check .",
+    "css:gui": "css-doctor gui --no-open"
   },
   "dependencies": {
     "@astrojs/preact": "^4.0.0",
@@ -30,7 +31,9 @@
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@zealakit/css-doctor-cli": "workspace:*",
     "@zealakit/css-doctor-vite": "workspace:*",
+    "@zealakit/css-doctor-gui": "workspace:*",
     "sass": "^1.83.0",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.6.0"
