@@ -21,6 +21,7 @@ Turborepo.
 | `packages/css-doctor-rsbuild` | Rsbuild/Rspack plugin (ESM + DTS) |
 | `packages/css-doctor-remix` | Remix 3 asset-server middleware (ESM + DTS) |
 | `packages/css-doctor-nuxt` | Nuxt 4 module wrapping the Vite plugin (ESM + DTS) |
+| `packages/css-doctor-gui` | Local report viewer (Web HTTP default + Tauri scaffold) |
 | `examples/vite-react-tailwind` | React 19 + Tailwind v4 SPA build-graph demo for Vite |
 | `examples/next-app-tailwind` | Next 15 App Router + Tailwind v4 CSS Modules safety fixture |
 | `examples/rsbuild-react-tailwind` | Rsbuild 2 + React 19 + Tailwind v4 fixture |
@@ -68,7 +69,7 @@ Turborepo.
 | --- | --- | --- |
 | Rust parser, selector extraction, splitter, AST | `crates/core/src/analyzer.rs`, `model.rs`, `splitter.rs` | `css-doctor-core` |
 | NAPI types/function, JS ↔ Rust mapping | `packages/binding/src/lib.rs`, `crates/core/src/` changed API | `css-doctor-binding` |
-| CLI output/flags, Vite plugin, Next wrapper | package `src/` and tests | `css-doctor-integrations` |
+| CLI output/flags, Vite/Next/GUI runtime | package `src/` and tests | `css-doctor-integrations` |
 | Full verification / release readiness | all package test commands | `css-doctor-verify` |
 
 ## Canonical commands

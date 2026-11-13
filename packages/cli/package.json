@@ -48,7 +48,8 @@
     "check": "biome check src test"
   },
   "dependencies": {
-    "@zealakit/css-doctor-binding": "workspace:*"
+    "@zealakit/css-doctor-binding": "workspace:*",
+    "css-doctor-gui": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",

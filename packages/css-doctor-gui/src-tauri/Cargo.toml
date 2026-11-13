@@ -1,0 +1,27 @@
+[workspace]
+
+[package]
+name = "css-doctor-gui"
+version = "1.1.1"
+description = "CSS Doctor desktop shell (Node sidecar + Tauri webview)"
+authors = ["nqhed - Huy Edward Nguyen"]
+edition = "2021"
+rust-version = "1.77"
+publish = false
+
+[lib]
+name = "css_doctor_gui_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true

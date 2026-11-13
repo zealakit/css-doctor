@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "command": "optimize",
+  "success": true,
+  "dryRun": true,
+  "errors": [],
+  "warnings": [
+    "pageCoverage was enabled without pageUsage; coverage-based DCE did not run."
+  ],
+  "patterns": ["src/app.css"],
+  "files": [
+    {
+      "path": "src/app.css",
+      "report": {
+        "schemaVersion": 1,
+        "input": {
+          "files": 1,
+          "bytes": 200,
+          "rules": 4,
+          "selectors": 5,
+          "declarations": 4
+        },
+        "output": {
+          "files": 1,
+          "bytes": 150,
+          "rules": 4,
+          "selectors": 5,
+          "declarations": 4
+        },
+        "impact": {
+          "bytesEliminated": 50,
+          "eliminationPercent": 25,
+          "emittedBytesTotal": 150,
+          "redistributedBytes": 0,
+          "rulesRemovedEstimate": 0,
+          "selectorsRemoved": 0,
+          "chunksCreated": 1,
+          "variablesChunks": 0
+        },
+        "operations": {
+          "minified": true,
+          "pageCoverageSplit": false,
+          "sizeBudgetSplit": false,
+          "variablesIsolated": false,
+          "deadCodeEliminated": false
+        },
+        "chunks": [
+          {
+            "name": "common",
+            "kind": "common",
+            "sizeBytes": 150,
+            "oversized": false,
+            "variables": false,
+            "page": null
+          }
+        ],
+        "decisions": [
+          {
+            "id": "minify-001",
+            "category": "minification",
+            "type": "minify",
+            "title": "Minification applied",
+            "explanation": "Serialized chunks use minify mode.",
+            "reason": "minify enabled",
+            "source": {
+              "file": null,
+              "selector": null,
+              "line": null,
+              "column": null
+            },
+            "destination": null,
+            "impact": {
+              "bytesBefore": 200,
+              "bytesAfter": 150,
+              "rulesAffected": null,
+              "selectorsAffected": null
+            },
+            "confidence": "high",
+            "changed": true,
+            "relatedDiagnostics": [],
+            "routes": []
+          }
+        ],
+        "warnings": [],
+        "analysisMs": 1
+      }
+    }
+  ],
+  "outDir": null
+}

@@ -3,6 +3,11 @@ members = [
     "crates/core",
     "packages/binding",
 ]
+# Desktop shell is a separate Tauri crate (Option B Node sidecar); keep it out of
+# the NAPI workspace so `cargo test --workspace` stays focused on Core/binding.
+exclude = [
+    "packages/css-doctor-gui/src-tauri",
+]
 resolver = "2"
 
 [profile.release]

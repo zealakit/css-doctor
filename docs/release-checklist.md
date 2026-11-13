@@ -50,3 +50,9 @@ complete without command evidence from the current checkout.
 - Native binding CI verifies the Ubuntu host used by GitHub Actions.
 - Additional NAPI targets require an explicit multi-platform build matrix before
   claiming support in release notes.
+
+## GUI (when shipping css-doctor-gui)
+
+- [ ] Follow [`docs/gui-release-checklist.md`](./gui-release-checklist.md)
+- [ ] Web production path verified on at least one host
+- [ ] Desktop claims limited to platforms actually packaged

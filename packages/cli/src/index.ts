@@ -10,6 +10,7 @@ import {
   registerOptimizeCommand,
   registerSplitCommand,
 } from "./commands/optimize";
+import { registerGuiCommand } from "./commands/gui";
 
 const program = new Command();
 
@@ -30,6 +31,7 @@ registerDiffCommand(program);
 registerOptimizeCommand(program);
 registerSplitCommand(program);
 registerFixCommand(program);
+registerGuiCommand(program);
 
 try {
   await program.parseAsync(process.argv);

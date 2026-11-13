@@ -16,13 +16,15 @@
       "**/*.json",
       "!**/*.d.ts",
       "!**/dist",
+      "!**/dist-server",
       "!**/node_modules",
       "!**/fixtures",
       "!**/.next",
       "!**/coverage",
       "!**/.nuxt",
       "!**/.output",
-      "!**/.svelte-kit"
+      "!**/.svelte-kit",
+      "!**/src-tauri"
     ]
   },
   "formatter": {

@@ -9,7 +9,10 @@ import type { CheckReport } from "../src/commands/check";
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const cliPath = join(packageRoot, "dist", "index.js");
 
-function runCli(args: string[]): SpawnSyncReturns<string> {
+function runCli(
+  args: string[],
+  options: { env?: NodeJS.ProcessEnv } = {},
+): SpawnSyncReturns<string> {
   return spawnSync(process.execPath, [cliPath, ...args], {
     cwd: packageRoot,
     encoding: "utf8",
@@ -17,6 +20,7 @@ function runCli(args: string[]): SpawnSyncReturns<string> {
       ...process.env,
       FORCE_COLOR: "0",
       NO_COLOR: "1",
+      ...options.env,
     },
   });
 }
@@ -570,4 +574,27 @@ test("help lists optimize and fix commands", () => {
   assert.match(result.stdout, /optimize/);
   assert.match(result.stdout, /split/);
   assert.match(result.stdout, /fix/);
+  assert.match(result.stdout, /gui/);
+});
+
+test("gui --help documents web runtime flags", () => {
+  const result = runCli(["gui", "--help"]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /--port/);
+  assert.match(result.stdout, /--no-open/);
+  assert.match(result.stdout, /--strict-port/);
+  assert.match(result.stdout, /--desktop/);
+  assert.match(result.stdout, /--report/);
+});
+
+test("gui --desktop fails clearly when desktop app is missing", () => {
+  const result = runCli(["gui", "--desktop"], {
+    env: {
+      ...process.env,
+      CSS_DOCTOR_GUI_DESKTOP: "/tmp/css-doctor-gui-missing-app.app",
+    },
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /desktop/i);
+  assert.doesNotMatch(result.stdout, /listening on/);
 });

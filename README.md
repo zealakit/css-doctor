@@ -119,6 +119,21 @@ Optional `package.json` scripts:
 }
 ```
 
+### Local report viewer (GUI)
+
+```bash
+# Build the GUI package, then open the local Web viewer
+pnpm --filter css-doctor-gui build
+css-doctor gui
+css-doctor gui --report ./report.json
+```
+
+Web mode serves a React report console on `127.0.0.1:4193` (with port fallback).
+Desktop mode (`css-doctor gui --desktop`) launches a built Tauri shell that
+spawns the same Node sidecar — see
+[`packages/css-doctor-gui/README.md`](./packages/css-doctor-gui/README.md) and
+[`docs/gui-release-checklist.md`](./docs/gui-release-checklist.md).
+
 ### Command cheat sheet
 
 ```bash
@@ -126,6 +141,11 @@ Optional `package.json` scripts:
 css-doctor --help
 css-doctor --version
 css-doctor check --help
+
+# Local GUI (Web report viewer)
+css-doctor gui
+css-doctor gui --port 4200 --no-open
+css-doctor gui --desktop   # requires prior desktop:build
 
 # Single file or multiple paths
 css-doctor check src/styles/app.css

@@ -10,13 +10,19 @@ export default defineConfig({
   splitting: false,
   dts: false,
   outDir: "dist",
-  // Bundle the CLI's JavaScript dependencies so npx works even when optional
-  // transitive packages are not installed by the npm client.
-  noExternal: [/.*/],
+  // Bundle CLI JS deps for npx, but never fold the native binding or the GUI
+  // server into this binary (GUI resolves its own dist/ via import.meta.url).
+  noExternal: [
+    /^(?!@zealakit\/css-doctor-binding$)(?!css-doctor-gui(?:\/|$)).+$/,
+  ],
   shims: true,
   // The native binding must remain a dynamic runtime require. It resolves the
   // correct platform package (.node) at execution time.
-  external: ["@zealakit/css-doctor-binding"],
+  external: [
+    "@zealakit/css-doctor-binding",
+    "css-doctor-gui",
+    "css-doctor-gui/server",
+  ],
   banner: {
     js: [
       "#!/usr/bin/env node",

@@ -10,6 +10,7 @@ description: Implements and debugs css-doctor consumers: the CLI, Vite/Rollup pl
 Use for changes in:
 
 - `packages/cli/`
+- `packages/css-doctor-gui/` (local Web report viewer + Tauri scaffold)
 - `packages/css-doctor-shared/` (pure helpers: class scan, clamps, patterns)
 - `packages/css-doctor-vite/`
 - `packages/css-doctor-next/`
