@@ -14,5 +14,6 @@ export default defineConfig({
     "@rsbuild/core",
     "@rspack/core",
     "@zealakit/css-doctor-binding",
+    "@zealakit/css-doctor-shared",
   ],
 });

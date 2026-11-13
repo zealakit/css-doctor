@@ -48,7 +48,7 @@ export default defineNuxtConfig({
 | `pageCoverage.minPageRatio` | `0.5` | Tỷ lệ tối thiểu (0.0-1.0) để vào common chunk. |
 | `pageCoverage.forceCommon` | `[]` | Selector/class luôn giữ trong common CSS. |
 | `sizeBudget.enabled` | `true` | Bật chia nhỏ theo byte budget. |
-| `sizeBudget.maxChunkSize` | `60 * 1024` | Số byte tối đa mỗi chunk. |
+| `sizeBudget.maxChunkSize` | `30 * 1024` | Số byte tối đa mỗi chunk. |
 | `sizeBudget.isolateVariables` | `true` | Tách biến `:root` và `@theme` trước. |
 | `minify` | production | Minify CSS bằng LightningCSS. |
 | `report` | `true` | In chẩn đoán coverage và chunk. |

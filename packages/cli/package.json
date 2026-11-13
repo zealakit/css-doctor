@@ -41,11 +41,11 @@
     "build": "tsup && node -e \"require('node:fs').chmodSync('dist/index.js', 0o755)\"",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "test": "pnpm typecheck && pnpm build && tsx --test test/cli.test.ts",
-    "lint": "biome lint src test/cli.test.ts",
-    "format": "biome format --write src test/cli.test.ts",
-    "format:check": "biome format src test/cli.test.ts",
-    "check": "biome check src test/cli.test.ts"
+    "test": "pnpm typecheck && pnpm build && tsx --test test/**/*.test.ts",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "format:check": "biome format src test",
+    "check": "biome check src test"
   },
   "dependencies": {
     "@zealakit/css-doctor-binding": "workspace:*"
@@ -54,7 +54,7 @@
     "@types/node": "^22.20.5",
     "tsup": "^8.5.1",
     "tsx": "^4.23.15",
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.3",
     "commander": "^12.1.0",
     "fast-glob": "^3.3.3",
     "picocolors": "^1.1.1"

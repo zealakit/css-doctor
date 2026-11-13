@@ -1,855 +1,867 @@
+/**
+ * Local Dependency Monitor for css-doctor (root + packages/* only).
+ *
+ *   pnpm monitor
+ *   → http://127.0.0.1:4177
+ */
 import { execFile } from "node:child_process";
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { readdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
+import fs from "node:fs";
+import fsp from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
-import { parse as parseToml } from "smol-toml";
-
-const ROOT = resolve(process.cwd());
-const INDEX_FILE = join(ROOT, "monitor/index.html");
-const USER_AGENT = "css-doctor-monitor";
-const REQUEST_TIMEOUT_MS = 12_000;
-const MAX_BODY_BYTES = 1_000_000;
 const execFileAsync = promisify(execFile);
 
-type Ecosystem = "node" | "rust";
-type DependencyType =
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.resolve(__dirname, "..");
+const HOST = "127.0.0.1";
+const PREFERRED_PORT = 4177;
+const INDEX_HTML = path.join(__dirname, "index.html");
+
+type DepType =
   | "dependencies"
   | "devDependencies"
   | "peerDependencies"
-  | "dev-dependencies"
-  | "build-dependencies";
-type DependencyStatus = "up-to-date" | "outdated" | "error";
+  | "optionalDependencies";
 
-type ManifestDependency = {
-  ecosystem: Ecosystem;
-  subRepo: string;
+type ManifestInfo = {
+  id: string;
   name: string;
-  type: DependencyType;
-  current: string;
-  filePath: string;
-  section: string;
+  label: string;
+  relativePackageJson: string;
+  absolutePackageJson: string;
+};
+
+type DeclaredDependency = {
+  id: string;
+  dependency: string;
+  manifestId: string;
+  packageName: string;
+  depType: DepType;
+  declared: string;
+  resolved: string | null;
+  ecosystem: "node";
   local: boolean;
 };
 
-type DependencyRow = Omit<ManifestDependency, "filePath" | "section"> & {
+type UpdateClass =
+  | "up-to-date"
+  | "patch-available"
+  | "minor-available"
+  | "major-available"
+  | "deprecated"
+  | "registry-check-failed"
+  | "skipped";
+
+type RegistryInfo = {
   latest: string | null;
-  status: DependencyStatus;
-  note?: string;
+  latestPatch: string | null;
+  latestMinor: string | null;
+  latestMajor: string | null;
+  versions: string[];
+  deprecated: boolean | string | null;
+  classification: UpdateClass;
+  error?: string;
 };
 
-type UpgradePayload = {
-  ecosystem?: unknown;
-  subRepo?: unknown;
-  package?: unknown;
-  type?: unknown;
-  latestVersion?: unknown;
+type DependencyRow = DeclaredDependency & {
+  registry: RegistryInfo;
 };
 
-const IGNORED_DIRECTORIES = new Set([
-  ".git",
-  ".next",
-  ".turbo",
-  "coverage",
-  "dist",
-  "examples",
-  "node_modules",
-  "target",
-]);
-
-type LatestCacheEntry = {
-  expiresAt: number;
-  promise: Promise<string | null>;
+type UpdateRequest = {
+  manifestId: string;
+  dependency: string;
+  depType: DepType;
+  targetVersion: string;
+  preserveRange?: boolean;
 };
 
-const LATEST_CACHE_TTL_MS = 5 * 60 * 1000;
-const latestCache = new Map<string, LatestCacheEntry>();
+type SemVer = {
+  major: number;
+  minor: number;
+  patch: number;
+  prerelease: string | null;
+  raw: string;
+};
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+const DEP_TYPES: DepType[] = [
+  "dependencies",
+  "devDependencies",
+  "peerDependencies",
+  "optionalDependencies",
+];
 
-function normalizePath(path: string): string {
-  return relative(ROOT, path).split(sep).join("/") || "root";
-}
+const registryCache = new Map<
+  string,
+  { ok: true; info: RegistryInfo } | { ok: false; error: string }
+>();
 
-function assertInsideRoot(path: string): void {
-  const resolved = resolve(path);
+let lastRegistryCheckAt: string | null = null;
 
-  if (resolved !== ROOT && !resolved.startsWith(`${ROOT}${sep}`)) {
-    throw new Error("Path escapes the monorepo root");
-  }
-}
-
-async function walkFiles(
-  directory: string,
-  fileName: string,
-  found: string[],
-): Promise<void> {
-  let entries;
-
-  try {
-    entries = await readdir(directory, { withFileTypes: true });
-  } catch {
-    return;
-  }
-
-  for (const entry of entries) {
-    if (entry.isDirectory()) {
-      if (!IGNORED_DIRECTORIES.has(entry.name)) {
-        await walkFiles(join(directory, entry.name), fileName, found);
-      }
-      continue;
-    }
-
-    if (entry.isFile() && entry.name === fileName) {
-      found.push(join(directory, entry.name));
-    }
-  }
-}
-
-async function collectPackageFiles(): Promise<string[]> {
-  const files = [join(ROOT, "package.json")];
-  await walkFiles(join(ROOT, "packages"), "package.json", files);
-  return files;
-}
-
-async function collectCargoFiles(): Promise<string[]> {
-  const files = [join(ROOT, "Cargo.toml")];
-  await walkFiles(join(ROOT, "crates"), "Cargo.toml", files);
-  // packages/binding is a NAPI crate and a workspace member too.
-  await walkFiles(join(ROOT, "packages"), "Cargo.toml", files);
-  return files;
-}
-
-function nodeSubRepo(
-  filePath: string,
-  packageName: string | undefined,
-): string {
-  if (filePath === join(ROOT, "package.json")) {
-    return "root";
-  }
-
-  return packageName ?? normalizePath(dirname(filePath));
-}
-
-function isLocalNodeSpecifier(version: string): boolean {
-  return (
-    version.startsWith("workspace:") ||
-    version.startsWith("file:") ||
-    version.startsWith("link:") ||
-    version.startsWith("catalog:") ||
-    version.startsWith("git+") ||
-    version.startsWith("http://") ||
-    version.startsWith("https://")
-  );
-}
-
-async function scanNodeManifests(): Promise<ManifestDependency[]> {
-  const dependencies: ManifestDependency[] = [];
-  const files = await collectPackageFiles();
-  const sections: Array<{
-    key: "dependencies" | "devDependencies" | "peerDependencies";
-    type: DependencyType;
-  }> = [
-    { key: "dependencies", type: "dependencies" },
-    { key: "devDependencies", type: "devDependencies" },
-    { key: "peerDependencies", type: "peerDependencies" },
-  ];
-
-  for (const filePath of files) {
-    let manifest: unknown;
-
-    try {
-      manifest = JSON.parse(await readFile(filePath, "utf8"));
-    } catch (error) {
-      console.warn(`[monitor] skipping ${filePath}: ${errorMessage(error)}`);
-      continue;
-    }
-
-    if (!isRecord(manifest)) {
-      continue;
-    }
-
-    const packageName =
-      typeof manifest.name === "string" ? manifest.name : undefined;
-    const subRepo = nodeSubRepo(filePath, packageName);
-
-    for (const section of sections) {
-      const values = manifest[section.key];
-
-      if (!isRecord(values)) {
-        continue;
-      }
-
-      for (const [name, value] of Object.entries(values)) {
-        if (typeof value !== "string") {
-          continue;
-        }
-
-        dependencies.push({
-          ecosystem: "node",
-          subRepo,
-          name,
-          type: section.type,
-          current: value,
-          filePath,
-          section: section.key,
-          local: isLocalNodeSpecifier(value),
-        });
-      }
-    }
-  }
-
-  return dependencies;
-}
-
-function isLocalCargoSpecifier(value: unknown): boolean {
-  if (!isRecord(value)) {
-    return false;
-  }
-
-  return (
-    value.workspace === true ||
-    typeof value.path === "string" ||
-    typeof value.git === "string"
-  );
-}
-
-function cargoCurrent(value: unknown): string {
-  if (typeof value === "string") {
-    return value;
-  }
-
-  if (isRecord(value) && typeof value.version === "string") {
-    return value.version;
-  }
-
-  return "";
-}
-
-async function scanCargoManifests(): Promise<ManifestDependency[]> {
-  const dependencies: ManifestDependency[] = [];
-  const files = await collectCargoFiles();
-  const sections: Array<{ key: string; type: DependencyType }> = [
-    { key: "dependencies", type: "dependencies" },
-    { key: "dev-dependencies", type: "dev-dependencies" },
-    { key: "build-dependencies", type: "build-dependencies" },
-    { key: "workspace.dependencies", type: "dependencies" },
-  ];
-
-  for (const filePath of files) {
-    let parsed: unknown;
-
-    try {
-      parsed = parseToml(await readFile(filePath, "utf8"));
-    } catch (error) {
-      console.warn(`[monitor] skipping ${filePath}: ${errorMessage(error)}`);
-      continue;
-    }
-
-    if (!isRecord(parsed)) {
-      continue;
-    }
-
-    const subRepo = normalizePath(dirname(filePath));
-
-    for (const section of sections) {
-      const table = section.key
-        .split(".")
-        .reduce<unknown>((value, key) => (isRecord(value) ? value[key] : undefined), parsed);
-
-      if (!isRecord(table)) {
-        continue;
-      }
-
-      for (const [name, value] of Object.entries(table)) {
-        if (typeof value !== "string" && !isRecord(value)) {
-          continue;
-        }
-
-        const local = isLocalCargoSpecifier(value);
-        dependencies.push({
-          ecosystem: "rust",
-          subRepo,
-          name,
-          type: section.type,
-          current: cargoCurrent(value),
-          filePath,
-          section: section.key,
-          local,
-        });
-      }
-    }
-  }
-
-  return dependencies;
-}
-
-async function fetchLatest(
-  ecosystem: Ecosystem,
-  name: string,
-): Promise<string | null> {
-  const cacheKey = `${ecosystem}:${name}`;
-  const cached = latestCache.get(cacheKey);
-
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.promise;
-  }
-
-  const promise = fetchLatestUncached(ecosystem, name);
-  latestCache.set(cacheKey, {
-    expiresAt: Date.now() + LATEST_CACHE_TTL_MS,
-    promise,
+function sendJson(res: ServerResponse, status: number, body: unknown): void {
+  const payload = JSON.stringify(body);
+  res.writeHead(status, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Content-Length": Buffer.byteLength(payload),
   });
-  return promise;
+  res.end(payload);
 }
 
-async function fetchLatestUncached(
-  ecosystem: Ecosystem,
-  name: string,
-): Promise<string | null> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  const url =
-    ecosystem === "node"
-      ? `https://registry.npmjs.org/${encodeURIComponent(name)}/latest`
-      : `https://crates.io/api/v1/crates/${encodeURIComponent(name)}`;
+function sendText(
+  res: ServerResponse,
+  status: number,
+  body: string,
+  contentType: string,
+): void {
+  res.writeHead(status, {
+    "Content-Type": contentType,
+    "Cache-Control": "no-store",
+    "Content-Length": Buffer.byteLength(body),
+  });
+  res.end(body);
+}
+
+async function readJsonBody(req: IncomingMessage): Promise<unknown> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  const raw = Buffer.concat(chunks).toString("utf8").trim();
+  if (!raw) return {};
+  return JSON.parse(raw) as unknown;
+}
+
+function isLocalHost(req: IncomingMessage): boolean {
+  const host = (req.headers.host ?? "").split(":")[0]?.toLowerCase();
+  return host === "127.0.0.1" || host === "localhost";
+}
+
+function discoverManifests(): ManifestInfo[] {
+  const manifests: ManifestInfo[] = [];
+  const rootPkg = path.join(ROOT, "package.json");
+  if (fs.existsSync(rootPkg)) {
+    const json = JSON.parse(fs.readFileSync(rootPkg, "utf8")) as {
+      name?: string;
+    };
+    manifests.push({
+      id: ".",
+      name: json.name ?? "css-doctor",
+      label: "Root",
+      relativePackageJson: "package.json",
+      absolutePackageJson: rootPkg,
+    });
+  }
+
+  const packagesDir = path.join(ROOT, "packages");
+  if (!fs.existsSync(packagesDir)) return manifests;
+
+  for (const dirName of fs
+    .readdirSync(packagesDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort()) {
+    if (dirName === "examples") continue;
+    const absolutePackageJson = path.join(packagesDir, dirName, "package.json");
+    if (!fs.existsSync(absolutePackageJson)) continue;
+    const json = JSON.parse(fs.readFileSync(absolutePackageJson, "utf8")) as {
+      name?: string;
+    };
+    manifests.push({
+      id: `packages/${dirName}`,
+      name: json.name ?? dirName,
+      label: json.name ?? dirName,
+      relativePackageJson: `packages/${dirName}/package.json`,
+      absolutePackageJson,
+    });
+  }
+
+  return manifests;
+}
+
+function assertApprovedManifest(manifestId: string): ManifestInfo {
+  const manifests = discoverManifests();
+  const match = manifests.find((item) => item.id === manifestId);
+  if (!match) {
+    throw new Error(`Unknown or disallowed manifest id: ${manifestId}`);
+  }
+  if (
+    match.id.startsWith("examples") ||
+    match.relativePackageJson.includes("examples/")
+  ) {
+    throw new Error("examples/ manifests are excluded");
+  }
+  return match;
+}
+
+function parseSemVer(input: string): SemVer | null {
+  const token =
+    input
+      .trim()
+      .match(/v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?/)?.[0]
+      ?.replace(/^v/, "") ?? "";
+  const match = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/.exec(token);
+  if (!match) return null;
+  return {
+    major: Number(match[1]),
+    minor: Number(match[2]),
+    patch: Number(match[3]),
+    prerelease: match[4] ?? null,
+    raw: `${match[1]}.${match[2]}.${match[3]}${match[4] ? `-${match[4]}` : ""}`,
+  };
+}
+
+function compareSemVer(a: SemVer, b: SemVer): number {
+  if (a.major !== b.major) return a.major - b.major;
+  if (a.minor !== b.minor) return a.minor - b.minor;
+  if (a.patch !== b.patch) return a.patch - b.patch;
+  if (a.prerelease === b.prerelease) return 0;
+  if (a.prerelease === null) return 1;
+  if (b.prerelease === null) return -1;
+  return a.prerelease.localeCompare(b.prerelease);
+}
+
+function maxStable(
+  versions: string[],
+  predicate?: (v: SemVer) => boolean,
+): string | null {
+  let best: SemVer | null = null;
+  for (const version of versions) {
+    const parsed = parseSemVer(version);
+    if (!parsed || parsed.prerelease) continue;
+    if (predicate && !predicate(parsed)) continue;
+    if (!best || compareSemVer(parsed, best) > 0) best = parsed;
+  }
+  return best?.raw ?? null;
+}
+
+function isSkippableSpec(spec: string): boolean {
+  return (
+    spec.startsWith("workspace:") ||
+    spec.startsWith("file:") ||
+    spec.startsWith("link:") ||
+    spec.startsWith("portal:") ||
+    spec.startsWith("catalog:") ||
+    spec.includes("://") ||
+    spec.startsWith("git+")
+  );
+}
+
+function preserveRange(current: string, nextExact: string): string {
+  if (current.startsWith("^")) return `^${nextExact}`;
+  if (current.startsWith("~")) return `~${nextExact}`;
+  return nextExact;
+}
+
+function classify(
+  declared: string,
+  info: Omit<RegistryInfo, "classification" | "error">,
+): UpdateClass {
+  if (info.deprecated) return "deprecated";
+  if (!info.latest) return "registry-check-failed";
+  const current = parseSemVer(declared);
+  const latest = parseSemVer(info.latest);
+  if (!current || !latest) return "registry-check-failed";
+  if (compareSemVer(latest, current) <= 0) return "up-to-date";
+  if (latest.major > current.major) return "major-available";
+  if (latest.minor > current.minor) return "minor-available";
+  return "patch-available";
+}
+
+async function fetchRegistry(
+  dependency: string,
+  declared: string,
+): Promise<RegistryInfo> {
+  if (isSkippableSpec(declared)) {
+    return {
+      latest: null,
+      latestPatch: null,
+      latestMinor: null,
+      latestMajor: null,
+      versions: [],
+      deprecated: null,
+      classification: "skipped",
+      error: "Non-registry version specification",
+    };
+  }
+
+  const cached = registryCache.get(dependency);
+  if (cached?.ok) {
+    return {
+      ...cached.info,
+      classification: classify(declared, cached.info),
+    };
+  }
+  if (cached && !cached.ok) {
+    return {
+      latest: null,
+      latestPatch: null,
+      latestMinor: null,
+      latestMajor: null,
+      versions: [],
+      deprecated: null,
+      classification: "registry-check-failed",
+      error: cached.error,
+    };
+  }
+
+  const encoded = dependency
+    .split("/")
+    .map((part) => encodeURIComponent(part))
+    .join("/");
 
   try {
-    const response = await fetch(url, {
-      headers: {
-        Accept: "application/json",
-        "User-Agent": USER_AGENT,
-      },
-      signal: controller.signal,
+    const response = await fetch(`https://registry.npmjs.org/${encoded}`, {
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) {
+      const error = `Registry HTTP ${response.status} for ${dependency}`;
+      registryCache.set(dependency, { ok: false, error });
+      return {
+        latest: null,
+        latestPatch: null,
+        latestMinor: null,
+        latestMajor: null,
+        versions: [],
+        deprecated: null,
+        classification: "registry-check-failed",
+        error,
+      };
+    }
+
+    const doc = (await response.json()) as {
+      "dist-tags"?: { latest?: string };
+      versions?: Record<string, { deprecated?: string }>;
+      deprecated?: string;
+    };
+
+    const versions = Object.keys(doc.versions ?? {}).filter((version) => {
+      const parsed = parseSemVer(version);
+      return Boolean(parsed && !parsed.prerelease);
+    });
+    const latest = doc["dist-tags"]?.latest ?? maxStable(versions);
+    const baseline = parseSemVer(declared);
+    const latestPatch = baseline
+      ? maxStable(
+          versions,
+          (v) => v.major === baseline.major && v.minor === baseline.minor,
+        )
+      : null;
+    const latestMinor = baseline
+      ? maxStable(versions, (v) => v.major === baseline.major)
+      : null;
+    const latestMajor = maxStable(versions);
+    const deprecated =
+      (latest && doc.versions?.[latest]?.deprecated) || doc.deprecated || false;
+
+    const base: Omit<RegistryInfo, "classification" | "error"> = {
+      latest: latest ?? null,
+      latestPatch,
+      latestMinor,
+      latestMajor,
+      versions: versions.sort((a, b) => {
+        const pa = parseSemVer(a);
+        const pb = parseSemVer(b);
+        if (!pa || !pb) return a.localeCompare(b);
+        return compareSemVer(pb, pa);
+      }),
+      deprecated: deprecated === false ? false : deprecated,
+    };
+
+    registryCache.set(dependency, {
+      ok: true,
+      info: { ...base, classification: "up-to-date" },
     });
 
-    if (!response.ok) {
-      throw new Error(`registry returned ${response.status}`);
-    }
-
-    const body = (await response.json()) as unknown;
-
-    if (ecosystem === "node") {
-      return isRecord(body) && typeof body.version === "string"
-        ? body.version
-        : null;
-    }
-
-    if (!isRecord(body) || !isRecord(body.crate)) {
-      return null;
-    }
-
-    return (
-      (typeof body.crate.max_stable_version === "string" &&
-        body.crate.max_stable_version) ||
-      (typeof body.crate.max_version === "string" &&
-        body.crate.max_version) ||
-      null
-    );
+    return {
+      ...base,
+      classification: classify(declared, base),
+    };
   } catch (error) {
-    const message = errorMessage(error);
-    console.warn(`[monitor] ${ecosystem} ${name}: ${message}`);
-    return null;
-  } finally {
-    clearTimeout(timeout);
+    const message = error instanceof Error ? error.message : String(error);
+    registryCache.set(dependency, { ok: false, error: message });
+    return {
+      latest: null,
+      latestPatch: null,
+      latestMinor: null,
+      latestMajor: null,
+      versions: [],
+      deprecated: null,
+      classification: "registry-check-failed",
+      error: message,
+    };
   }
 }
 
-function normalizeVersion(value: string): string {
-  return value
-    .trim()
-    .replace(/^(?:workspace:|npm:)/, "")
-    .replace(/^[~^<>=v]+/, "")
-    .trim();
-}
+function readResolvedFromLockfile(): Map<string, string> {
+  const lockPath = path.join(ROOT, "pnpm-lock.yaml");
+  const resolved = new Map<string, string>();
+  if (!fs.existsSync(lockPath)) return resolved;
 
-function dependencyStatus(
-  current: string,
-  latest: string | null,
-  local: boolean,
-): DependencyStatus {
-  if (local) {
-    return "up-to-date";
-  }
+  const text = fs.readFileSync(lockPath, "utf8");
+  const lines = text.split("\n");
+  let inImporters = false;
+  let currentImporter: string | null = null;
+  let inDepBlock = false;
 
-  if (!latest) {
-    return "error";
-  }
+  for (const line of lines) {
+    if (line === "importers:") {
+      inImporters = true;
+      continue;
+    }
+    if (inImporters && /^\S/.test(line) && line !== "importers:") {
+      break;
+    }
+    if (!inImporters) continue;
 
-  return normalizeVersion(current) === normalizeVersion(latest)
-    ? "up-to-date"
-    : "outdated";
-}
+    const importerMatch = /^ {2}(\.|packages\/[^:]+):$/.exec(line);
+    if (importerMatch) {
+      currentImporter = importerMatch[1] ?? null;
+      inDepBlock = false;
+      continue;
+    }
 
-async function enrichDependencies(
-  manifests: ManifestDependency[],
-): Promise<DependencyRow[]> {
-  const queue = [...manifests];
-  const rows: DependencyRow[] = [];
-  const concurrency = 8;
+    if (
+      currentImporter &&
+      /^ {4}(dependencies|devDependencies|peerDependencies|optionalDependencies):$/.test(
+        line,
+      )
+    ) {
+      inDepBlock = true;
+      continue;
+    }
 
-  async function worker(): Promise<void> {
-    for (;;) {
-      const dependency = queue.shift();
+    if (currentImporter && /^ {4}\S/.test(line)) {
+      inDepBlock = false;
+    }
 
-      if (!dependency) {
-        return;
+    if (!currentImporter || !inDepBlock) continue;
+
+    const nameMatch = /^ {6}(.+):$/.exec(line);
+    if (nameMatch) {
+      const depName = nameMatch[1]?.replace(/^['"]|['"]$/g, "") ?? "";
+      // look ahead handled by version line below via temporary key
+      resolved.set(`${currentImporter}::pending`, depName);
+      continue;
+    }
+
+    const versionMatch = /^ {8}version:\s+(.+)$/.exec(line);
+    if (versionMatch) {
+      const depName = resolved.get(`${currentImporter}::pending`);
+      if (depName) {
+        let version = versionMatch[1]?.trim() ?? "";
+        version = version.replace(/^['"]|['"]$/g, "");
+        // pnpm may store "1.2.3(peer@x)" — take the leading semver
+        version = version.split("(")[0]?.trim() ?? version;
+        resolved.set(`${currentImporter}::${depName}`, version);
+        resolved.delete(`${currentImporter}::pending`);
       }
-
-      const latest = dependency.local
-        ? null
-        : await fetchLatest(dependency.ecosystem, dependency.name);
-      const status = dependencyStatus(
-        dependency.current,
-        latest,
-        dependency.local,
-      );
-
-      rows.push({
-        ecosystem: dependency.ecosystem,
-        subRepo: dependency.subRepo,
-        name: dependency.name,
-        type: dependency.type,
-        current: dependency.current || (dependency.local ? "local" : ""),
-        latest,
-        status,
-        local: dependency.local,
-        note: dependency.local ? "Local workspace/path dependency" : undefined,
-      });
     }
   }
 
+  return resolved;
+}
+
+function listDeclarations(): DeclaredDependency[] {
+  const manifests = discoverManifests();
+  const lockResolved = readResolvedFromLockfile();
+  const rows: DeclaredDependency[] = [];
+
+  for (const manifest of manifests) {
+    const json = JSON.parse(
+      fs.readFileSync(manifest.absolutePackageJson, "utf8"),
+    ) as Record<string, Record<string, string> | undefined>;
+
+    for (const depType of DEP_TYPES) {
+      const block = json[depType];
+      if (!block) continue;
+      for (const [dependency, declared] of Object.entries(block)) {
+        rows.push({
+          id: `${manifest.id}::${depType}::${dependency}`,
+          dependency,
+          manifestId: manifest.id,
+          packageName: manifest.name,
+          depType,
+          declared,
+          resolved: lockResolved.get(`${manifest.id}::${dependency}`) ?? null,
+          ecosystem: "node",
+          local: isSkippableSpec(declared),
+        });
+      }
+    }
+  }
+
+  return rows.sort((a, b) => a.id.localeCompare(b.id));
+}
+
+async function buildDependencyRows(options?: {
+  refresh?: boolean;
+}): Promise<DependencyRow[]> {
+  if (options?.refresh) {
+    registryCache.clear();
+  }
+  const declarations = listDeclarations();
+  const uniqueNames = [...new Set(declarations.map((item) => item.dependency))];
+
+  // Warm cache once per unique dependency (using first declared sample).
+  const sampleDeclared = new Map<string, string>();
+  for (const item of declarations) {
+    if (!sampleDeclared.has(item.dependency)) {
+      sampleDeclared.set(item.dependency, item.declared);
+    }
+  }
   await Promise.all(
-    Array.from({ length: Math.min(concurrency, manifests.length) }, () =>
-      worker(),
-    ),
+    uniqueNames.map(async (name) => {
+      await fetchRegistry(name, sampleDeclared.get(name) ?? "");
+    }),
   );
 
+  lastRegistryCheckAt = new Date().toISOString();
+
+  const rows: DependencyRow[] = [];
+  for (const item of declarations) {
+    rows.push({
+      ...item,
+      registry: await fetchRegistry(item.dependency, item.declared),
+    });
+  }
   return rows;
 }
 
-async function scanDependencies(): Promise<DependencyRow[]> {
-  const [nodeDependencies, rustDependencies] = await Promise.all([
-    scanNodeManifests(),
-    scanCargoManifests(),
-  ]);
-
-  return enrichDependencies([...nodeDependencies, ...rustDependencies]);
-}
-
-function findManifestDependency(
-  manifests: ManifestDependency[],
-  payload: UpgradePayload,
-): ManifestDependency | undefined {
-  const ecosystem = payload.ecosystem;
-  const subRepo = payload.subRepo;
-  const packageName = payload.package;
-  const type = payload.type;
-
-  if (ecosystem !== "node" && ecosystem !== "rust") {
-    return undefined;
+function summarize(rows: DependencyRow[]) {
+  const unique = new Set(rows.map((row) => row.dependency));
+  const byDepClass = new Map<string, UpdateClass>();
+  for (const row of rows) {
+    const prev = byDepClass.get(row.dependency);
+    const rank: Record<UpdateClass, number> = {
+      deprecated: 0,
+      "major-available": 1,
+      "minor-available": 2,
+      "patch-available": 3,
+      "registry-check-failed": 4,
+      skipped: 5,
+      "up-to-date": 6,
+    };
+    if (!prev || rank[row.registry.classification] < rank[prev]) {
+      byDepClass.set(row.dependency, row.registry.classification);
+    }
   }
 
-  const matches = manifests.filter(
-    (dependency) =>
-      dependency.ecosystem === ecosystem &&
-      dependency.subRepo === subRepo &&
-      dependency.name === packageName &&
-      (type === undefined || dependency.type === type),
-  );
+  let upToDate = 0;
+  let updatesAvailable = 0;
+  let deprecated = 0;
+  let failed = 0;
+  for (const classification of byDepClass.values()) {
+    if (classification === "up-to-date" || classification === "skipped") {
+      upToDate += 1;
+    } else if (classification === "deprecated") {
+      deprecated += 1;
+      updatesAvailable += 1;
+    } else if (classification === "registry-check-failed") {
+      failed += 1;
+    } else {
+      updatesAvailable += 1;
+    }
+  }
 
-  if (matches.length > 1) {
+  return {
+    total: unique.size,
+    outdated: updatesAvailable,
+    upToDate,
+    errors: failed,
+    uniqueDependencies: unique.size,
+    declarationCount: rows.length,
+    updatesAvailable,
+    deprecated,
+    registryFailures: failed,
+    lastRegistryCheckAt,
+    ecosystems: ["node"],
+  };
+}
+
+function validateUpdateRequest(input: unknown): UpdateRequest {
+  if (!input || typeof input !== "object") {
+    throw new Error("Invalid update payload");
+  }
+  const body = input as Record<string, unknown>;
+  const manifestId = body.manifestId;
+  const dependency = body.dependency;
+  const depType = body.depType;
+  const targetVersion = body.targetVersion;
+
+  if (typeof manifestId !== "string" || !manifestId) {
+    throw new Error("manifestId is required");
+  }
+  if (typeof dependency !== "string" || !dependency) {
+    throw new Error("dependency is required");
+  }
+  if (!DEP_TYPES.includes(depType as DepType)) {
+    throw new Error("depType is invalid");
+  }
+  if (typeof targetVersion !== "string" || !targetVersion.trim()) {
+    throw new Error("targetVersion is required");
+  }
+  if (
+    targetVersion.includes("..") ||
+    targetVersion.includes("/") ||
+    /\s/.test(targetVersion)
+  ) {
+    throw new Error("targetVersion looks unsafe");
+  }
+
+  assertApprovedManifest(manifestId);
+
+  return {
+    manifestId,
+    dependency,
+    depType: depType as DepType,
+    targetVersion: targetVersion.trim().replace(/^[~^]/, ""),
+    preserveRange: body.preserveRange !== false,
+  };
+}
+
+async function applyUpdate(
+  request: UpdateRequest,
+  options: { dryRun: boolean },
+): Promise<{
+  dryRun: boolean;
+  from: string;
+  to: string;
+  lockfileSynced: boolean;
+}> {
+  const manifest = assertApprovedManifest(request.manifestId);
+  const original = await fsp.readFile(manifest.absolutePackageJson, "utf8");
+  const json = JSON.parse(original) as Record<
+    string,
+    Record<string, string> | undefined
+  >;
+  const block = json[request.depType];
+  if (!block || !(request.dependency in block)) {
     throw new Error(
-      "Upgrade is ambiguous; include the dependency type in the request",
+      `${request.dependency} not found in ${request.depType} of ${manifest.id}`,
     );
   }
 
-  return matches[0];
-}
+  const from = block[request.dependency] ?? "";
+  const exact = request.targetVersion;
+  if (!parseSemVer(exact)) {
+    throw new Error(`Invalid target version: ${exact}`);
+  }
+  const to = request.preserveRange ? preserveRange(from, exact) : exact;
 
-function validateLatestVersion(value: string): boolean {
-  return /^[0-9A-Za-z][0-9A-Za-z0-9.+-]*$/.test(value);
-}
-
-function nextNodeRange(current: string, latest: string): string {
-  if (current.startsWith("^")) {
-    return `^${latest}`;
+  if (options.dryRun) {
+    return { dryRun: true, from, to, lockfileSynced: false };
   }
 
-  if (current.startsWith("~")) {
-    return `~${latest}`;
+  if (from === to) {
+    return { dryRun: false, from, to, lockfileSynced: false };
   }
 
-  const comparison = current.match(/^(>=|<=|>|<|=)/);
-
-  if (comparison) {
-    return `${comparison[1]}${latest}`;
-  }
-
-  if (current === "*" || current === "latest") {
-    return `^${latest}`;
-  }
-
-  return latest;
-}
-
-async function updateNodeDependency(
-  dependency: ManifestDependency,
-  latest: string,
-): Promise<string> {
-  assertInsideRoot(dependency.filePath);
-
-  const manifest = JSON.parse(
-    await readFile(dependency.filePath, "utf8"),
-  ) as Record<string, unknown>;
-  const section = manifest[dependency.section];
-
-  if (!isRecord(section)) {
-    throw new Error(`Section ${dependency.section} not found`);
-  }
-
-  const current = section[dependency.name];
-
-  if (typeof current !== "string") {
-    throw new Error("Dependency is not a string version");
-  }
-
-  if (isLocalNodeSpecifier(current)) {
-    throw new Error("Local/workspace dependencies cannot be upgraded");
-  }
-
-  section[dependency.name] = nextNodeRange(current, latest);
-  await writeFile(
-    dependency.filePath,
-    `${JSON.stringify(manifest, null, 2)}\n`,
+  block[request.dependency] = to;
+  await fsp.writeFile(
+    manifest.absolutePackageJson,
+    `${JSON.stringify(json, null, 2)}\n`,
     "utf8",
   );
 
-  return `Updated ${dependency.name} to ${latest}. Run pnpm install to refresh the lockfile.`;
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-async function updateCargoDependency(
-  dependency: ManifestDependency,
-  latest: string,
-): Promise<string> {
-  assertInsideRoot(dependency.filePath);
-
-  const source = await readFile(dependency.filePath, "utf8");
-  const lines = source.split(/\r?\n/);
-  const header = `[${dependency.section}]`;
-  const keyPattern = new RegExp(
-    `^(\\s*)${escapeRegExp(dependency.name)}\\s*=\\s*(.*)$`,
-  );
-  let inSection = false;
-  let changed = false;
-
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index] ?? "";
-    const trimmed = line.trim();
-
-    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-      inSection = trimmed === header;
-      continue;
-    }
-
-    if (!inSection) {
-      continue;
-    }
-
-    const match = line.match(keyPattern);
-
-    if (!match) {
-      continue;
-    }
-
-    const prefix = match[1] ?? "";
-    const rest = match[2] ?? "";
-
-    if (/^\s*["']/.test(rest)) {
-      lines[index] = `${prefix}${dependency.name} = "${latest}"`;
-      changed = true;
-      break;
-    }
-
-    const versionMatch = rest.match(/version\s*=\s*["'][^"']*["']/);
-
-    if (versionMatch) {
-      lines[index] = line.replace(
-        versionMatch[0],
-        `version = "${latest}"`,
-      );
-      changed = true;
-      break;
-    }
-
-    throw new Error(
-      `${dependency.name} uses a workspace/path/git dependency and cannot be upgraded here`,
-    );
-  }
-
-  if (!changed) {
-    throw new Error(`Could not locate ${dependency.name} in ${header}`);
-  }
-
-  await writeFile(dependency.filePath, lines.join("\n"), "utf8");
-
-  return `Updated ${dependency.name} to ${latest}.`;
-}
-
-async function upgradeDependency(
-  payload: UpgradePayload,
-): Promise<{ message: string; output?: string }> {
-  const latestVersion = payload.latestVersion;
-
-  if (typeof latestVersion !== "string" || !validateLatestVersion(latestVersion)) {
-    throw new Error("Invalid latestVersion");
-  }
-
-  const manifests = [...(await scanNodeManifests()), ...(await scanCargoManifests())];
-  const dependency = findManifestDependency(manifests, payload);
-
-  if (!dependency) {
-    throw new Error("Dependency not found in scanned manifests");
-  }
-
-  if (dependency.local) {
-    throw new Error("Local/workspace dependencies cannot be upgraded");
-  }
-
-  if (dependency.ecosystem === "node") {
-    const message = await updateNodeDependency(dependency, latestVersion);
-    let output = "";
-
-    try {
-      const result = await execFileAsync(
-        "pnpm",
-        ["install", "--lockfile-only", "--ignore-scripts"],
-        {
-          cwd: ROOT,
-          timeout: 120_000,
-          maxBuffer: 10 * 1024 * 1024,
-        },
-      );
-      output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
-    } catch (error) {
-      output = `package.json updated, but pnpm install failed: ${errorMessage(
-        error,
-      )}`;
-    }
-
-    return { message, output };
-  }
-
-  const message = await updateCargoDependency(dependency, latestVersion);
-  let output = "";
-
   try {
-    const result = await execFileAsync(
-      "cargo",
-      ["update", "-p", dependency.name, "--precise", latestVersion],
+    // Refresh the lockfile from manifests without running prepare/build hooks.
+    await execFileAsync(
+      "pnpm",
+      ["install", "--lockfile-only", "--ignore-scripts"],
       {
         cwd: ROOT,
         timeout: 120_000,
         maxBuffer: 10 * 1024 * 1024,
       },
     );
-    output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
+    return { dryRun: false, from, to, lockfileSynced: true };
   } catch (error) {
-    output = `Cargo.toml updated, but cargo update failed: ${errorMessage(
-      error,
-    )}`;
+    await fsp.writeFile(manifest.absolutePackageJson, original, "utf8");
+    throw new Error(
+      `Package manager update failed; restored ${manifest.relativePackageJson}. ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
   }
-
-  return { message, output };
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function sendJson(
-  response: ServerResponse,
-  status: number,
-  value: unknown,
-): void {
-  const body = JSON.stringify(value);
-  response.writeHead(status, {
-    "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "no-store",
-    "Content-Length": Buffer.byteLength(body),
-  });
-  response.end(body);
-}
-
-async function readJsonBody(request: IncomingMessage): Promise<UpgradePayload> {
-  let size = 0;
-  const chunks: Buffer[] = [];
-
-  for await (const chunk of request) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    size += buffer.length;
-
-    if (size > MAX_BODY_BYTES) {
-      throw new Error("Request body is too large");
-    }
-
-    chunks.push(buffer);
-  }
-
-  const body = Buffer.concat(chunks).toString("utf8").trim();
-
-  if (!body) {
-    throw new Error("Request body is empty");
-  }
-
-  const parsed = JSON.parse(body) as unknown;
-
-  if (!isRecord(parsed)) {
-    throw new Error("Request body must be a JSON object");
-  }
-
-  return parsed as UpgradePayload;
-}
-
-async function handleRequest(
-  request: IncomingMessage,
-  response: ServerResponse,
+async function handleApi(
+  req: IncomingMessage,
+  res: ServerResponse,
+  url: URL,
 ): Promise<void> {
-  const url = new URL(request.url ?? "/", "http://localhost");
+  const method = req.method ?? "GET";
+  const pathname = url.pathname;
 
-  if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
-    try {
-      const html = await readFile(INDEX_FILE);
-      response.writeHead(200, {
-        "Content-Type": "text/html; charset=utf-8",
-        "Cache-Control": "no-store",
-      });
-      response.end(html);
-    } catch (error) {
-      sendJson(response, 500, { error: errorMessage(error) });
-    }
+  if (method === "GET" && pathname === "/api/packages") {
+    const packages = discoverManifests().map((item) => ({
+      id: item.id,
+      name: item.name,
+      label: item.label,
+      relativePackageJson: item.relativePackageJson,
+    }));
+    sendJson(res, 200, { packages });
     return;
   }
 
-  if (request.method === "GET" && url.pathname === "/api/deps") {
-    try {
-      if (url.searchParams.get("refresh") === "1") {
-        latestCache.clear();
-      }
-
-      const dependencies = await scanDependencies();
-      sendJson(response, 200, {
-        generatedAt: new Date().toISOString(),
-        dependencies,
-      });
-    } catch (error) {
-      sendJson(response, 500, { error: errorMessage(error) });
-    }
-    return;
-  }
-
-  if (request.method === "POST" && url.pathname === "/api/upgrade") {
-    try {
-      const payload = await readJsonBody(request);
-      const result = await upgradeDependency(payload);
-      sendJson(response, 200, { ok: true, ...result });
-    } catch (error) {
-      sendJson(response, 400, { ok: false, error: errorMessage(error) });
-    }
-    return;
-  }
-
-  if (url.pathname === "/favicon.ico") {
-    response.writeHead(204);
-    response.end();
-    return;
-  }
-
-  sendJson(response, 404, { error: "Not found" });
-}
-
-function openBrowser(url: string): void {
-  if (process.env.MONITOR_NO_OPEN === "1") {
-    return;
-  }
-
-  const command =
-    process.platform === "darwin"
-      ? "open"
-      : process.platform === "win32"
-        ? "cmd"
-        : "xdg-open";
-  const args =
-    process.platform === "win32" ? ["/c", "start", "", url] : [url];
-
-  execFile(command, args, (error) => {
-    if (error) {
-      console.warn(`[monitor] could not open browser: ${error.message}`);
-    }
-  });
-}
-
-async function start(): Promise<void> {
-  const server = createServer((request, response) => {
-    handleRequest(request, response).catch((error) => {
-      sendJson(response, 500, { error: errorMessage(error) });
+  if (method === "GET" && pathname === "/api/dependencies") {
+    const refresh = url.searchParams.get("refresh") === "1";
+    const rows = await buildDependencyRows({ refresh });
+    sendJson(res, 200, {
+      dependencies: rows,
+      summary: summarize(rows),
+      lastRegistryCheckAt,
     });
-  });
-
-  let port = 3000;
-
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    try {
-      await new Promise<void>((resolveListen, rejectListen) => {
-        const onError = (error: NodeJS.ErrnoException): void => {
-          server.off("listening", onListening);
-          rejectListen(error);
-        };
-        const onListening = (): void => {
-          server.off("error", onError);
-          resolveListen();
-        };
-
-        server.once("error", onError);
-        server.once("listening", onListening);
-        server.listen(port, "127.0.0.1");
-      });
-
-      const address = server.address();
-      const actualPort =
-        typeof address === "object" && address ? address.port : port;
-      const url = `http://127.0.0.1:${actualPort}`;
-
-      console.log(`[monitor] css-doctor dependency monitor: ${url}`);
-      console.log("[monitor] scanning manifests; latest versions are cached for 5 minutes");
-      openBrowser(url);
-      return;
-    } catch (error) {
-      const code = isRecord(error) && typeof error.code === "string" ? error.code : "";
-
-      if (code !== "EADDRINUSE") {
-        throw error;
-      }
-
-      port += 1;
-    }
+    return;
   }
 
-  throw new Error("No free port found in range 3000-3019");
+  if (method === "GET" && pathname === "/api/summary") {
+    const rows = await buildDependencyRows();
+    sendJson(res, 200, summarize(rows));
+    return;
+  }
+
+  if (method === "POST" && pathname === "/api/refresh") {
+    registryCache.clear();
+    const rows = await buildDependencyRows({ refresh: true });
+    sendJson(res, 200, {
+      dependencies: rows,
+      summary: summarize(rows),
+      lastRegistryCheckAt,
+    });
+    return;
+  }
+
+  if (method === "GET" && pathname === "/api/versions") {
+    const name = url.searchParams.get("name");
+    if (!name) {
+      sendJson(res, 400, { error: "name query param is required" });
+      return;
+    }
+    const sample =
+      listDeclarations().find((item) => item.dependency === name)?.declared ??
+      "0.0.0";
+    const info = await fetchRegistry(name, sample);
+    sendJson(res, 200, { dependency: name, ...info });
+    return;
+  }
+
+  if (method === "POST" && pathname === "/api/update") {
+    const body = await readJsonBody(req);
+    const dryRun =
+      Boolean((body as { dryRun?: boolean }).dryRun) ||
+      url.searchParams.get("dryRun") === "1";
+    const request = validateUpdateRequest(body);
+    const result = await applyUpdate(request, { dryRun });
+    sendJson(res, 200, { ok: true, ...request, ...result });
+    return;
+  }
+
+  if (method === "POST" && pathname === "/api/update-bulk") {
+    const body = (await readJsonBody(req)) as {
+      dryRun?: boolean;
+      updates?: unknown[];
+    };
+    const dryRun = Boolean(body.dryRun);
+    if (!Array.isArray(body.updates) || body.updates.length === 0) {
+      sendJson(res, 400, { error: "updates array is required" });
+      return;
+    }
+
+    const results = [];
+    for (const item of body.updates) {
+      const request = validateUpdateRequest(item);
+      // Refuse silent major upgrades unless target is explicit exact chosen by client.
+      const current = listDeclarations().find(
+        (row) =>
+          row.manifestId === request.manifestId &&
+          row.dependency === request.dependency &&
+          row.depType === request.depType,
+      );
+      if (!current) {
+        throw new Error(`Declaration not found for ${request.dependency}`);
+      }
+      const currentParsed = parseSemVer(current.declared);
+      const targetParsed = parseSemVer(request.targetVersion);
+      if (
+        currentParsed &&
+        targetParsed &&
+        targetParsed.major > currentParsed.major &&
+        (item as { allowMajor?: boolean }).allowMajor !== true
+      ) {
+        throw new Error(
+          `Refusing major upgrade for ${request.dependency} (${currentParsed.raw} → ${targetParsed.raw}) without allowMajor`,
+        );
+      }
+      results.push({
+        ...request,
+        ...(await applyUpdate(request, { dryRun })),
+      });
+    }
+
+    sendJson(res, 200, { ok: true, dryRun, results });
+    return;
+  }
+
+  sendJson(res, 404, { error: `Unknown API route: ${pathname}` });
 }
 
-process.on("SIGINT", () => {
-  process.exit(0);
-});
+async function requestListener(
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
+  try {
+    if (!isLocalHost(req)) {
+      sendJson(res, 403, { error: "Host not allowed" });
+      return;
+    }
 
-start().catch((error) => {
-  console.error(`[monitor] failed to start: ${errorMessage(error)}`);
-  process.exit(1);
-});
+    const url = new URL(req.url ?? "/", `http://${HOST}`);
+
+    if ((req.method ?? "GET") === "GET" && url.pathname === "/") {
+      const html = await fsp.readFile(INDEX_HTML, "utf8");
+      sendText(res, 200, html, "text/html; charset=utf-8");
+      return;
+    }
+
+    if (url.pathname.startsWith("/api/")) {
+      await handleApi(req, res, url);
+      return;
+    }
+
+    sendJson(res, 404, { error: "Not found" });
+  } catch (error) {
+    sendJson(res, 500, {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+function listen(port: number): void {
+  const server = createServer((req, res) => {
+    void requestListener(req, res);
+  });
+
+  server.on("error", (error: NodeJS.ErrnoException) => {
+    if (error.code === "EADDRINUSE" && port < PREFERRED_PORT + 20) {
+      listen(port + 1);
+      return;
+    }
+    console.error(error);
+    process.exit(1);
+  });
+
+  server.listen(port, HOST, () => {
+    console.log(`[monitor] css-doctor Dependency Monitor → http://${HOST}:${port}`);
+    console.log("[monitor] Scope: root + packages/* (examples/ and Cargo excluded)");
+  });
+}
+
+listen(PREFERRED_PORT);

@@ -8,6 +8,15 @@ import type {
   JsChunkOutput,
   JsSelectorStat,
 } from "@zealakit/css-doctor-binding";
+import {
+  DEFAULT_MAX_CHUNK_SIZE,
+  DEFAULT_MIN_PAGE_RATIO,
+  clampMaxChunkSize,
+  clampMinPageRatio,
+  describeError,
+  matchesPatterns,
+  scanClasses,
+} from "@zealakit/css-doctor-shared";
 import type { Compilation, Compiler } from "@rspack/core";
 
 import { printReport } from "./reporter";
@@ -22,8 +31,6 @@ import type {
 } from "./types";
 
 const PLUGIN_NAME = "css-doctor:rsbuild";
-const DEFAULT_MIN_PAGE_RATIO = 0.5;
-const DEFAULT_MAX_CHUNK_SIZE = 60 * 1_024;
 
 type RspackChunkLike = {
   name?: string;
@@ -58,10 +65,12 @@ type PagesResult = {
 type ResolvedOptions = {
   pageCoverage: Required<PageCoverageOptions> & { forceCommon: string[] };
   sizeBudget: Required<SizeBudgetOptions>;
+  pageUsage?: Record<string, string[]>;
   minify: boolean;
   report: boolean;
   include: Array<string | RegExp>;
   exclude: Array<string | RegExp>;
+  onDiagnostics?: CssDoctorRsbuildOptions["onDiagnostics"];
 };
 
 /**
@@ -73,53 +82,54 @@ export class CssDoctorRspackPlugin {
   private readonly configurationWarnings: string[] = [];
 
   constructor(options: CssDoctorRsbuildOptions = {}) {
-    const configuredMinPageRatio =
-      options.pageCoverage?.minPageRatio ?? DEFAULT_MIN_PAGE_RATIO;
-    const configuredMaxChunkSize =
-      options.sizeBudget?.maxChunkSize ?? DEFAULT_MAX_CHUNK_SIZE;
+    const clampedRatio = clampMinPageRatio(
+      options.pageCoverage?.minPageRatio ?? DEFAULT_MIN_PAGE_RATIO,
+    );
+    const clampedSize = clampMaxChunkSize(
+      options.sizeBudget?.maxChunkSize ?? DEFAULT_MAX_CHUNK_SIZE,
+    );
 
-    const minPageRatio =
-      Number.isFinite(configuredMinPageRatio) &&
-      configuredMinPageRatio >= 0 &&
-      configuredMinPageRatio <= 1
-        ? configuredMinPageRatio
-        : DEFAULT_MIN_PAGE_RATIO;
-    const maxChunkSize =
-      Number.isInteger(configuredMaxChunkSize) && configuredMaxChunkSize > 0
-        ? configuredMaxChunkSize
-        : DEFAULT_MAX_CHUNK_SIZE;
-
-    if (minPageRatio !== configuredMinPageRatio) {
-      this.configurationWarnings.push(
-        "minPageRatio must be a number between 0 and 1; using 0.5",
-      );
+    if (clampedRatio.warning) {
+      this.configurationWarnings.push(clampedRatio.warning);
     }
-
-    if (maxChunkSize !== configuredMaxChunkSize) {
-      this.configurationWarnings.push(
-        "maxChunkSize must be a positive integer; using 61440",
-      );
+    if (clampedSize.warning) {
+      this.configurationWarnings.push(clampedSize.warning);
     }
 
     this.options = {
       pageCoverage: {
         enabled: options.pageCoverage?.enabled ?? true,
-        minPageRatio,
+        minPageRatio: clampedRatio.value,
         forceCommon: options.pageCoverage?.forceCommon ?? [],
       },
       sizeBudget: {
         enabled: options.sizeBudget?.enabled ?? true,
-        maxChunkSize,
+        maxChunkSize: clampedSize.value,
         isolateVariables: options.sizeBudget?.isolateVariables ?? true,
       },
+      pageUsage: options.pageUsage,
       minify: options.minify ?? true,
       report: options.report ?? true,
       include: options.include ?? [],
       exclude: options.exclude ?? [],
+      onDiagnostics: options.onDiagnostics,
     };
   }
 
   apply(compiler: Compiler): void {
+    if (this.options.minify === false) {
+      compiler.hooks.thisCompilation.tap(
+        `${PLUGIN_NAME}:minify-warning`,
+        (compilation) => {
+          compilation
+            .getLogger(PLUGIN_NAME)
+            .warn(
+              "[css-doctor] minify:false only disables LightningCSS minify in css-doctor; Rspack/Rsbuild CSS minimizers may still minify assets. Disable host CSS minify in Rsbuild config when readable CSS is required.",
+            );
+        },
+      );
+    }
+
     compiler.hooks.thisCompilation.tap(PLUGIN_NAME, (compilation) => {
       compilation.hooks.processAssets.tapPromise(
         {
@@ -152,7 +162,7 @@ export class CssDoctorRspackPlugin {
     for (const warning of this.configurationWarnings) {
       logger.warn(`[css-doctor] ${warning}`);
     }
-    const pagesResult = await collectPages(compilation);
+    const pagesResult = await collectPages(compilation, this.options.pageUsage);
     const pageNames = pagesResult.pages.map((page) => page.name);
     const allPages = new Set(pageNames);
     const pageUsage: Record<string, string[]> = {};
@@ -417,6 +427,16 @@ export class CssDoctorRspackPlugin {
         logger.warn(`[css-doctor] reporter failed: ${describeError(error)}`);
       }
     }
+
+    if (this.options.onDiagnostics) {
+      try {
+        await this.options.onDiagnostics(diagnostics);
+      } catch (error) {
+        logger.warn(
+          `[css-doctor] onDiagnostics callback failed: ${describeError(error)}`,
+        );
+      }
+    }
   }
 
   private shouldSkipAsset(assetName: string, source: string): boolean {
@@ -494,7 +514,10 @@ function toChunkInfo(chunk: EmittedCssChunk): ChunkInfo {
   };
 }
 
-async function collectPages(compilation: Compilation): Promise<PagesResult> {
+async function collectPages(
+  compilation: Compilation,
+  directPageUsage?: Record<string, string[]>,
+): Promise<PagesResult> {
   const pages: PageInfo[] = [];
   const pagesByCss = new Map<string, Set<string>>();
   const sourceCache = new Map<string, Promise<string | undefined>>();
@@ -504,6 +527,10 @@ async function collectPages(compilation: Compilation): Promise<PagesResult> {
   >;
 
   for (const [entryName, entry] of entrypoints) {
+    if (isInternalRsbuildEntry(entryName)) {
+      continue;
+    }
+
     const pageName = normalizePageName(entryName);
     const page: PageInfo = {
       name: pageName,
@@ -610,7 +637,45 @@ async function collectPages(compilation: Compilation): Promise<PagesResult> {
     }
   }
 
+  if (directPageUsage && Object.keys(directPageUsage).length > 0) {
+    const byName = new Map(pages.map((page) => [page.name, page]));
+
+    for (const [rawName, classes] of Object.entries(directPageUsage)) {
+      const name = rawName.trim();
+
+      if (!name) {
+        continue;
+      }
+
+      const page = byName.get(name) ?? {
+        name,
+        classes: new Set<string>(),
+        cssFiles: new Set<string>(),
+        jsFiles: new Set<string>(),
+      };
+
+      for (const className of classes) {
+        page.classes.add(className.toLowerCase());
+      }
+
+      if (!byName.has(name)) {
+        pages.push(page);
+        byName.set(name, page);
+      }
+    }
+  }
+
   return { pages, pagesByCss };
+}
+
+function isInternalRsbuildEntry(name: string): boolean {
+  const normalized = name.toLowerCase();
+  return (
+    normalized.startsWith("rspack-") ||
+    normalized.includes("runtime") ||
+    normalized === "vendors" ||
+    normalized === "polyfills"
+  );
 }
 
 type PageChunk = {
@@ -791,43 +856,6 @@ function readModuleSource(module: RspackModuleLike): string | undefined {
   }
 }
 
-function scanClasses(source: string, classes: Set<string>): void {
-  const patterns = [
-    /(?:class|className)\s*=\s*(?:"([^"]*)"|'([^']*)'|`([^`]*)`)/g,
-    /(?:^|[,{;\s])(?:class|className)\s*:\s*(?:"([^"]*)"|'([^']*)'|`([^`]*)`)/g,
-    /classList\.(?:add|remove|toggle|contains)\(\s*(?:"([^"]*)"|'([^']*)'|`([^`]*)`)/g,
-  ];
-
-  for (const pattern of patterns) {
-    for (const match of source.matchAll(pattern)) {
-      const value = match[1] ?? match[2] ?? match[3];
-
-      if (!value) {
-        continue;
-      }
-
-      for (const token of value.split(/\s+/)) {
-        if (isClassToken(token)) {
-          classes.add(token.toLowerCase());
-        }
-      }
-    }
-  }
-}
-
-/** Accept Tailwind-style tokens (`md:flex`, `w-1/2`, `w-[10px]`, `!p-2`). */
-function isClassToken(token: string): boolean {
-  if (!token || token.length > 256) {
-    return false;
-  }
-
-  if (/[`${}]/.test(token)) {
-    return false;
-  }
-
-  return /[A-Za-z_]/.test(token);
-}
-
 function injectPageCssLoaders(
   compilation: Compilation,
   cssByPage: Map<string, string[]>,
@@ -933,15 +961,6 @@ function withCommonClasses(
   return result;
 }
 
-function matchesPatterns(
-  value: string,
-  patterns: Array<string | RegExp>,
-): boolean {
-  return patterns.some((pattern) =>
-    typeof pattern === "string" ? value.includes(pattern) : pattern.test(value),
-  );
-}
-
 function sourceToString(source: unknown): string {
   if (typeof source === "string") {
     return source;
@@ -952,10 +971,6 @@ function sourceToString(source: unknown): string {
   }
 
   return String(source);
-}
-
-function describeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function roundMs(value: number): number {

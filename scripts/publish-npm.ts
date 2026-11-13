@@ -54,6 +54,8 @@ const PLATFORMS = [
 ] as const;
 
 const ADAPTER_DIRS = [
+  // Shared helpers must publish before consumers that depend on them.
+  "css-doctor-shared",
   "css-doctor-vite",
   "css-doctor-rsbuild",
   "css-doctor-remix",

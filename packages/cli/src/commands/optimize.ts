@@ -48,8 +48,18 @@ export type OptimizeRunOptions = {
   pageUsage?: string;
   minPageRatio?: number;
   maxChunkSize?: number;
+  /**
+   * Commander maps `--no-page-coverage` to `pageCoverage: false` (default true).
+   * Programmatic callers may also set `noPageCoverage: true`.
+   */
+  pageCoverage?: boolean;
+  sizeBudget?: boolean;
+  isolateVariables?: boolean;
+  /** Programmatic alias for disabling page coverage. */
   noPageCoverage?: boolean;
+  /** Programmatic alias for disabling size budget. */
   noSizeBudget?: boolean;
+  /** Programmatic alias for disabling variable isolation. */
   noIsolateVariables?: boolean;
   commandName?: "optimize" | "split";
 };
@@ -256,13 +266,17 @@ export async function runOptimize(
     const pipelineOptions = {
       pageUsage,
       pageCoverage: {
-        enabled: options.noPageCoverage !== true,
+        // Commander: `--no-page-coverage` → pageCoverage:false (not noPageCoverage).
+        enabled: !isNegatedOption(options.pageCoverage, options.noPageCoverage),
         minPageRatio: options.minPageRatio,
       },
       sizeBudget: {
-        enabled: options.noSizeBudget !== true,
+        enabled: !isNegatedOption(options.sizeBudget, options.noSizeBudget),
         maxChunkSize: options.maxChunkSize,
-        isolateVariables: options.noIsolateVariables !== true,
+        isolateVariables: !isNegatedOption(
+          options.isolateVariables,
+          options.noIsolateVariables,
+        ),
       },
       minify: options.minify !== false,
     };
@@ -373,6 +387,17 @@ function parsePageUsage(
       error: `Invalid --page-usage JSON: ${describeError(error)}`,
     };
   }
+}
+
+/**
+ * Commander `--no-foo` sets `foo: false`. Programmatic callers may pass
+ * `noFoo: true`. Either form disables the feature; otherwise it stays on.
+ */
+function isNegatedOption(
+  commanderValue: boolean | undefined,
+  programmaticNoFlag: boolean | undefined,
+): boolean {
+  return commanderValue === false || programmaticNoFlag === true;
 }
 
 function parseRatio(value: string): number {

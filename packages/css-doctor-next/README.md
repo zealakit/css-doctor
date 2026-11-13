@@ -59,6 +59,7 @@ export default withCssDoctor(
 
 - Preserves the existing webpack callback and applies only to the production client build.
 - CSS Modules are skipped automatically; common chunks remain linked through @import wrappers.
+- Turbopack is **not** supported yet. `withCssDoctor` only attaches to the webpack client production compilation; builds with `--turbopack` will not run CSS splitting.
 - Peer range next >=13 is intentionally broad.
 
 ## Full documentation

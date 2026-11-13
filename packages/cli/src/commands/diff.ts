@@ -297,6 +297,8 @@ function buildGateConfig(
 ): {
   minScore?: number;
   maxSizeIncreasePercent?: number;
+  maxSelectorIncreasePercent?: number;
+  maxRuleIncreasePercent?: number;
   maxNewErrors?: number;
   maxNewWarnings?: number;
   failOnRegression?: boolean;
@@ -337,6 +339,8 @@ function buildGateConfig(
   const gates: {
     minScore?: number;
     maxSizeIncreasePercent?: number;
+    maxSelectorIncreasePercent?: number;
+    maxRuleIncreasePercent?: number;
     maxNewErrors?: number;
     maxNewWarnings?: number;
     failOnRegression?: boolean;
@@ -360,6 +364,13 @@ function buildGateConfig(
     ) {
       gates.maxSizeIncreasePercent = maxSizeIncrease ?? undefined;
     }
+  }
+  if (config.qualityGates.maxSelectorIncreasePercent !== null) {
+    gates.maxSelectorIncreasePercent =
+      config.qualityGates.maxSelectorIncreasePercent;
+  }
+  if (config.qualityGates.maxRuleIncreasePercent !== null) {
+    gates.maxRuleIncreasePercent = config.qualityGates.maxRuleIncreasePercent;
   }
   if (maxNewErrors !== null && maxNewErrors !== undefined) {
     gates.maxNewErrors = maxNewErrors;

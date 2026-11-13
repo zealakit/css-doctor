@@ -10,10 +10,15 @@ description: Implements and debugs css-doctor consumers: the CLI, Vite/Rollup pl
 Use for changes in:
 
 - `packages/cli/`
+- `packages/css-doctor-shared/` (pure helpers: class scan, clamps, patterns)
 - `packages/css-doctor-vite/`
 - `packages/css-doctor-next/`
+- `packages/css-doctor-rsbuild/` / remix / nuxt when touching adapter integration
 - shared behavior around `splitCssByPages`, page scanning, page chunks,
   diagnostics, reporters, and plugin lifecycle
+
+Put only semantics-identical helpers in `css-doctor-shared`. Keep bundler
+lifecycle, emission, and route graphs inside each adapter.
 
 Read `AGENTS.md` first. Read the relevant package source and tests before
 editing. All three integrations consume the native binding; build it first.

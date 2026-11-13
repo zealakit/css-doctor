@@ -3,9 +3,10 @@
 use std::collections::BTreeSet;
 
 use lightningcss::properties::Property;
-use lightningcss::properties::custom::CustomPropertyName;
 use lightningcss::rules::CssRule;
 use lightningcss::stylesheet::{ParserOptions, PrinterOptions, StyleSheet};
+
+use crate::property_key::property_identity_key;
 use serde::{Deserialize, Serialize};
 
 use crate::health::{HealthDiagnostic, HealthScoreConfig, evaluate_css_health};
@@ -209,13 +210,15 @@ pub fn apply_css_fixes(
     let apply_empty = allowed.contains("dead.empty-rule");
     let apply_dup = allowed.contains("duplicate.declaration");
 
-    let fixed_css = if apply_empty || apply_dup {
+    let (fixed_css, transforms_applied) = if apply_empty || apply_dup {
         transform_css(css, apply_empty, apply_dup)?
     } else {
-        css.to_string()
+        (css.to_string(), false)
     };
 
-    let changed = fixed_css != css;
+    // Only mark changed when a real fix mutated the AST — never because
+    // LightningCSS re-serialized formatting alone.
+    let changed = transforms_applied;
     let bytes_after = fixed_css.len();
     let mut items = Vec::new();
     let mut decisions = Vec::new();
@@ -368,9 +371,9 @@ fn transform_css(
     css: &str,
     remove_empty: bool,
     dedupe_declarations: bool,
-) -> Result<String, String> {
+) -> Result<(String, bool), String> {
     if css.trim().is_empty() {
-        return Ok(String::new());
+        return Ok((String::new(), false));
     }
 
     let mut stylesheet = StyleSheet::parse(
@@ -383,65 +386,91 @@ fn transform_css(
     )
     .map_err(|error| format!("failed to parse CSS for autofix: {error}"))?;
 
-    stylesheet.rules.0 = clean_rule_list(stylesheet.rules.0, remove_empty, dedupe_declarations);
+    let (rules, removed) = clean_rule_list(stylesheet.rules.0, remove_empty, dedupe_declarations);
+    stylesheet.rules.0 = rules;
 
-    stylesheet
+    if removed == 0 {
+        // No AST mutation — preserve original source bytes/formatting.
+        return Ok((css.to_string(), false));
+    }
+
+    let code = stylesheet
         .to_css(PrinterOptions {
             minify: false,
             ..PrinterOptions::default()
         })
         .map(|result| result.code)
-        .map_err(|error| format!("failed to serialize fixed CSS: {error}"))
+        .map_err(|error| format!("failed to serialize fixed CSS: {error}"))?;
+    Ok((code, true))
 }
 
 fn clean_rule_list(
     rules: Vec<CssRule<'_>>,
     remove_empty: bool,
     dedupe_declarations: bool,
-) -> Vec<CssRule<'_>> {
+) -> (Vec<CssRule<'_>>, usize) {
     let mut cleaned = Vec::with_capacity(rules.len());
+    let mut removed = 0usize;
 
     for rule in rules {
         match rule {
             CssRule::Style(mut style) => {
                 if dedupe_declarations {
-                    dedupe_style_declarations(&mut style);
+                    removed += dedupe_style_declarations(&mut style);
                 }
-                style.rules.0 = clean_rule_list(style.rules.0, remove_empty, dedupe_declarations);
+                let (nested, nested_removed) =
+                    clean_rule_list(style.rules.0, remove_empty, dedupe_declarations);
+                removed += nested_removed;
+                style.rules.0 = nested;
                 let empty = style.declarations.declarations.is_empty()
                     && style.declarations.important_declarations.is_empty()
                     && style.rules.0.is_empty();
                 if remove_empty && empty {
+                    removed += 1;
                     continue;
                 }
                 cleaned.push(CssRule::Style(style));
             }
             CssRule::Media(mut media) => {
-                media.rules.0 = clean_rule_list(media.rules.0, remove_empty, dedupe_declarations);
+                let (nested, nested_removed) =
+                    clean_rule_list(media.rules.0, remove_empty, dedupe_declarations);
+                removed += nested_removed;
+                media.rules.0 = nested;
                 if remove_empty && media.rules.0.is_empty() {
+                    removed += 1;
                     continue;
                 }
                 cleaned.push(CssRule::Media(media));
             }
             CssRule::Supports(mut supports) => {
-                supports.rules.0 =
+                let (nested, nested_removed) =
                     clean_rule_list(supports.rules.0, remove_empty, dedupe_declarations);
+                removed += nested_removed;
+                supports.rules.0 = nested;
                 if remove_empty && supports.rules.0.is_empty() {
+                    removed += 1;
                     continue;
                 }
                 cleaned.push(CssRule::Supports(supports));
             }
             CssRule::LayerBlock(mut layer) => {
-                layer.rules.0 = clean_rule_list(layer.rules.0, remove_empty, dedupe_declarations);
+                let (nested, nested_removed) =
+                    clean_rule_list(layer.rules.0, remove_empty, dedupe_declarations);
+                removed += nested_removed;
+                layer.rules.0 = nested;
                 if remove_empty && layer.rules.0.is_empty() {
+                    removed += 1;
                     continue;
                 }
                 cleaned.push(CssRule::LayerBlock(layer));
             }
             CssRule::Container(mut container) => {
-                container.rules.0 =
+                let (nested, nested_removed) =
                     clean_rule_list(container.rules.0, remove_empty, dedupe_declarations);
+                removed += nested_removed;
+                container.rules.0 = nested;
                 if remove_empty && container.rules.0.is_empty() {
+                    removed += 1;
                     continue;
                 }
                 cleaned.push(CssRule::Container(container));
@@ -450,52 +479,35 @@ fn clean_rule_list(
         }
     }
 
-    cleaned
+    (cleaned, removed)
 }
 
-fn dedupe_style_declarations(style: &mut lightningcss::rules::style::StyleRule<'_>) {
-    style.declarations.declarations =
+fn dedupe_style_declarations(style: &mut lightningcss::rules::style::StyleRule<'_>) -> usize {
+    let (normal, removed_normal) =
         keep_last_unique_properties(std::mem::take(&mut style.declarations.declarations));
-    style.declarations.important_declarations = keep_last_unique_properties(std::mem::take(
+    let (important, removed_important) = keep_last_unique_properties(std::mem::take(
         &mut style.declarations.important_declarations,
     ));
+    style.declarations.declarations = normal;
+    style.declarations.important_declarations = important;
+    removed_normal + removed_important
 }
 
-fn keep_last_unique_properties(properties: Vec<Property<'_>>) -> Vec<Property<'_>> {
+fn keep_last_unique_properties(properties: Vec<Property<'_>>) -> (Vec<Property<'_>>, usize) {
+    let original_len = properties.len();
     let mut seen = BTreeSet::new();
     let mut kept = Vec::new();
 
     for property in properties.into_iter().rev() {
-        let name = property_key(&property);
+        let name = property_identity_key(&property);
         if seen.insert(name) {
             kept.push(property);
         }
     }
 
     kept.reverse();
-    kept
-}
-
-fn property_key(property: &Property<'_>) -> String {
-    match property {
-        Property::Custom(custom) => match &custom.name {
-            CustomPropertyName::Custom(name) => {
-                let raw = name.as_ref();
-                if raw.starts_with("--") {
-                    raw.to_ascii_lowercase()
-                } else {
-                    format!("--{}", raw.to_ascii_lowercase())
-                }
-            }
-            CustomPropertyName::Unknown(name) => name.as_ref().to_ascii_lowercase(),
-        },
-        other => format!("{other:?}")
-            .split_whitespace()
-            .next()
-            .unwrap_or("property")
-            .trim_matches(|ch| ch == '(' || ch == ')')
-            .to_ascii_lowercase(),
-    }
+    let removed = original_len.saturating_sub(kept.len());
+    (kept, removed)
 }
 
 #[cfg(test)]
@@ -608,5 +620,90 @@ mod tests {
                 |item| item.rule == "dead.empty-rule" && matches!(item.safety, FixSafety::Safe)
             )
         );
+    }
+
+    #[test]
+    fn does_not_collapse_distinct_unparsed_properties() {
+        let css = ".a { color: var(--fg); background: var(--bg); }";
+        let result = apply_css_fixes(
+            css,
+            Some("a.css"),
+            &ApplyFixesOptions {
+                dry_run: false,
+                rules: vec!["duplicate.declaration".into()],
+                include_review: false,
+            },
+        )
+        .unwrap();
+
+        assert!(!result.changed, "fixed css: {}", result.fixed_css);
+        assert_eq!(result.fixed_css, css);
+        assert!(result.fixed_css.contains("var(--fg)"));
+        assert!(result.fixed_css.contains("var(--bg)"));
+    }
+
+    #[test]
+    fn preserves_vendor_prefixed_siblings() {
+        let css = ".a { transform: translateX(0); -webkit-transform: translateX(0); }";
+        let result = apply_css_fixes(
+            css,
+            Some("a.css"),
+            &ApplyFixesOptions {
+                dry_run: false,
+                rules: vec!["duplicate.declaration".into()],
+                include_review: false,
+            },
+        )
+        .unwrap();
+
+        assert!(!result.changed, "fixed css: {}", result.fixed_css);
+        assert!(result.fixed_css.contains("transform"));
+        assert!(result.fixed_css.contains("-webkit-transform"));
+    }
+
+    #[test]
+    fn preserves_important_and_normal_same_property() {
+        let css = ".a { color: red; color: blue !important; }";
+        let result = apply_css_fixes(
+            css,
+            Some("a.css"),
+            &ApplyFixesOptions {
+                dry_run: false,
+                rules: vec!["duplicate.declaration".into()],
+                include_review: false,
+            },
+        )
+        .unwrap();
+
+        assert!(!result.changed, "fixed css: {}", result.fixed_css);
+        assert!(
+            result.fixed_css.contains("red") || result.fixed_css.contains("#f00"),
+            "fixed css: {}",
+            result.fixed_css
+        );
+        assert!(
+            result.fixed_css.contains("!important"),
+            "fixed css: {}",
+            result.fixed_css
+        );
+    }
+
+    #[test]
+    fn no_op_dedupe_preserves_original_source() {
+        let css = ".a {\n  color: red;\n  /* keep me */\n  background: blue;\n}\n";
+        let result = apply_css_fixes(
+            css,
+            Some("a.css"),
+            &ApplyFixesOptions {
+                dry_run: false,
+                rules: vec!["duplicate.declaration".into()],
+                include_review: false,
+            },
+        )
+        .unwrap();
+
+        assert!(!result.changed);
+        assert_eq!(result.fixed_css, css);
+        assert!(result.fixed_css.contains("/* keep me */"));
     }
 }

@@ -15,6 +15,7 @@ Turborepo.
 | `crates/core` | Rust engine: parse, selector extraction, usage matrix, page-coverage splitter, CSS Health Score |
 | `packages/binding` | NAPI-RS bridge exposing `analyzeCss`, `splitCssByPages`, `optimizeCss`, and JS types |
 | `packages/cli` | `css-doctor` terminal CLI (`check`, `health`, `baseline`, `diff`, `optimize`, `split`, `fix`; Commander + tsup, ESM) |
+| `packages/css-doctor-shared` | Pure adapter helpers (class scan, option clamps, pattern match); no bundler hooks |
 | `packages/css-doctor-vite` | Vite/Rollup plugin (ESM + CJS + DTS) |
 | `packages/css-doctor-next` | Next.js config wrapper + Webpack plugin (ESM + CJS + DTS) |
 | `packages/css-doctor-rsbuild` | Rsbuild/Rspack plugin (ESM + DTS) |
@@ -27,7 +28,7 @@ Turborepo.
 | `examples/remix-tailwind-sass` | Remix 3 asset-server + Tailwind v4 + Sass fixture |
 | `examples/nuxt-tailwind-sass` | Nuxt 4 + Tailwind v4 + Sass + Vue scoped fixture |
 | `examples/vite-react-3rd-ui` | Vite + React 3rd-party UI (Antd/MUI/Chakra) fixture |
-| `monitor/` | Local Node/Rust dependency dashboard (`pnpm monitor`) |
+| `monitor/` | Local Node dependency dashboard for root + `packages/*` (`pnpm monitor`) |
 | `turbo.json` | Turborepo task graph, input hashing, native addon outputs |
 | `.agents/skills` | Vendor-neutral agent skills (canonical) |
 | `.claude/skills` | Single Claude router skill pointing at the canonical workflows |
@@ -45,6 +46,8 @@ Turborepo.
    exceptions.
 3. Public API changes must be propagated through:
    `crates/core` → `packages/binding` → consumers (CLI/Vite/Next) → tests/docs.
+   Adapter-only pure helpers live in `packages/css-doctor-shared` (no Core/Node
+   reverse deps; adapters must not depend on each other or on the CLI).
 4. Build the native binding before running TypeScript integration tests:
    `pnpm --filter @zealakit/css-doctor-binding build`.
 5. NAPI-RS 2.x does not support `f32`. Use `f64` at the JS boundary and cast
@@ -83,7 +86,7 @@ pnpm format                 # turbo format (Biome format --write)
 pnpm format:check           # turbo format:check (no writes)
 pnpm check                  # turbo check (Biome lint + format)
 pnpm dev                    # turbo dev (persistent, uncached)
-pnpm monitor                # dependency dashboard at http://127.0.0.1:3000
+pnpm monitor                # dependency dashboard at http://127.0.0.1:4177
 
 # Rust
 pnpm test:cargo             # cargo test --workspace
@@ -157,6 +160,16 @@ target directory is involved.
   use LightningCSS AST rewrites. Do not count split redistribution as byte
   savings. Never silently apply Review/Unsafe fixes.
 
+### Configuration surfaces
+
+| Surface | Used by | Notes |
+| --- | --- | --- |
+| `.css-doctor/config.json` | CLI only | Regression/quality-gate defaults. Precedence: CLI flags > file > built-ins. Missing file is OK. |
+| `cssd.config.ts\|mts\|js\|mjs` | Next (`withCssDoctor`) | Plugin options via jiti. Soft shape validation; broken file must not crash Next. |
+| Inline plugin/module options | Vite / Next / Rsbuild / Remix / Nuxt | Highest precedence for that adapter. Explicit `false` must win over defaults. |
+
+Do not merge CLI and adapter config loaders into one discovery path — lifecycles differ.
+
 ### Integration semantics
 
 - Vite: `generateBundle` → native `optimizeCss` pipeline → embed the common
@@ -199,6 +212,13 @@ target directory is involved.
 - Next path aliases beyond `@/` need explicit `pageUsage`.
 - A selector with multiple classes is matched conservatively by any class.
 - `@keyframes` are always common; animation usage is not tracked per page.
+- **Content hash integrity:** Vite / Next (webpack) / Rsbuild finalize hashed
+  CSS filenames before or during asset optimization. css-doctor rewrites CSS
+  bodies in-place and emits new hashed chunk names for split parts, but it does
+  **not** rename an already-finalized host asset to match its rewritten bytes.
+  Prefer short cache TTLs or `wrapCommonImports` / emitted chunk URLs for split
+  output; do not assume an immutable `[hash]` URL still matches pre-doctor
+  content after rewrite.
 
 
 ## Naming & file layout
@@ -267,6 +287,7 @@ and update imports/configs in the same change.
 - No generated artifacts or local tool state staged for commit.
 - Known limitations documented instead of silently ignored.
 - Update skills if architecture, commands, or invariants changed.
+- For a publishable release, complete [`docs/release-checklist.md`](./docs/release-checklist.md).
 
 ## Tool entrypoints
 

@@ -1,7 +1,8 @@
-name: Prepare release artifacts
+name: Prepare native binding zip
 
-# This workflow prepares release artifacts only. It never publishes to npm.
-# A maintainer downloads ready-to-publish-packages.zip and publishes manually.
+# Builds the 5 prebuilt NAPI binaries on GitHub-hosted runners, stages them
+# under packages/binding/npm/*, and uploads a zip for manual npm publish.
+# This workflow never publishes to the registry.
 
 on:
   workflow_dispatch:
@@ -10,19 +11,18 @@ permissions:
   contents: read
 
 concurrency:
-  group: prepare-release-${{ github.ref }}
+  group: prepare-release-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
   PNPM_VERSION: 9.0.0
-  NODE_VERSION: 22
-  ACTIONS_NODE20_DEPRECATION_WARNING: "false"
+  NODE_VERSION: 20
 
 jobs:
   build-native:
-    name: Native ${{ matrix.settings.target }}
+    name: Native ${{ matrix.settings.platform }}
     runs-on: ${{ matrix.settings.runner }}
     strategy:
       fail-fast: false
@@ -64,22 +64,22 @@ jobs:
       - name: Install Node dependencies
         run: >-
           pnpm install --frozen-lockfile --prefer-offline --ignore-scripts
-          --filter "@zealakit/*..." --filter "."
+          --filter "@zealakit/css-doctor-binding..." --filter "."
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.settings.target }}
 
-      - name: Add macOS x64 Rust target
+      - name: Ensure macOS x64 Rust target
         if: matrix.settings.target == 'x86_64-apple-darwin'
         run: rustup target add x86_64-apple-darwin
 
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: "."
-          shared-key: release-${{ matrix.settings.target }}
+          workspaces: ". -> target"
+          shared-key: prepare-native-${{ matrix.settings.target }}
           cache-on-failure: true
 
       - name: Install Zig and cargo-zigbuild for musl
@@ -128,41 +128,24 @@ jobs:
         run: |
           set -euo pipefail
           ls -la packages/binding/*.node
+          test -f "packages/binding/css-doctor-binding.${{ matrix.settings.platform }}.node"
 
       - name: Upload native artifact
         uses: actions/upload-artifact@v4
         with:
-          name: binding-${{ matrix.settings.target }}
-          path: packages/binding/*.node
+          name: binding-${{ matrix.settings.platform }}
+          path: packages/binding/css-doctor-binding.${{ matrix.settings.platform }}.node
           if-no-files-found: error
           retention-days: 14
 
-  bundle-release-artifacts:
-    name: Bundle release artifacts
+  bundle-native-zip:
+    name: Bundle native binding zip
     needs: build-native
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install Node dependencies
-        run: >-
-          pnpm install --frozen-lockfile --prefer-offline --ignore-scripts
-          --filter "@zealakit/*..." --filter "."
 
       - name: Download all native binaries
         uses: actions/download-artifact@v4
@@ -171,24 +154,17 @@ jobs:
           path: native-binaries
           merge-multiple: true
 
-      - name: Stage native platform sub-packages
+      - name: Stage platform packages and create zip
         shell: bash
         run: |
           set -euo pipefail
 
-          echo "::group::Downloaded native artifact files"
-          find native-binaries -maxdepth 3 -type f -print | sort || true
+          echo "::group::Downloaded binaries"
+          find native-binaries -type f -print | sort
           echo "::endgroup::"
 
           version=$(node -p "require('./packages/binding/package.json').version")
-
-          targets=(
-            "aarch64-apple-darwin"
-            "x86_64-apple-darwin"
-            "x86_64-unknown-linux-gnu"
-            "x86_64-unknown-linux-musl"
-            "x86_64-pc-windows-msvc"
-          )
+          echo "Using binding version: ${version}"
 
           platforms=(
             "darwin-arm64"
@@ -198,250 +174,112 @@ jobs:
             "win32-x64-msvc"
           )
 
-          for index in "${!targets[@]}"; do
-            target="${targets[$index]}"
-            platform="${platforms[$index]}"
-            package_dir="packages/binding/npm/css-doctor-binding-${platform}"
-            binary="${package_dir}/css-doctor-binding.${platform}.node"
+          staging_root="native-binding-packages"
+          rm -rf "${staging_root}"
+          mkdir -p "${staging_root}"
 
-            mkdir -p "${package_dir}"
+          for platform in "${platforms[@]}"; do
+            package_name="css-doctor-binding-${platform}"
+            source_dir="packages/binding/npm/${package_name}"
+            dest_dir="${staging_root}/${package_name}"
+            binary_name="css-doctor-binding.${platform}.node"
 
-            artifact=$(find native-binaries -maxdepth 1 -type f -name "*.${platform}.node" -print -quit)
-
-            if [ -z "${artifact}" ]; then
-              artifact=$(find native-binaries -maxdepth 1 -type f -name "*${platform}*.node" -print -quit)
-            fi
-
-            if [ -z "${artifact}" ]; then
-              echo "::error::Missing native binary for target ${target} (expected filename containing ${platform})"
+            if [ ! -d "${source_dir}" ]; then
+              echo "::error::Missing checked-in platform package template: ${source_dir}"
               exit 1
             fi
 
-            echo "Staging ${artifact} -> ${binary}"
-            cp "${artifact}" "${binary}"
+            artifact=$(find native-binaries -type f -name "${binary_name}" -print -quit)
+            if [ -z "${artifact}" ]; then
+              artifact=$(find native-binaries -type f -name "*${platform}*.node" -print -quit)
+            fi
+            if [ -z "${artifact}" ]; then
+              echo "::error::Missing native binary for ${platform}"
+              exit 1
+            fi
 
-            case "${platform}" in
-              darwin-*)
-                os_name="darwin"
-                cpu_name="${platform#darwin-}"
-                ;;
-              linux-*)
-                os_name="linux"
-                cpu_name="x64"
-                ;;
-              win32-*)
-                os_name="win32"
-                cpu_name="x64"
-                ;;
-              *)
-                echo "Unsupported platform: ${platform}" >&2
-                exit 1
-                ;;
-            esac
+            mkdir -p "${dest_dir}"
+            cp -R "${source_dir}/." "${dest_dir}/"
+            cp "${artifact}" "${dest_dir}/${binary_name}"
 
-            cat > "${package_dir}/package.json" <<JSON
-          {
-            "name": "@zealakit/css-doctor-binding-${platform}",
-            "version": "${version}",
-            "description": "Prebuilt css-doctor native binding for ${platform}",
-            "license": "MIT",
-            "main": "css-doctor-binding.${platform}.node",
-            "files": [
-              "css-doctor-binding.${platform}.node"
-            ],
-            "os": [
-              "${os_name}"
-            ],
-            "cpu": [
-              "${cpu_name}"
-            ],
-            "publishConfig": {
-              "access": "public"
-            }
-          }
-          JSON
+            node -e "
+              const fs = require('node:fs');
+              const path = require('node:path');
+              const manifestPath = path.join(process.argv[1], 'package.json');
+              const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+              manifest.version = process.argv[2];
+              manifest.main = process.argv[3];
+              manifest.files = [process.argv[3]];
+              manifest.publishConfig = manifest.publishConfig ?? {};
+              manifest.publishConfig.access = 'public';
+              delete manifest.private;
+              fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+            " "${dest_dir}" "${version}" "${binary_name}"
+
+            echo "Staged ${package_name}@${version} <- ${artifact}"
           done
 
-          staged_count=$(find packages/binding/npm -type f -name '*.node' | wc -l | tr -d ' ')
-          echo "::group::Staged native binaries"
-          find packages/binding/npm -type f -name '*.node' -print | sort
+          staged_count=$(find "${staging_root}" -type f -name '*.node' | wc -l | tr -d ' ')
           echo "Staged .node count: ${staged_count} (expected 5)"
-          echo "::endgroup::"
-
           if [ "${staged_count}" -ne 5 ]; then
             echo "::error::Expected 5 staged native binaries, found ${staged_count}"
             exit 1
           fi
 
-      - name: Typecheck all packages
-        run: pnpm typecheck
-
-      - name: Build all packages
-        run: pnpm build
-
-      - name: Verify package outputs
-        shell: bash
-        run: |
-          set -uo pipefail
-          missing=0
-
-          echo "::group::packages/binding top-level files"
-          ls -la packages/binding || true
-          echo "::endgroup::"
-
-          echo "::group::packages/binding/npm tree"
-          find packages/binding/npm -maxdepth 3 -type f -print 2>/dev/null | sort || true
-          echo "::endgroup::"
-
-          if [ ! -f packages/binding/index.js ]; then
-            echo "::error::Missing packages/binding/index.js"
-            missing=1
-          else
-            echo "Found packages/binding/index.js"
-          fi
-
-          if [ ! -f packages/binding/index.d.ts ]; then
-            echo "::error::Missing packages/binding/index.d.ts"
-            missing=1
-          else
-            echo "Found packages/binding/index.d.ts"
-          fi
-
-          platforms=(
-            "darwin-arm64"
-            "darwin-x64"
-            "linux-x64-gnu"
-            "linux-x64-musl"
-            "win32-x64-msvc"
+          zip_name="css-doctor-native-bindings-v${version}.zip"
+          rm -f "${zip_name}"
+          (
+            cd "${staging_root}"
+            zip -rq "../${zip_name}" .
           )
 
-          for platform in "${platforms[@]}"; do
-            package_dir="packages/binding/npm/css-doctor-binding-${platform}"
-            binary="${package_dir}/css-doctor-binding.${platform}.node"
+          echo "ZIP_NAME=${zip_name}" >> "$GITHUB_ENV"
+          echo "BINDING_VERSION=${version}" >> "$GITHUB_ENV"
 
-            if [ ! -d "${package_dir}" ]; then
-              echo "::error::Missing platform package directory: ${package_dir}"
-              missing=1
-            elif [ ! -f "${binary}" ]; then
-              echo "::error::Missing native binary: ${binary}"
-              missing=1
-            else
-              echo "Verified ${binary}"
-            fi
-
-            if [ ! -f "${package_dir}/package.json" ]; then
-              echo "::error::Missing platform package manifest: ${package_dir}/package.json"
-              missing=1
-            fi
-          done
-
-          echo "::group::Package dist outputs"
-          for package_dir in packages/*; do
-            if [ ! -d "${package_dir}/dist" ]; then
-              echo "No dist directory: ${package_dir}"
-              continue
-            fi
-
-            echo "--- ${package_dir}/dist ---"
-            ls -la "${package_dir}/dist" || true
-
-            if [ ! -f "${package_dir}/dist/index.js" ]; then
-              echo "::error::Missing ${package_dir}/dist/index.js"
-              missing=1
-            fi
-
-            # The CLI is an executable package; it has no public type declarations.
-            if [ "${package_dir}" != "packages/cli" ] && [ ! -f "${package_dir}/dist/index.d.ts" ]; then
-              echo "::error::Missing ${package_dir}/dist/index.d.ts"
-              missing=1
-            fi
-          done
+          echo "::group::Zip contents"
+          unzip -l "${zip_name}"
+          ls -lh "${zip_name}"
           echo "::endgroup::"
 
-          node_count=$(find packages/binding/npm -type f -name '*.node' | wc -l | tr -d ' ')
-          echo "::group::Native binary count"
-          echo "Found ${node_count} .node files (expected 5)"
-          find packages/binding/npm -type f -name '*.node' -print | sort || true
-          echo "::endgroup::"
-
-          if [ "${node_count}" -ne 5 ]; then
-            echo "::error::Expected 5 native .node files, found ${node_count}"
-            missing=1
-          fi
-
-          if [ "${missing}" -ne 0 ]; then
-            echo "::error::Release artifact verification failed; see the errors above."
-            exit 1
-          fi
-
-          echo "All release artifacts verified: 5 platform binaries and all dist declarations are present."
-
-      - name: Prepare publishable manifests
-        shell: bash
-        run: |
-          set -euo pipefail
-          node <<'NODE'
-          const fs = require("node:fs");
-          const path = require("node:path");
-
-          for (const entry of fs.readdirSync("packages", { withFileTypes: true })) {
-            if (!entry.isDirectory() || entry.name === "binding") {
-              continue;
-            }
-
-            const manifestPath = path.join("packages", entry.name, "package.json");
-
-            if (!fs.existsSync(manifestPath)) {
-              continue;
-            }
-
-            const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-            delete manifest.private;
-            manifest.publishConfig = manifest.publishConfig ?? {};
-            manifest.publishConfig.access = "public";
-            fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
-            console.log(`Prepared ${manifest.name}@${manifest.version} for publishing`);
-          }
-
-          const bindingPath = "packages/binding/package.json";
-          const binding = JSON.parse(fs.readFileSync(bindingPath, "utf8"));
-          delete binding.private;
-          binding.publishConfig = binding.publishConfig ?? {};
-          binding.publishConfig.access = "public";
-          fs.writeFileSync(bindingPath, `${JSON.stringify(binding, null, 2)}\n`);
-          console.log(`Prepared ${binding.name}@${binding.version} for publishing`);
-          NODE
-
-      - name: Create ready-to-publish packages archive
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -f ready-to-publish-packages.zip
-          zip -rq ready-to-publish-packages.zip packages
-          unzip -l ready-to-publish-packages.zip | tail -20
-          ls -lh ready-to-publish-packages.zip
-
-      - name: Upload ready-to-publish packages
+      - name: Upload native binding zip
         uses: actions/upload-artifact@v4
         with:
-          name: ready-to-publish-packages
-          path: ready-to-publish-packages.zip
+          name: css-doctor-native-bindings
+          path: css-doctor-native-bindings-v${{ env.BINDING_VERSION }}.zip
           if-no-files-found: error
           retention-days: 30
 
-      - name: Write maintainer instructions
+      - name: Maintainer instructions
         run: |
           {
-            echo "## Ready-to-publish packages"
+            echo "## Native binding zip ready"
             echo ""
-            echo "The release bundle is ready. No registry publishing was executed."
+            echo "Version: \`${BINDING_VERSION}\`"
+            echo "Artifact: \`css-doctor-native-bindings\`"
             echo ""
-            echo "Maintainer steps:"
+            echo "This workflow **does not** publish to npm."
             echo ""
-            echo "1. Open the Actions tab, select this successful run, and download the ready-to-publish-packages artifact."
-            echo "2. Unzip it over the packages/ directory in the monorepo."
-            echo "3. Log in to npm locally."
-            echo "4. Run: pnpm -r publish --access public --no-git-checks"
+            echo "### Manual publish steps"
             echo ""
-            echo "The artifact contains five platform .node binaries under packages/binding/npm and all adapter dist directories."
+            echo "1. Download the \`css-doctor-native-bindings\` artifact from this run."
+            echo "2. Unzip it (you will get five folders: \`css-doctor-binding-<platform>\`)."
+            echo "3. From each folder, publish the platform package:"
+            echo ""
+            echo '```bash'
+            echo "npm login"
+            echo "for d in css-doctor-binding-darwin-arm64 css-doctor-binding-darwin-x64 \\"
+            echo "         css-doctor-binding-linux-x64-gnu css-doctor-binding-linux-x64-musl \\"
+            echo "         css-doctor-binding-win32-x64-msvc; do"
+            echo "  (cd \"\$d\" && npm publish --access public)"
+            echo "done"
+            echo '```'
+            echo ""
+            echo "4. Locally (darwin-arm64 is enough), rebuild the main loader if needed:"
+            echo ""
+            echo '```bash'
+            echo "pnpm --filter @zealakit/css-doctor-binding build"
+            echo "pnpm --filter @zealakit/css-doctor-binding publish --access public --no-git-checks"
+            echo '```'
+            echo ""
+            echo "Or copy the five folders into \`packages/binding/npm/\` and use \`pnpm publish:npm:binding\`."
           } >> "$GITHUB_STEP_SUMMARY"

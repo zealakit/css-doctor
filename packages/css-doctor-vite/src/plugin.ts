@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { basename, extname } from "node:path";
+import { basename, dirname, extname, posix, relative } from "node:path";
 import { performance } from "node:perf_hooks";
 
 import { createFilter } from "@rollup/pluginutils";
@@ -8,6 +8,14 @@ import type {
   JsCssAnalysisResult,
   JsSelectorStat,
 } from "@zealakit/css-doctor-binding";
+import {
+  DEFAULT_MAX_CHUNK_SIZE,
+  DEFAULT_MIN_PAGE_RATIO,
+  clampMaxChunkSize,
+  clampMinPageRatio,
+  describeError,
+  scanClasses,
+} from "@zealakit/css-doctor-shared";
 import type { Plugin } from "vite";
 
 import { printDiagnostics } from "./reporter";
@@ -22,8 +30,6 @@ import type {
   SizeBudgetOptions,
 } from "./types";
 
-const DEFAULT_MIN_PAGE_RATIO = 0.5;
-const DEFAULT_MAX_CHUNK_SIZE = 60 * 1_024;
 const LARGE_CSS_ASSET_BYTES = 500 * 1_024;
 
 type CssAssetLike = {
@@ -92,36 +98,24 @@ export function cssDoctor(options: CssDoctorViteOptions = {}): Plugin {
     isolateVariables: options.sizeBudget?.isolateVariables ?? true,
   };
   const report = options.report ?? true;
-  const configuredMinPageRatio =
-    pageCoverage.minPageRatio ?? DEFAULT_MIN_PAGE_RATIO;
-  const configuredMaxChunkSize =
-    sizeBudget.maxChunkSize ?? DEFAULT_MAX_CHUNK_SIZE;
   const configurationWarnings: string[] = [];
-  const minPageRatio =
-    Number.isFinite(configuredMinPageRatio) &&
-    configuredMinPageRatio >= 0 &&
-    configuredMinPageRatio <= 1
-      ? configuredMinPageRatio
-      : DEFAULT_MIN_PAGE_RATIO;
-  const maxChunkSize =
-    Number.isFinite(configuredMaxChunkSize) &&
-    Number.isInteger(configuredMaxChunkSize) &&
-    configuredMaxChunkSize > 0
-      ? configuredMaxChunkSize
-      : DEFAULT_MAX_CHUNK_SIZE;
+  const clampedRatio = clampMinPageRatio(
+    pageCoverage.minPageRatio ?? DEFAULT_MIN_PAGE_RATIO,
+  );
+  const clampedSize = clampMaxChunkSize(
+    sizeBudget.maxChunkSize ?? DEFAULT_MAX_CHUNK_SIZE,
+  );
+  const minPageRatio = clampedRatio.value;
+  const maxChunkSize = clampedSize.value;
   let base = "/";
   let minify = options.minify ?? true;
+  let isLibBuild = false;
 
-  if (minPageRatio !== configuredMinPageRatio) {
-    configurationWarnings.push(
-      "minPageRatio must be a number between 0 and 1; using 0.5",
-    );
+  if (clampedRatio.warning) {
+    configurationWarnings.push(clampedRatio.warning);
   }
-
-  if (maxChunkSize !== configuredMaxChunkSize) {
-    configurationWarnings.push(
-      "maxChunkSize must be a positive integer; using 61440",
-    );
+  if (clampedSize.warning) {
+    configurationWarnings.push(clampedSize.warning);
   }
 
   // Keep resolved configs aligned with clamped values so optimizeCss never
@@ -150,9 +144,25 @@ export function cssDoctor(options: CssDoctorViteOptions = {}): Plugin {
       minify =
         options.minify ??
         (config.mode === "production" || config.command === "build");
+      // Library builds do not have a reliable HTML/page graph for coverage
+      // splitting — rewriting CSS here can drop styles. Keep original.
+      // Vite sets `build.lib` to `false` (not undefined) for app builds.
+      isLibBuild = Boolean(config.build.lib);
     },
 
     async generateBundle(_outputOptions, bundle) {
+      // Vite 6 may resolve the same plugin for client + SSR environments.
+      // Only skip the server consumer; do not sticky-skip the client build.
+      const environmentConsumer = (
+        this as { environment?: { config?: { consumer?: string } } }
+      ).environment?.config?.consumer;
+      if (isLibBuild || environmentConsumer === "server") {
+        this.warn(
+          "[css-doctor] skipped CSS splitting for library/SSR build to avoid dropping styles",
+        );
+        return;
+      }
+
       try {
         const diagnostics = await analyzeAndSplit(
           bundle,
@@ -406,7 +416,10 @@ async function analyzeAndSplit(
 
       if (options.wrapCommonImports && commonWasSplit) {
         output.source = commonFileNames
-          .map((fileName) => `@import "./${basename(fileName)}";`)
+          .map((fileName) => {
+            const importPath = cssImportPath(output.fileName, fileName);
+            return `@import "${importPath}";`;
+          })
           .join("\n");
       }
 
@@ -537,9 +550,9 @@ function injectPageChunkStyles(
     const chunkFile = chunkByPage.get(page);
     const hrefs = fileNames.map((fileName) => `${normalizedBase}${fileName}`);
     const htmlOutput = findPageHtmlAsset(bundle, page);
-    const output = htmlOutput ?? (chunkFile ? bundle[chunkFile] : undefined);
+    const chunkOutput = chunkFile ? bundle[chunkFile] : undefined;
 
-    if (isHtmlAsset(output)) {
+    if (isHtmlAsset(htmlOutput)) {
       const tags = hrefs
         .map(
           (href) =>
@@ -547,19 +560,28 @@ function injectPageChunkStyles(
         )
         .join("\n");
 
-      if (!output.source.includes(tags) && output.source.includes("</head>")) {
-        output.source = output.source.replace("</head>", `${tags}\n  </head>`);
+      if (htmlOutput.source.includes(tags)) {
+        continue;
       }
-      continue;
+
+      // Prefer structured HTML injection; otherwise fall through to the JS
+      // loader so page CSS is not lost on headless/incomplete documents.
+      const injected = injectHtmlTags(htmlOutput.source, tags, {
+        allowAppend: false,
+      });
+      if (injected !== null) {
+        htmlOutput.source = injected;
+        continue;
+      }
     }
 
-    if (!isChunk(output)) {
+    if (!isChunk(chunkOutput)) {
       continue;
     }
 
     const snippet = `(()=>{const __cssDoctorPageStyles=${JSON.stringify(hrefs)};if(typeof document!=="undefined"){for(const __cssDoctorPageHref of __cssDoctorPageStyles){if(!Array.from(document.querySelectorAll("link[data-css-doctor-page]")).some((link)=>link.dataset.cssDoctorPage===__cssDoctorPageHref)){const __cssDoctorPageLink=document.createElement("link");__cssDoctorPageLink.rel="stylesheet";__cssDoctorPageLink.href=__cssDoctorPageHref;__cssDoctorPageLink.dataset.cssDoctorPage=__cssDoctorPageHref;document.head.append(__cssDoctorPageLink);}}}})();\n`;
 
-    output.code = snippet + output.code;
+    chunkOutput.code = snippet + chunkOutput.code;
   }
 }
 
@@ -581,10 +603,38 @@ function injectStylesheetLinks(
       continue;
     }
 
-    if (output.source.includes("</head>")) {
-      output.source = output.source.replace("</head>", `${tags}\n  </head>`);
+    const injected = injectHtmlTags(output.source, tags, { allowAppend: true });
+    if (injected !== null) {
+      output.source = injected;
     }
   }
+}
+
+/**
+ * Inserts stylesheet tags before `</head>`, else `</body>`, else `</html>`.
+ * When `allowAppend` is true, falls back to appending at the end.
+ */
+function injectHtmlTags(
+  html: string,
+  tags: string,
+  options: { allowAppend: boolean },
+): string | null {
+  if (html.length === 0) {
+    return null;
+  }
+  if (html.includes("</head>")) {
+    return html.replace("</head>", `${tags}\n  </head>`);
+  }
+  if (html.includes("</body>")) {
+    return html.replace("</body>", `${tags}\n  </body>`);
+  }
+  if (html.includes("</html>")) {
+    return html.replace("</html>", `${tags}\n</html>`);
+  }
+  if (options.allowAppend) {
+    return `${html}\n${tags}\n`;
+  }
+  return null;
 }
 
 function findPageHtmlAsset(
@@ -881,44 +931,6 @@ function collectChunkContent(
   return { classes, cssFiles };
 }
 
-function scanClasses(source: string, classes: Set<string>): void {
-  const patterns = [
-    /(?:class|className)\s*=\s*(?:"([^"]*)"|'([^']*)'|`([^`]*)`)/g,
-    /(?:^|[,{;\s])(?:class|className)\s*:\s*(?:"([^"]*)"|'([^']*)'|`([^`]*)`)/g,
-    /classList\.(?:add|remove|toggle|contains)\(\s*(?:"([^"]*)"|'([^']*)'|`([^`]*)`)/g,
-  ];
-
-  for (const pattern of patterns) {
-    for (const match of source.matchAll(pattern)) {
-      const value = match[1] ?? match[2] ?? match[3];
-
-      if (!value) {
-        continue;
-      }
-
-      for (const token of value.split(/\s+/)) {
-        if (isClassToken(token)) {
-          classes.add(token.toLowerCase());
-        }
-      }
-    }
-  }
-}
-
-/** Accept Tailwind-style tokens (`md:flex`, `w-1/2`, `w-[10px]`, `!p-2`). */
-function isClassToken(token: string): boolean {
-  if (!token || token.length > 256) {
-    return false;
-  }
-
-  // Reject template/expression leftovers while allowing arbitrary-value brackets.
-  if (/[`${}]/.test(token)) {
-    return false;
-  }
-
-  return /[A-Za-z_]/.test(token);
-}
-
 function isInternalPageEntry(chunk: ViteChunkLike): boolean {
   const name = pageNameFor(chunk);
 
@@ -1083,6 +1095,14 @@ function roundMs(value: number): number {
   return Math.round(value * 1_000) / 1_000;
 }
 
-function describeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+function cssImportPath(fromFileName: string, toFileName: string): string {
+  const fromDir = dirname(fromFileName.replace(/\\/g, "/"));
+  const relativePath = relative(fromDir, toFileName).replace(/\\/g, "/");
+  const normalized = posix.normalize(relativePath);
+
+  if (normalized.startsWith("../") || normalized.startsWith("./")) {
+    return normalized;
+  }
+
+  return `./${normalized}`;
 }

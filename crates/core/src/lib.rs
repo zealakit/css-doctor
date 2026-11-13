@@ -46,6 +46,7 @@ mod health;
 mod model;
 mod optimization;
 mod pipeline;
+mod property_key;
 mod regression;
 mod size_splitter;
 mod splitter;
@@ -55,8 +56,8 @@ pub use analyzer::analyze_css;
 pub use health::{
     DiagnosticCertainty, DimensionId, DimensionScore, HealthDiagnostic, HealthEvaluationInput,
     HealthGrade, HealthReport, HealthScoreConfig, HealthScoreSummary, HealthSeverity, HealthStatus,
-    HealthThresholds, HealthWeights, ScoreBand, evaluate_css_health, evaluate_health_report,
-    grade_for_score, merge_health_reports,
+    HealthThresholds, HealthWeights, ScoreBand, evaluate_css_health,
+    evaluate_css_health_with_usage, evaluate_health_report, grade_for_score, merge_health_reports,
 };
 pub use model::{
     AnalysisStats, AnalysisWarning, CssAnalysisResult, SelectorInfo, SelectorKind, SourceLocation,

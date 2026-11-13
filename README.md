@@ -300,6 +300,22 @@ Remix 3 has no build-time page-to-CSS dependency graph. Its middleware uses
 `sizeBudget`, `isolateVariables`, `minify`, and a response cache instead of
 runtime page coverage.
 
+### Known limitations
+
+- CSS Modules (`*.module.css`) and helper-built class strings (`cn` / `clsx`) are
+  not fully resolved by static scanning. Prefer literal `class` / `className`
+  tokens, or supply `pageUsage` / `forceCommon`.
+- Next.js path aliases beyond `@/` need explicit `pageUsage`.
+- Content-hashed CSS asset rewrites may leave the original filename hash stale
+  after in-place CSS updates (adapters emit additional hashed chunk files for
+  split output).
+- `minify: false` disables LightningCSS minify inside css-doctor; host bundler
+  CSS minimizers (Vite/Next/Rsbuild) may still minify unless also disabled.
+- Prebuilt native bindings are verified for the five published triples listed
+  above; CI currently builds and tests the Ubuntu runner host triple.
+
+Release prep: see [`docs/release-checklist.md`](./docs/release-checklist.md).
+
 ---
 
 ## Configuration reference

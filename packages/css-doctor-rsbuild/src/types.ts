@@ -26,6 +26,11 @@ export type CssDoctorRsbuildOptions = {
   pageCoverage?: PageCoverageOptions;
   /** Tier 2 configuration. */
   sizeBudget?: SizeBudgetOptions;
+  /**
+   * Explicit page → class usage. Merged with route/entrypoint scanning when
+   * both are available.
+   */
+  pageUsage?: Record<string, string[]>;
   /** Minify emitted CSS. Defaults to true for production builds. */
   minify?: boolean;
   /** Print the diagnostics summary. @default true */
@@ -34,6 +39,8 @@ export type CssDoctorRsbuildOptions = {
   include?: Array<string | RegExp>;
   /** Skip CSS assets whose name matches these patterns. */
   exclude?: Array<string | RegExp>;
+  /** Optional diagnostics callback. Failures are reported, never thrown. */
+  onDiagnostics?: (result: CssDoctorRsbuildDiagnostics) => void | Promise<void>;
 };
 
 /** One final CSS chunk produced by either pipeline tier. */

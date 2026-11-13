@@ -437,7 +437,16 @@ test("optimize --dry-run emits an optimization report without writing", () => {
     success: boolean;
     dryRun: boolean;
     files: Array<{
-      report: { schemaVersion: number; operations: { minified: boolean } };
+      report: {
+        schemaVersion: number;
+        operations: {
+          minified: boolean;
+          pageCoverageSplit: boolean;
+          sizeBudgetSplit: boolean;
+          variablesIsolated: boolean;
+        };
+        chunks: Array<{ name: string }>;
+      };
     }>;
   };
   assert.equal(report.success, true);
@@ -445,6 +454,55 @@ test("optimize --dry-run emits an optimization report without writing", () => {
   assert.ok(report.files[0]);
   assert.equal(report.files[0].report.schemaVersion, 1);
   assert.equal(report.files[0].report.operations.minified, true);
+  assert.equal(report.files[0].report.operations.pageCoverageSplit, false);
+  assert.equal(report.files[0].report.operations.sizeBudgetSplit, false);
+});
+
+test("optimize --no-isolate-variables disables variable isolation", () => {
+  const result = runCli([
+    "optimize",
+    "test/fixtures/basic.css",
+    "--dry-run",
+    "--json",
+    "--no-page-coverage",
+    "--no-isolate-variables",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+  const report = JSON.parse(result.stdout) as {
+    files: Array<{
+      report: {
+        operations: { variablesIsolated: boolean; sizeBudgetSplit: boolean };
+      };
+    }>;
+  };
+  assert.ok(report.files[0]);
+  assert.equal(report.files[0].report.operations.variablesIsolated, false);
+});
+
+test("split --no-page-coverage keeps coverage disabled", () => {
+  const result = runCli([
+    "split",
+    "test/fixtures/basic.css",
+    "--dry-run",
+    "--json",
+    "--no-page-coverage",
+    "--no-size-budget",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+  const report = JSON.parse(result.stdout) as {
+    command: string;
+    files: Array<{
+      report: {
+        operations: { pageCoverageSplit: boolean; sizeBudgetSplit: boolean };
+      };
+    }>;
+  };
+  assert.equal(report.command, "split");
+  assert.ok(report.files[0]);
+  assert.equal(report.files[0].report.operations.pageCoverageSplit, false);
+  assert.equal(report.files[0].report.operations.sizeBudgetSplit, false);
 });
 
 test("optimize rejects --write together with --dry-run", () => {

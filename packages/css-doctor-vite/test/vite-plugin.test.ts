@@ -578,6 +578,152 @@ test("isolates variables and injects size-budget parts", async () => {
   );
 });
 
+test("injects common CSS before </body> when </head> is missing", async () => {
+  const captured: CssDoctorDiagnostics[] = [];
+  const emitted: EmittedAsset[] = [];
+  const plugin = cssDoctor({
+    report: false,
+    pageCoverage: { enabled: false },
+    sizeBudget: {
+      maxChunkSize: 90,
+      isolateVariables: true,
+    },
+    onDiagnostics: (result) => {
+      captured.push(result);
+    },
+  });
+
+  const html = `<!doctype html><html><body><h1>No head</h1></body></html>`;
+  const css = `
+    :root { --brand: #646cff; --space: 4px; }
+    .a { color: red; }
+    .b { color: blue; }
+    .c { color: green; }
+    .d { color: orange; }
+    .e { color: purple; }
+    .f { color: teal; }
+    .g { color: pink; }
+    .h { color: brown; }
+  `;
+  const bundle: Record<string, unknown> = {
+    "index.html": asset("index.html", html),
+    "assets/all.css": asset("assets/all.css", css),
+  };
+
+  await hookFor(plugin).call(directContext(emitted), {}, bundle);
+
+  const diagnostics = captured[0];
+  assert.ok(diagnostics);
+  const htmlSource = String(
+    (bundle["index.html"] as { source: unknown }).source,
+  );
+  assert.ok(htmlSource.includes("</body>"));
+  assert.ok(
+    diagnostics.emittedCssChunks.some((chunk) =>
+      htmlSource.includes(chunk.fileName),
+    ),
+    "expected stylesheet links before </body>",
+  );
+});
+
+test("falls back to JS loader when HTML has no injection point", async () => {
+  const captured: CssDoctorDiagnostics[] = [];
+  const emitted: EmittedAsset[] = [];
+  const plugin = cssDoctor({
+    report: false,
+    pageCoverage: { enabled: true, minPageRatio: 1 },
+    sizeBudget: { enabled: false },
+    pageUsage: {
+      home: ["home-only"],
+      about: ["about-only"],
+    },
+    onDiagnostics: (result) => {
+      captured.push(result);
+    },
+  });
+
+  const bundle: Record<string, unknown> = {
+    // No </head>/</body>/</html> — HTML inject must fail open to the loader.
+    "home.html": asset("home.html", "<!doctype html><title>home</title>"),
+    "assets/home.js": {
+      type: "chunk",
+      fileName: "assets/home.js",
+      name: "home",
+      isEntry: true,
+      facadeModuleId: join(appRoot, "page-a.html"),
+      code: "export default 1;",
+      modules: {},
+      imports: [],
+      dynamicImports: [],
+      viteMetadata: { importedCss: new Set(["assets/all.css"]) },
+    },
+    "assets/about.js": {
+      type: "chunk",
+      fileName: "assets/about.js",
+      name: "about",
+      isEntry: true,
+      facadeModuleId: join(appRoot, "page-b.html"),
+      code: "export default 2;",
+      modules: {},
+      imports: [],
+      dynamicImports: [],
+      viteMetadata: { importedCss: new Set(["assets/all.css"]) },
+    },
+    "assets/all.css": asset(
+      "assets/all.css",
+      ".home-only { color: red; } .about-only { color: blue; }",
+    ),
+  };
+
+  await hookFor(plugin).call(directContext(emitted), {}, bundle);
+
+  const diagnostics = captured[0];
+  assert.ok(diagnostics);
+  assert.ok(diagnostics.splitApplied);
+  assert.ok(
+    diagnostics.emittedPageChunks.some((chunk) => chunk.page === "home"),
+  );
+
+  const homeChunk = bundle["assets/home.js"] as { code: string };
+  assert.match(homeChunk.code, /__cssDoctorPageStyles/);
+});
+
+test("skips splitting for library builds", async () => {
+  const plugin = cssDoctor({ report: false });
+  const warnings: string[] = [];
+  const configHook = plugin.configResolved;
+  assert.ok(typeof configHook === "function");
+  (
+    configHook as (
+      this: unknown,
+      config: {
+        base: string;
+        mode: string;
+        command: string;
+        build: { lib?: { entry: string }; ssr?: boolean };
+      },
+    ) => void
+  ).call(
+    {},
+    {
+      base: "/",
+      mode: "production",
+      command: "build",
+      build: { lib: { entry: "src/index.ts" } },
+    },
+  );
+
+  const bundle: Record<string, unknown> = {
+    "assets/all.css": asset("assets/all.css", ".keep { color: red; }"),
+  };
+  await hookFor(plugin).call(directContext([], warnings), {}, bundle);
+  assert.equal(
+    String((bundle["assets/all.css"] as { source: unknown }).source),
+    ".keep { color: red; }",
+  );
+  assert.ok(warnings.some((warning) => /library\/SSR/i.test(warning)));
+});
+
 test("honors minify: false", async () => {
   const captured: CssDoctorDiagnostics[] = [];
   const plugin = cssDoctor({
@@ -606,6 +752,50 @@ test("honors minify: false", async () => {
   );
   assert.match(common, /color: red/);
   assert.doesNotMatch(common, /\.dead/);
+});
+
+test("wrapCommonImports uses relative paths for nested assets", async () => {
+  const captured: CssDoctorDiagnostics[] = [];
+  const emitted: EmittedAsset[] = [];
+  const plugin = cssDoctor({
+    report: false,
+    wrapCommonImports: true,
+    pageCoverage: { enabled: false },
+    sizeBudget: { enabled: true, maxChunkSize: 40, isolateVariables: true },
+    onDiagnostics: (result) => {
+      captured.push(result);
+    },
+  });
+
+  const large =
+    ":root { --a: 1; --b: 2; --c: 3; --d: 4; } " +
+    ".a{color:red}.b{color:blue}.c{color:green}.d{color:navy}.e{color:teal}.f{color:purple}";
+  const bundle: Record<string, unknown> = {
+    "style.css": asset("style.css", large),
+  };
+
+  await hookFor(plugin).call(directContext(emitted), {}, bundle);
+
+  const diagnostics = captured[0];
+  assert.ok(diagnostics);
+  const source = String((bundle["style.css"] as { source: unknown }).source);
+  const nestedEmitted = diagnostics.emittedCssChunks.filter(
+    (chunk) =>
+      !chunk.embedded &&
+      chunk.fileName !== "style.css" &&
+      chunk.fileName.includes("/"),
+  );
+  if (nestedEmitted.length > 0) {
+    assert.match(source, /@import "/);
+    for (const chunk of nestedEmitted) {
+      const relative = chunk.fileName; // from style.css at repo root of bundle
+      assert.ok(
+        source.includes(`@import "./${relative}"`) ||
+          source.includes(`@import "${relative}"`),
+        `expected directory-aware import for ${chunk.fileName} in:\n${source}`,
+      );
+    }
+  }
 });
 
 test("clamps an invalid size budget instead of crashing the build", () => {

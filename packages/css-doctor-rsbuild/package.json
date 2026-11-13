@@ -46,6 +46,7 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
+    "test": "pnpm typecheck && pnpm build && node --test test/**/*.test.mjs",
     "lint": "biome lint src",
     "format": "biome format --write src",
     "format:check": "biome format src",
@@ -53,6 +54,7 @@
   },
   "dependencies": {
     "@zealakit/css-doctor-binding": "workspace:*",
+    "@zealakit/css-doctor-shared": "workspace:*",
     "picocolors": "^1.1.1"
   },
   "peerDependencies": {
@@ -60,10 +62,11 @@
   },
   "devDependencies": {
     "@rsbuild/core": "^1.7.6",
-    "@rspack/core": "^2.2.9",
+    "@rspack/core": "^2.3.2",
     "@types/node": "^22.20.5",
     "tsup": "^8.5.1",
-    "typescript": "^5.9.3"
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3"
   },
   "publishConfig": {
     "access": "public"

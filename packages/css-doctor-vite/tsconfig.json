@@ -13,6 +13,7 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
+    "ignoreDeprecations": "6.0",
     "types": ["node"]
   },
   "include": ["src/**/*.ts", "test/**/*.test.ts", "tsup.config.ts"],

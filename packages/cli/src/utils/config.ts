@@ -19,6 +19,8 @@ export type CssDoctorQualityGatesConfig = {
   minScore: number | null;
   maxCssSize: number | null;
   maxSizeIncreasePercent: number | null;
+  maxSelectorIncreasePercent: number | null;
+  maxRuleIncreasePercent: number | null;
   maxNewErrors: number | null;
   maxNewWarnings: number | null;
   failOnRegression: boolean;
@@ -56,6 +58,8 @@ const DEFAULT_CONFIG: CssDoctorConfig = {
     minScore: null,
     maxCssSize: null,
     maxSizeIncreasePercent: null,
+    maxSelectorIncreasePercent: null,
+    maxRuleIncreasePercent: null,
     maxNewErrors: null,
     maxNewWarnings: null,
     failOnRegression: false,
@@ -274,6 +278,24 @@ function normalizeQualityGates(
     "maxSizeIncreasePercent",
     errors,
     "`qualityGates.maxSizeIncreasePercent`",
+    { min: 0, nullable: true },
+  );
+  assignNumber(
+    source,
+    "maxSelectorIncreasePercent",
+    result,
+    "maxSelectorIncreasePercent",
+    errors,
+    "`qualityGates.maxSelectorIncreasePercent`",
+    { min: 0, nullable: true },
+  );
+  assignNumber(
+    source,
+    "maxRuleIncreasePercent",
+    result,
+    "maxRuleIncreasePercent",
+    errors,
+    "`qualityGates.maxRuleIncreasePercent`",
     { min: 0, nullable: true },
   );
   assignNullableInteger(

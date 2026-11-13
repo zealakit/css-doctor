@@ -317,11 +317,40 @@ pub fn compare_baselines_with_gates(
     let diagnostics = compare_diagnostics(&baseline.diagnostics, &current.diagnostics);
     let files = compare_files(&baseline.files, &current.files, options);
 
+    if baseline.schema_version != current.schema_version {
+        // Schema mismatch makes metric interpretation unreliable.
+        let mut report = RegressionReport {
+            schema_version: 1,
+            status: RegressionStatus::Inconclusive,
+            baseline: SnapshotRef::from_document(baseline),
+            current: SnapshotRef::from_document(current),
+            changes: RegressionChanges {
+                score: score_change,
+                css_size,
+                rules,
+                selectors,
+                declarations,
+                dimensions,
+            },
+            diagnostics,
+            files,
+            warnings,
+            quality_gates: None,
+        };
+
+        if let Some(config) = gates {
+            report.quality_gates = Some(evaluate_quality_gates(&report, config));
+        }
+
+        return report;
+    }
+
     let status = classify_status(
         score_change,
         &dimensions,
         &css_size,
         &rules,
+        &selectors,
         &declarations,
         &diagnostics,
         &files,
@@ -542,6 +571,7 @@ fn classify_status(
     dimensions: &[DimensionDelta],
     css_size: &SizeDelta,
     rules: &CountDelta,
+    selectors: &CountDelta,
     declarations: &CountDelta,
     diagnostics: &DiagnosticChangeSet,
     files: &FileChangeSet,
@@ -572,8 +602,12 @@ fn classify_status(
         }
     }
 
+    // Count *increases* are regressions. Count *decreases* are not automatic
+    // improvements — removing rules/selectors can delete live CSS behavior.
+    // Byte-size decrease remains an improvement signal (payload shrink).
     if css_size.is_significant_increase(options)
         || rules.is_significant_increase(options)
+        || selectors.is_significant_increase(options)
         || declarations.is_significant_increase(options)
     {
         regressions += 1;
@@ -602,6 +636,9 @@ fn classify_status(
             .iter()
             .any(|dimension| dimension.change.is_some())
         || css_size.change_bytes != 0
+        || rules.change != 0
+        || selectors.change != 0
+        || declarations.change != 0
         || !diagnostics.new.is_empty()
         || !diagnostics.resolved.is_empty()
         || !files.added.is_empty()
@@ -675,7 +712,7 @@ mod tests {
     }
 
     #[test]
-    fn diagnostic_match_ignores_line_shifts() {
+    fn diagnostic_match_distinguishes_locations() {
         let left = HealthDiagnostic {
             code: "dup.selector".into(),
             severity: HealthSeverity::Warning,
@@ -692,16 +729,61 @@ mod tests {
 
         let baseline_diag = BaselineDiagnostic::from_health(&left);
         let current_diag = BaselineDiagnostic::from_health(&right);
-        assert_eq!(baseline_diag.identity_key(), current_diag.identity_key());
+        assert_ne!(baseline_diag.identity_key(), current_diag.identity_key());
 
         let mut baseline = make_doc(".a{color:red}", 90, "src/a.css");
         let mut current = make_doc(".a{color:red}", 90, "src/a.css");
         baseline.diagnostics = vec![baseline_diag];
         current.diagnostics = vec![current_diag];
         let report = compare_baselines(&baseline, &current, &CompareOptions::default());
-        assert_eq!(report.diagnostics.persistent.len(), 1);
-        assert!(report.diagnostics.new.is_empty());
-        assert!(report.diagnostics.resolved.is_empty());
+        assert_eq!(report.diagnostics.new.len(), 1);
+        assert_eq!(report.diagnostics.resolved.len(), 1);
+        assert!(report.diagnostics.persistent.is_empty());
+    }
+
+    #[test]
+    fn selector_growth_can_trigger_regression() {
+        let mut baseline = make_doc(".a{color:red}", 90, "a.css");
+        let mut current = make_doc(".a{color:red}", 90, "a.css");
+        baseline.health.selectors = 2;
+        current.health.selectors = 40;
+        let report = compare_baselines(
+            &baseline,
+            &current,
+            &CompareOptions {
+                count_absolute_tolerance: 5,
+                count_increase_percent: 10.0,
+                ..CompareOptions::default()
+            },
+        );
+        assert_eq!(report.status, RegressionStatus::Regressed);
+        assert!(
+            report
+                .changes
+                .selectors
+                .is_significant_increase(&CompareOptions {
+                    count_absolute_tolerance: 5,
+                    count_increase_percent: 10.0,
+                    ..CompareOptions::default()
+                })
+        );
+    }
+
+    #[test]
+    fn schema_mismatch_is_inconclusive() {
+        let mut baseline = make_doc(".a{color:red}", 90, "a.css");
+        let current = make_doc(".a{color:red}", 90, "a.css");
+        baseline.schema_version = 1;
+        let mut current = current;
+        current.schema_version = 2;
+        let report = compare_baselines(&baseline, &current, &CompareOptions::default());
+        assert_eq!(report.status, RegressionStatus::Inconclusive);
+        assert!(
+            report
+                .warnings
+                .iter()
+                .any(|warning| warning.contains("schemaVersion"))
+        );
     }
 
     #[test]

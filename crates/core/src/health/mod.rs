@@ -16,6 +16,6 @@ pub use model::{
     HealthScoreSummary, HealthSeverity, HealthStatus, ScoreBand,
 };
 pub use scoring::{
-    HealthEvaluationInput, evaluate_css_health, evaluate_health_report, grade_for_score,
-    merge_health_reports,
+    HealthEvaluationInput, evaluate_css_health, evaluate_css_health_with_usage,
+    evaluate_health_report, grade_for_score, merge_health_reports,
 };

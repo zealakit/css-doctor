@@ -10,5 +10,9 @@ export default defineConfig({
   platform: 'node',
   splitting: false,
   outDir: 'dist',
-  external: ['vite', '@zealakit/css-doctor-binding'],
+  external: [
+    'vite',
+    '@zealakit/css-doctor-binding',
+    '@zealakit/css-doctor-shared',
+  ],
 });

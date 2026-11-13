@@ -1,8 +1,8 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>css-doctor Dependency Monitor</title>
     <link
       rel="stylesheet"
@@ -10,94 +10,194 @@
     />
     <style>
       :root {
-        --monitor-green: #1f9d55;
-        --monitor-red: #c53030;
-        --monitor-amber: #b7791f;
+        --pico-font-size: 14px;
+        --pico-line-height: 1.4;
+        --pico-spacing: 0.75rem;
+        --pico-form-element-spacing-vertical: 0.4rem;
+        --pico-form-element-spacing-horizontal: 0.75rem;
+        --pico-border-radius: 8px;
+        --font-xs: 12px;
+        --font-sm: 13px;
+        --font-base: 14px;
+        --font-md: 16px;
+        --font-lg: 18px;
+        --font-title: 24px;
+        --ok: #1f9d55;
+        --warn: #b7791f;
+        --danger: #c53030;
+        --muted: #9aa4b2;
+        --surface: #161b22;
+        --panel: #0d1117;
+        --line: #30363d;
+        --text: #e6edf3;
       }
 
       body {
         min-height: 100vh;
+        color: var(--text);
+        background: #0b0f14;
+        font-size: var(--font-base);
+        padding-block: 1rem 2rem;
+      }
+
+      main.container {
+        max-width: 1920px;
+        padding-inline: 32px;
       }
 
       .monitor-header {
-        align-items: flex-start;
         display: flex;
         flex-wrap: wrap;
-        gap: 1rem;
+        gap: 0.85rem;
         justify-content: space-between;
-        margin-bottom: 1.5rem;
+        align-items: flex-start;
+        margin-bottom: 1rem;
       }
 
       .monitor-header h1 {
-        margin-bottom: 0.25rem;
+        margin: 0 0 0.35rem;
+        font-size: var(--font-title);
+        line-height: 1.2;
       }
 
       .monitor-header p {
-        color: var(--pico-muted-color);
         margin: 0;
+        color: var(--muted);
+        font-size: var(--font-sm);
       }
 
       .monitor-actions {
         display: flex;
         flex-wrap: wrap;
-        gap: 0.5rem;
+        gap: 0.45rem;
       }
 
       .monitor-actions button {
         margin: 0;
         width: auto;
+        font-size: var(--font-sm);
+        padding: 0.4rem 0.8rem;
       }
 
       .monitor-stats {
         display: grid;
-        gap: 1rem;
-        grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-        margin-bottom: 1.5rem;
+        gap: 0.65rem;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        margin-bottom: 0.9rem;
       }
 
       .monitor-stat {
-        background: var(--pico-card-background-color);
-        border: 1px solid var(--pico-card-border-color);
-        border-radius: var(--pico-border-radius);
-        padding: 0.7rem 0.85rem;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0.65rem 0.8rem;
       }
 
       .monitor-stat span {
-        color: var(--pico-muted-color);
         display: block;
-        font-size: 0.75rem;
-        letter-spacing: 0.08em;
+        color: var(--muted);
+        font-size: var(--font-xs);
+        letter-spacing: 0.06em;
         text-transform: uppercase;
       }
 
       .monitor-stat strong {
         display: block;
-        font-size: 1.35rem;
-        margin-top: 0.15rem;
+        margin-top: 0.25rem;
+        font-size: var(--font-lg);
       }
 
       .monitor-filters {
-        align-items: end;
         display: grid;
-        gap: 1rem;
-        grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
-        margin-bottom: 1.5rem;
+        gap: 0.75rem;
+        grid-template-columns: 1fr 1.2fr 1.4fr auto;
+        align-items: end;
+        margin-bottom: 1rem;
       }
 
       .monitor-filters label {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
         margin: 0;
+        font-size: var(--font-xs);
+        color: var(--muted);
       }
 
       .monitor-filters select,
+      .monitor-filters input,
       .monitor-filters button {
         margin: 0;
+        font-size: var(--font-base);
+        min-height: 2.5rem;
+      }
+
+      .monitor-filters select {
+        padding-block: 0.5rem;
+      }
+
+      .dep-name {
+        font-size: var(--font-md);
+        font-weight: 600;
+        line-height: 1.3;
       }
 
       .monitor-checkbox {
-        align-items: center;
         display: flex;
-        gap: 0.5rem;
-        min-height: 2.5rem;
+        flex-direction: row;
+        align-items: center;
+        gap: 0.45rem;
+        min-height: 2.4rem;
+        font-size: var(--font-sm);
+        color: var(--text);
+        margin: 0;
+      }
+
+      .package-card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        margin-bottom: 0.85rem;
+        overflow: hidden;
+      }
+
+      .package-card-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.75rem;
+        align-items: flex-start;
+        padding: 0.75rem 0.9rem;
+        background: var(--surface);
+        border-bottom: 1px solid var(--line);
+      }
+
+      .package-card-header h2 {
+        margin: 0;
+        font-size: var(--font-md);
+        font-weight: 600;
+        line-height: 1.3;
+      }
+
+      .package-card-header .meta {
+        margin-top: 0.2rem;
+        color: var(--muted);
+        font-size: var(--font-xs);
+      }
+
+      .package-card-header .counts {
+        color: var(--muted);
+        font-weight: 500;
+        font-size: var(--font-xs);
+        white-space: nowrap;
+      }
+
+      .package-card-body {
+        padding: 0;
+      }
+
+      .package-cards {
+        display: grid;
+        gap: 0.85rem;
       }
 
       .monitor-table-wrap {
@@ -105,113 +205,186 @@
       }
 
       .monitor-table {
-        font-size: 0.76rem;
-        line-height: 1.25;
+        font-size: var(--font-sm);
+        line-height: 1.35;
+        margin: 0;
       }
 
-      .monitor-table td,
-      .monitor-table th {
-        padding: 0.38rem 0.5rem;
+      .monitor-table th,
+      .monitor-table td {
+        padding: 0.45rem 0.55rem;
         vertical-align: middle;
         white-space: nowrap;
       }
 
       .monitor-table th {
-        font-size: 0.64rem;
-        letter-spacing: 0.055em;
-        padding-bottom: 0.45rem;
-        padding-top: 0.45rem;
+        font-size: var(--font-xs);
+        letter-spacing: 0.05em;
         text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .monitor-table th:last-child,
+      .monitor-table td:last-child {
+        text-align: right;
+      }
+
+      .monitor-table td:last-child .row-actions {
+        justify-content: flex-end;
       }
 
       .monitor-table code {
         background: none;
-        font-size: 0.72rem;
         padding: 0;
+        font-size: var(--font-sm);
       }
 
       .monitor-table small {
-        color: var(--pico-muted-color);
         display: block;
-        font-size: 0.66rem;
-        line-height: 1.2;
+        margin-top: 0.15rem;
+        color: var(--muted);
+        font-size: var(--font-xs);
       }
 
       .badge {
-        border-radius: 999px;
         display: inline-block;
-        font-size: 0.6rem;
+        border-radius: 999px;
+        font-size: var(--font-xs);
         font-weight: 700;
-        letter-spacing: 0.035em;
-        padding: 0.12rem 0.45rem;
+        letter-spacing: 0.03em;
+        padding: 0.15rem 0.45rem;
         text-transform: uppercase;
       }
 
       .badge-up-to-date {
-        background: color-mix(in srgb, var(--monitor-green) 16%, transparent);
-        color: var(--monitor-green);
+        color: var(--ok);
+        background: color-mix(in srgb, var(--ok) 16%, transparent);
       }
-
-      .badge-outdated {
-        background: color-mix(in srgb, var(--monitor-amber) 18%, transparent);
-        color: var(--monitor-amber);
+      .badge-patch-available,
+      .badge-minor-available {
+        color: var(--warn);
+        background: color-mix(in srgb, var(--warn) 18%, transparent);
       }
-
-      .badge-error {
-        background: color-mix(in srgb, var(--monitor-red) 16%, transparent);
-        color: var(--monitor-red);
+      .badge-major-available,
+      .badge-deprecated,
+      .badge-registry-check-failed {
+        color: var(--danger);
+        background: color-mix(in srgb, var(--danger) 16%, transparent);
       }
-
-      .monitor-upgrade {
-        font-size: 0.65rem;
-        line-height: 1.1;
-        margin: 0;
-        padding: 0.22rem 0.55rem;
-        width: auto;
+      .badge-skipped {
+        color: var(--muted);
+        background: color-mix(in srgb, var(--muted) 14%, transparent);
       }
 
       .local-label {
-        color: #8b5cf6;
-        font-size: 0.65rem;
+        color: #a78bfa;
+        font-size: var(--font-xs);
         font-weight: 700;
         letter-spacing: 0.04em;
         text-transform: uppercase;
       }
 
-      #prompt-text {
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-        font-size: 0.72rem;
-        line-height: 1.35;
-        min-height: 20rem;
-        resize: vertical;
+      .row-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
       }
 
-      #prompt-dialog article {
-        max-width: 72rem;
-        width: min(72rem, 92vw);
+      .row-actions select {
+        margin: 0;
+        min-width: 9.5rem;
+        min-height: 2.25rem;
+        font-size: var(--font-sm);
+        padding: 0.4rem 0.6rem;
       }
 
-      #prompt-dialog header {
-        margin-bottom: 0.75rem;
+      .row-actions button {
+        margin: 0;
+        width: auto;
+        min-height: 2.25rem;
+        font-size: var(--font-sm);
+        padding: 0.35rem 0.65rem;
+        line-height: 1.2;
       }
 
       #monitor-message {
-        margin-bottom: 1rem;
+        margin-bottom: 0.75rem;
+        font-size: var(--font-sm);
       }
 
       #monitor-message:empty {
         display: none;
       }
 
-      @media (max-width: 720px) {
-        .monitor-header {
-          align-items: stretch;
-        }
+      dialog article {
+        border: 1px solid var(--line);
+        background: #12161c;
+      }
 
+      #prompt-dialog article,
+      #batch-dialog article {
+        width: min(72rem, 94vw);
+        max-width: 72rem;
+      }
+
+      #prompt-text {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: var(--font-xs);
+        line-height: 1.4;
+        min-height: 18rem;
+        resize: vertical;
+      }
+
+      .batch-table {
+        font-size: var(--font-sm);
+        margin: 0;
+      }
+
+      .batch-table th,
+      .batch-table td {
+        padding: 0.4rem 0.45rem;
+        vertical-align: middle;
+      }
+
+      .batch-table select {
+        margin: 0;
+        min-height: 2.25rem;
+        font-size: var(--font-sm);
+        padding: 0.35rem 0.55rem;
+      }
+
+      .batch-table button {
+        margin: 0;
+        width: auto;
+        min-height: 2.25rem;
+        font-size: var(--font-sm);
+        padding: 0.3rem 0.55rem;
+      }
+
+      .empty {
+        color: var(--muted);
+        text-align: center;
+        padding: 1.25rem 0.75rem;
+        font-size: var(--font-base);
+      }
+
+      @media (max-width: 960px) {
+        .monitor-stats {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .monitor-filters {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .monitor-stats,
+        .monitor-filters {
+          grid-template-columns: 1fr;
+        }
         .monitor-actions {
           width: 100%;
         }
-
         .monitor-actions button {
           flex: 1;
         }
@@ -223,15 +396,16 @@
       <header class="monitor-header">
         <div>
           <h1>css-doctor Dependency Monitor</h1>
-          <p>Rust crates and Node packages outside <code>examples/</code>.</p>
+          <p>
+            Root + <code>packages/*</code> only · <code>examples/</code> and Cargo excluded ·
+            <span id="last-check">No registry check yet</span>
+          </p>
         </div>
         <div class="monitor-actions">
-          <button id="refresh-button" type="button">Refresh Data</button>
-          <button id="prompt-button" class="contrast" type="button">
-            Get AI Prompt
-          </button>
-          <button id="upgrade-all-button" class="secondary" type="button">
-            Upgrade All Outdated
+          <button id="refresh-btn" type="button">Refresh Data</button>
+          <button id="prompt-btn" class="contrast" type="button">Get AI Prompt</button>
+          <button id="update-all-btn" class="secondary" type="button">
+            Update All Outdated
           </button>
         </div>
       </header>
@@ -260,58 +434,83 @@
       <form class="monitor-filters" onsubmit="return false">
         <label>
           Ecosystem
-          <select id="ecosystem-filter">
+          <select id="filter-ecosystem">
             <option value="all">All</option>
-            <option value="rust">Rust (Cargo)</option>
-            <option value="node">Node (npm/pnpm)</option>
           </select>
         </label>
         <label>
-          Sub-repo / Workspace Package
-          <select id="subrepo-filter">
+          Package / workspace
+          <select id="filter-package">
             <option value="all">All</option>
           </select>
         </label>
+        <label>
+          Search
+          <input id="filter-search" type="search" placeholder="dependency name" />
+        </label>
         <label class="monitor-checkbox">
-          <input id="outdated-filter" type="checkbox" />
+          <input id="filter-outdated" type="checkbox" />
           Only outdated
         </label>
       </form>
 
-      <div class="monitor-table-wrap">
-        <table class="monitor-table">
-          <thead>
-            <tr>
-              <th>Package</th>
-              <th>Type</th>
-              <th>Current</th>
-              <th>Latest</th>
-              <th>Status</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody id="dependency-rows">
-            <tr>
-              <td colspan="6">Loading dependencies…</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <div id="loading" class="empty">Loading dependencies…</div>
+      <div id="sections"></div>
     </main>
+
+    <dialog id="confirm-dialog">
+      <article>
+        <header><h3 id="confirm-title" style="margin:0">Confirm update</h3></header>
+        <div id="confirm-body"></div>
+        <footer style="display:flex;gap:0.45rem;justify-content:flex-end">
+          <button id="confirm-cancel" class="secondary" type="button">Cancel</button>
+          <button id="confirm-ok" type="button">Confirm</button>
+        </footer>
+      </article>
+    </dialog>
+
+    <dialog id="batch-dialog">
+      <article>
+        <header>
+          <h3 style="margin:0">Review outdated updates</h3>
+        </header>
+        <p style="margin-top:0;color:var(--muted);font-size:0.84rem">
+          Conservative targets prefer patch/minor. Majors require explicit selection and confirmation.
+        </p>
+        <div class="monitor-table-wrap">
+          <table class="batch-table">
+            <thead>
+              <tr>
+                <th>Dependency</th>
+                <th>Location</th>
+                <th>Type</th>
+                <th>Current</th>
+                <th>Target</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="batch-body"></tbody>
+          </table>
+        </div>
+        <footer style="display:flex;gap:0.45rem;justify-content:flex-end;margin-top:0.75rem">
+          <button id="batch-cancel" class="secondary" type="button">Cancel</button>
+          <button id="batch-confirm" type="button">Apply updates</button>
+        </footer>
+      </article>
+    </dialog>
 
     <dialog id="prompt-dialog">
       <article>
-        <header>
-          <h3>AI Upgrade Prompt</h3>
-        </header>
-        <p>
-          Copy this prompt into your AI coding assistant. It contains the full
-          dependency inventory, including local/workspace entries and current
-          registry status.
+        <header><h3 style="margin:0">AI Upgrade Prompt</h3></header>
+        <p style="margin-top:0;color:var(--muted);font-size:0.84rem">
+          Copy into your AI coding assistant. This does not update packages.
+          Scope: selected outdated rows, otherwise outdated rows in the current
+          filter view (includes each row’s selected target version).
         </p>
         <textarea id="prompt-text" readonly spellcheck="false"></textarea>
-        <footer>
-          <button id="copy-prompt" type="button">Copy Prompt</button>
+        <footer style="display:flex;gap:0.45rem;justify-content:flex-end">
+          <button id="prompt-copy" type="button">Copy Prompt</button>
           <button id="prompt-close" class="secondary" type="button">Close</button>
         </footer>
       </article>
@@ -319,29 +518,44 @@
 
     <script>
       const state = {
-        dependencies: [],
-        generatedAt: null,
-        loading: false,
-        upgrading: false,
+        rows: [],
+        packages: [],
+        summary: null,
+        ecosystems: ["node"],
+        batch: [],
+        pending: [],
+        allowMajor: false,
       };
 
-      const elements = {
-        ecosystem: document.querySelector("#ecosystem-filter"),
-        subrepo: document.querySelector("#subrepo-filter"),
-        outdated: document.querySelector("#outdated-filter"),
-        rows: document.querySelector("#dependency-rows"),
-        refresh: document.querySelector("#refresh-button"),
-        prompt: document.querySelector("#prompt-button"),
-        promptDialog: document.querySelector("#prompt-dialog"),
-        promptText: document.querySelector("#prompt-text"),
-        copyPrompt: document.querySelector("#copy-prompt"),
-        closePrompt: document.querySelector("#prompt-close"),
-        upgradeAll: document.querySelector("#upgrade-all-button"),
-        message: document.querySelector("#monitor-message"),
-        total: document.querySelector("#stat-total"),
-        outdatedCount: document.querySelector("#stat-outdated"),
-        current: document.querySelector("#stat-current"),
-        errors: document.querySelector("#stat-errors"),
+      const els = {
+        loading: document.getElementById("loading"),
+        sections: document.getElementById("sections"),
+        message: document.getElementById("monitor-message"),
+        lastCheck: document.getElementById("last-check"),
+        ecosystem: document.getElementById("filter-ecosystem"),
+        package: document.getElementById("filter-package"),
+        search: document.getElementById("filter-search"),
+        outdated: document.getElementById("filter-outdated"),
+        refresh: document.getElementById("refresh-btn"),
+        prompt: document.getElementById("prompt-btn"),
+        updateAll: document.getElementById("update-all-btn"),
+        confirmDialog: document.getElementById("confirm-dialog"),
+        confirmTitle: document.getElementById("confirm-title"),
+        confirmBody: document.getElementById("confirm-body"),
+        confirmCancel: document.getElementById("confirm-cancel"),
+        confirmOk: document.getElementById("confirm-ok"),
+        batchDialog: document.getElementById("batch-dialog"),
+        batchBody: document.getElementById("batch-body"),
+        batchCancel: document.getElementById("batch-cancel"),
+        batchConfirm: document.getElementById("batch-confirm"),
+        promptDialog: document.getElementById("prompt-dialog"),
+        promptText: document.getElementById("prompt-text"),
+        promptCopy: document.getElementById("prompt-copy"),
+        promptClose: document.getElementById("prompt-close"),
+        statTotal: document.getElementById("stat-total"),
+        statOutdated: document.getElementById("stat-outdated"),
+        statCurrent: document.getElementById("stat-current"),
+        statErrors: document.getElementById("stat-errors"),
       };
 
       function escapeHtml(value) {
@@ -349,347 +563,686 @@
           .replaceAll("&", "&amp;")
           .replaceAll("<", "&lt;")
           .replaceAll(">", "&gt;")
-          .replaceAll('"', "&quot;")
-          .replaceAll("'", "&#039;");
+          .replaceAll('"', "&quot;");
       }
 
-      function showMessage(text, kind = "info") {
-        elements.message.textContent = text;
-        elements.message.className = kind === "error" ? "mark" : "";
+      function showMessage(text, kind = "") {
+        els.message.textContent = text || "";
+        els.message.style.color = kind === "error" ? "var(--danger)" : "";
       }
 
-      async function load(force = false) {
-        if (state.loading) return;
-        state.loading = true;
-        elements.refresh.disabled = true;
-        elements.refresh.textContent = "Loading…";
-        showMessage("");
+      function isOutdated(row) {
+        return [
+          "patch-available",
+          "minor-available",
+          "major-available",
+          "deprecated",
+        ].includes(row.registry.classification);
+      }
 
-        try {
-          const response = await fetch(`/api/deps${force ? "?refresh=1" : ""}`);
-          if (!response.ok) {
-            throw new Error(`Request failed with ${response.status}`);
-          }
-          const data = await response.json();
-          state.dependencies = Array.isArray(data.dependencies)
-            ? data.dependencies
-            : [];
-          state.generatedAt = data.generatedAt ?? null;
-          renderSubRepos();
-          render();
-        } catch (error) {
-          showMessage(`Could not load dependencies: ${error.message}`, "error");
-        } finally {
-          state.loading = false;
-          elements.refresh.disabled = false;
-          elements.refresh.textContent = "Refresh Data";
+      function canUpdate(row) {
+        return !row.local && isOutdated(row) && Boolean(row.registry.latestPatch || row.registry.latestMinor || row.registry.latest);
+      }
+
+      function statusLabel(value) {
+        return value.replaceAll("-", " ");
+      }
+
+      function locationLabel(manifestId) {
+        return manifestId === "." ? "root" : manifestId;
+      }
+
+      function parseMajor(spec) {
+        const match = String(spec).match(/(\d+)/);
+        return match ? Number(match[1]) : NaN;
+      }
+
+      function conservativeTarget(row) {
+        const classification = row.registry.classification;
+        if (classification === "patch-available" && row.registry.latestPatch) {
+          return row.registry.latestPatch;
         }
-      }
-
-      function ecosystemDependencies() {
-        const ecosystem = elements.ecosystem.value;
-        return ecosystem === "all"
-          ? state.dependencies
-          : state.dependencies.filter((item) => item.ecosystem === ecosystem);
-      }
-
-      function renderSubRepos() {
-        const previous = elements.subrepo.value;
-        const repos = [
-          ...new Set(ecosystemDependencies().map((item) => item.subRepo)),
-        ].sort((left, right) => left.localeCompare(right));
-        elements.subrepo.innerHTML = [
-          '<option value="all">All</option>',
-          ...repos.map(
-            (repo) =>
-              `<option value="${escapeHtml(repo)}">${escapeHtml(repo)}</option>`,
-          ),
-        ].join("");
-
-        if (previous !== "all" && repos.includes(previous)) {
-          elements.subrepo.value = previous;
+        if (
+          (classification === "patch-available" || classification === "minor-available") &&
+          row.registry.latestMinor
+        ) {
+          return row.registry.latestMinor;
         }
+        if (classification === "major-available" && row.registry.latestMinor) {
+          return row.registry.latestMinor;
+        }
+        if (classification === "deprecated" && row.registry.latestMinor) {
+          return row.registry.latestMinor;
+        }
+        return null;
       }
 
-      function filteredDependencies() {
-        const ecosystem = elements.ecosystem.value;
-        const subrepo = elements.subrepo.value;
-        const onlyOutdated = elements.outdated.checked;
-
-        return state.dependencies.filter((item) => {
-          if (ecosystem !== "all" && item.ecosystem !== ecosystem) return false;
-          if (subrepo !== "all" && item.subRepo !== subrepo) return false;
-          if (onlyOutdated && item.status !== "outdated") return false;
+      function targetOptions(row) {
+        const options = [];
+        const safe = conservativeTarget(row);
+        if (safe) options.push([safe, `Safe · ${safe}`]);
+        if (row.registry.latestPatch) {
+          options.push([row.registry.latestPatch, `Patch · ${row.registry.latestPatch}`]);
+        }
+        if (row.registry.latestMinor) {
+          options.push([row.registry.latestMinor, `Minor · ${row.registry.latestMinor}`]);
+        }
+        if (row.registry.latest) {
+          const majorBump =
+            parseMajor(row.declared) !== parseMajor(row.registry.latest) &&
+            parseMajor(row.registry.latest) > parseMajor(row.declared);
+          options.push([
+            row.registry.latest,
+            majorBump
+              ? `Latest stable (major) · ${row.registry.latest}`
+              : `Latest stable · ${row.registry.latest}`,
+          ]);
+        }
+        for (const version of (row.registry.versions || []).slice(0, 30)) {
+          options.push([version, version]);
+        }
+        const seen = new Set();
+        return options.filter(([version]) => {
+          if (seen.has(version)) return false;
+          seen.add(version);
           return true;
         });
       }
 
-      function typeLabel(type) {
-        return type
-          .replace("devDependencies", "devDependencies")
-          .replace("peerDependencies", "peerDependencies")
-          .replace("dev-dependencies", "dev-dependencies")
-          .replace("build-dependencies", "build-dependencies");
+      function selectedIds() {
+        return [...document.querySelectorAll("input.row-select:checked")].map(
+          (input) => input.value,
+        );
       }
 
-      function statusLabel(status) {
-        if (status === "up-to-date") return "Up to date";
-        if (status === "outdated") return "Outdated";
-        return "Error";
+      function filteredRows() {
+        const ecosystem = els.ecosystem.value;
+        const pkg = els.package.value;
+        const q = els.search.value.trim().toLowerCase();
+        const onlyOutdated = els.outdated.checked;
+
+        return state.rows.filter((row) => {
+          if (ecosystem !== "all" && row.ecosystem !== ecosystem) return false;
+          if (pkg !== "all" && row.manifestId !== pkg) return false;
+          if (q && !row.dependency.toLowerCase().includes(q)) return false;
+          if (onlyOutdated && !isOutdated(row)) return false;
+          return true;
+        });
+      }
+
+      function renderFilters() {
+        const ecosystems = state.summary?.ecosystems || state.ecosystems || ["node"];
+        const currentEco = els.ecosystem.value || "all";
+        els.ecosystem.innerHTML =
+          `<option value="all">All</option>` +
+          ecosystems
+            .map(
+              (eco) =>
+                `<option value="${escapeHtml(eco)}">${escapeHtml(
+                  eco === "node" ? "Node.js" : eco,
+                )}</option>`,
+            )
+            .join("");
+        els.ecosystem.value = ecosystems.includes(currentEco) || currentEco === "all"
+          ? currentEco
+          : "all";
+
+        const currentPkg = els.package.value || "all";
+        const packages = state.packages.filter((pkg) => {
+          if (els.ecosystem.value === "all") return true;
+          return state.rows.some(
+            (row) => row.manifestId === pkg.id && row.ecosystem === els.ecosystem.value,
+          );
+        });
+        els.package.innerHTML =
+          `<option value="all">All</option>` +
+          packages
+            .map(
+              (pkg) =>
+                `<option value="${escapeHtml(pkg.id)}">${escapeHtml(pkg.label)}</option>`,
+            )
+            .join("");
+        els.package.value = [...packages.map((p) => p.id), "all"].includes(currentPkg)
+          ? currentPkg
+          : "all";
+      }
+
+      function renderStats() {
+        const summary = state.summary || {};
+        els.statTotal.textContent = String(summary.total ?? summary.uniqueDependencies ?? 0);
+        els.statOutdated.textContent = String(summary.outdated ?? summary.updatesAvailable ?? 0);
+        els.statCurrent.textContent = String(summary.upToDate ?? 0);
+        els.statErrors.textContent = String(summary.errors ?? summary.registryFailures ?? 0);
+        if (summary.lastRegistryCheckAt) {
+          els.lastCheck.textContent = `Last check ${new Date(
+            summary.lastRegistryCheckAt,
+          ).toLocaleString()}`;
+        }
+      }
+
+      function renderRow(row) {
+        const options = targetOptions(row);
+        const defaultTarget = conservativeTarget(row);
+        const selectHtml = options.length
+          ? `<select class="target-version" data-id="${escapeHtml(row.id)}">
+              ${options
+                .map(
+                  ([version, label]) =>
+                    `<option value="${escapeHtml(version)}" ${
+                      version === defaultTarget ? "selected" : ""
+                    }>${escapeHtml(label)}</option>`,
+                )
+                .join("")}
+            </select>`
+          : `<span class="local-label">${row.local ? "LOCAL" : "n/a"}</span>`;
+
+        const action = row.local
+          ? `<span class="local-label">LOCAL</span>`
+          : canUpdate(row)
+            ? `<button class="outline update-one" type="button" data-id="${escapeHtml(
+                row.id,
+              )}">Update</button>`
+            : row.registry.classification === "up-to-date"
+              ? `<span class="badge badge-up-to-date">up to date</span>`
+              : `<button class="outline" type="button" disabled>Update</button>`;
+
+        return `
+          <tr data-id="${escapeHtml(row.id)}">
+            <td>
+              <input class="row-select" type="checkbox" value="${escapeHtml(row.id)}" ${
+                canUpdate(row) ? "" : "disabled"
+              } />
+            </td>
+            <td>
+              <a class="dep-name" href="https://www.npmjs.com/package/${encodeURIComponent(
+                row.dependency,
+              )}" target="_blank" rel="noopener noreferrer">${escapeHtml(
+                row.dependency,
+              )}</a>
+            </td>
+            <td><code>${escapeHtml(row.depType)}</code></td>
+            <td><code>${escapeHtml(row.declared)}</code></td>
+            <td>
+              <div class="row-actions">
+                ${selectHtml}
+              </div>
+            </td>
+            <td>
+              <span class="badge badge-${escapeHtml(
+                row.registry.classification,
+              )}" title="${escapeHtml(row.registry.error || "")}">${escapeHtml(
+                statusLabel(row.registry.classification),
+              )}</span>
+            </td>
+            <td>${action}</td>
+          </tr>
+        `;
+      }
+
+      function packageCardTitle(manifestId) {
+        if (manifestId === ".") return "Root";
+        const pkg = state.packages.find((item) => item.id === manifestId);
+        return pkg?.label || pkg?.name || locationLabel(manifestId);
+      }
+
+      function packageCardPath(manifestId) {
+        if (manifestId === ".") return "package.json";
+        return `${manifestId}/package.json`;
+      }
+
+      function renderSections() {
+        const rows = filteredRows();
+        els.loading.hidden = true;
+
+        if (rows.length === 0) {
+          els.sections.innerHTML = `<div class="empty">No dependencies match the current filters.</div>`;
+          els.updateAll.disabled = true;
+          return;
+        }
+
+        const byPackage = new Map();
+        for (const row of rows) {
+          const list = byPackage.get(row.manifestId) || [];
+          list.push(row);
+          byPackage.set(row.manifestId, list);
+        }
+
+        const orderedIds = [...byPackage.keys()].sort((a, b) => {
+          if (a === ".") return -1;
+          if (b === ".") return 1;
+          return a.localeCompare(b);
+        });
+
+        els.sections.innerHTML = `<div class="package-cards">${orderedIds
+          .map((manifestId) => {
+            const packageRows = byPackage.get(manifestId) || [];
+            const outdated = packageRows.filter(isOutdated).length;
+            return `
+              <section class="package-card" data-package="${escapeHtml(manifestId)}">
+                <header class="package-card-header">
+                  <div>
+                    <h2>${escapeHtml(packageCardTitle(manifestId))}</h2>
+                    <div class="meta"><code>${escapeHtml(
+                      packageCardPath(manifestId),
+                    )}</code></div>
+                  </div>
+                  <div class="counts">${packageRows.length} deps · ${outdated} outdated</div>
+                </header>
+                <div class="package-card-body monitor-table-wrap">
+                  <table class="monitor-table">
+                    <thead>
+                      <tr>
+                        <th></th>
+                        <th>Dependency</th>
+                        <th>Type</th>
+                        <th>Current</th>
+                        <th>Target</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${packageRows.map(renderRow).join("")}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            `;
+          })
+          .join("")}</div>`;
+
+        const outdatedCount = rows.filter((row) => canUpdate(row)).length;
+        els.updateAll.disabled = outdatedCount === 0;
+      }
+
+      function rowById(id) {
+        return state.rows.find((row) => row.id === id);
+      }
+
+      function selectedTarget(id) {
+        const select = document.querySelector(
+          `select.target-version[data-id="${CSS.escape(id)}"]`,
+        );
+        return select?.value || conservativeTarget(rowById(id)) || null;
+      }
+
+      function isMajorBump(row, target) {
+        const current = parseMajor(row.declared);
+        const next = parseMajor(target);
+        return Number.isFinite(current) && Number.isFinite(next) && next > current;
+      }
+
+      function openConfirm(updates, allowMajor) {
+        state.pending = updates;
+        state.allowMajor = allowMajor;
+        els.confirmTitle.textContent =
+          updates.length === 1 ? "Confirm update" : `Confirm ${updates.length} updates`;
+        els.confirmBody.innerHTML = `
+          <p style="font-size:0.86rem">Updates write package manifests and run <code>pnpm install</code> for the lockfile.</p>
+          <ul style="font-size:0.84rem">
+            ${updates
+              .map((item) => {
+                const row = rowById(item.id);
+                return `<li><strong>${escapeHtml(row.dependency)}</strong> in <code>${escapeHtml(
+                  locationLabel(row.manifestId),
+                )}</code> (${escapeHtml(row.depType)}): <code>${escapeHtml(
+                  row.declared,
+                )}</code> → <code>${escapeHtml(item.targetVersion)}</code></li>`;
+              })
+              .join("")}
+          </ul>
+          ${
+            allowMajor
+              ? `<p><strong>Major updates are included.</strong></p>`
+              : `<p style="color:var(--muted)">Major updates are blocked unless explicitly allowed.</p>`
+          }
+        `;
+        els.confirmDialog.showModal();
+      }
+
+      function renderBatchDialog() {
+        els.batchBody.innerHTML = state.batch
+          .map((item) => {
+            const row = rowById(item.id);
+            const options = targetOptions(row);
+            return `
+              <tr data-id="${escapeHtml(item.id)}">
+                <td><strong>${escapeHtml(row.dependency)}</strong></td>
+                <td><code>${escapeHtml(locationLabel(row.manifestId))}</code></td>
+                <td><code>${escapeHtml(row.depType)}</code></td>
+                <td><code>${escapeHtml(row.declared)}</code></td>
+                <td>
+                  <select class="batch-target" data-id="${escapeHtml(item.id)}">
+                    ${options
+                      .map(
+                        ([version, label]) =>
+                          `<option value="${escapeHtml(version)}" ${
+                            version === item.targetVersion ? "selected" : ""
+                          }>${escapeHtml(label)}</option>`,
+                      )
+                      .join("")}
+                  </select>
+                </td>
+                <td><span class="badge badge-${escapeHtml(
+                  row.registry.classification,
+                )}">${escapeHtml(statusLabel(row.registry.classification))}</span></td>
+                <td><button class="outline batch-remove" type="button" data-id="${escapeHtml(
+                  item.id,
+                )}">Remove</button></td>
+              </tr>
+            `;
+          })
+          .join("");
+        els.batchConfirm.disabled = state.batch.length === 0;
+      }
+
+      function openBatchDialog(rows) {
+        state.batch = rows
+          .map((row) => {
+            const target = selectedTarget(row.id) || conservativeTarget(row);
+            return target ? { id: row.id, targetVersion: target } : null;
+          })
+          .filter(Boolean);
+        if (state.batch.length === 0) {
+          showMessage("No safe targets available. Select versions manually in the table.", "error");
+          return;
+        }
+        renderBatchDialog();
+        els.batchDialog.showModal();
+      }
+
+      async function executeUpdates(updates, allowMajor) {
+        const payload = {
+          dryRun: false,
+          updates: updates.map((item) => {
+            const row = rowById(item.id);
+            return {
+              manifestId: row.manifestId,
+              dependency: row.dependency,
+              depType: row.depType,
+              targetVersion: item.targetVersion,
+              preserveRange: true,
+              allowMajor,
+            };
+          }),
+        };
+
+        showMessage(`Updating ${updates.length} declaration(s)…`);
+        const res = await fetch("/api/update-bulk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Update failed");
+        showMessage(`Updated ${data.results?.length ?? 0} declaration(s).`);
+        await loadDependencies(true);
       }
 
       function promptCell(value) {
-        const text = value === null || value === undefined ? "—" : String(value);
-        return text.replaceAll("|", "\\|").replace(/\s+/g, " ").trim() || "—";
+        return String(value ?? "—").replaceAll("|", "\\|").replace(/\s+/g, " ").trim() || "—";
       }
 
-      function buildPrompt() {
-        const all = state.dependencies;
-        const outdated = all.filter((item) => item.status === "outdated");
-        const errors = all.filter((item) => item.status === "error");
-        const local = all.filter((item) => item.local);
-        const generatedAt = state.generatedAt
-          ? new Date(state.generatedAt).toISOString()
-          : new Date().toISOString();
-        const rows = [...all].sort((left, right) => {
-          const subRepo = left.subRepo.localeCompare(right.subRepo);
-          return subRepo !== 0 ? subRepo : left.name.localeCompare(right.name);
-        });
+      function publishedPackageList() {
+        const fromState = (state.packages || [])
+          .filter((pkg) => pkg.id !== ".")
+          .map((pkg) => pkg.name)
+          .filter(Boolean);
+        if (fromState.length > 0) {
+          return fromState.join(", ");
+        }
+        return [
+          "@zealakit/css-doctor-binding",
+          "@zealakit/css-doctor-cli",
+          "@zealakit/css-doctor-vite",
+          "@zealakit/css-doctor-next",
+          "@zealakit/css-doctor-rsbuild",
+          "@zealakit/css-doctor-remix",
+          "@zealakit/css-doctor-nuxt",
+        ].join(", ");
+      }
+
+      function buildPrompt(rows, options = {}) {
+        const generatedAt = state.summary?.lastRegistryCheckAt || new Date().toISOString();
+        const scopeNote = options.scopeNote || "outdated dependencies in monitor scope";
+        const summary = state.summary || {};
         const inventory = rows
-          .map(
-            (item) =>
-              `| ${promptCell(item.ecosystem)} | ${promptCell(item.subRepo)} | ${promptCell(item.name)} | ${promptCell(item.type)} | ${promptCell(item.current)} | ${promptCell(item.latest)} | ${promptCell(item.status)} | ${item.local ? "yes" : "no"} | ${promptCell(item.note)} |`,
-          )
+          .map((row) => {
+            const proposed =
+              selectedTarget(row.id) || conservativeTarget(row) || row.registry.latest || "—";
+            return `| ${promptCell(row.ecosystem)} | ${promptCell(locationLabel(row.manifestId))} | ${promptCell(row.packageName)} | ${promptCell(row.dependency)} | ${promptCell(row.depType)} | ${promptCell(row.declared)} | ${promptCell(row.resolved)} | ${promptCell(proposed)} | ${promptCell(row.registry.latestPatch)} | ${promptCell(row.registry.latestMinor)} | ${promptCell(row.registry.latestMajor)} | ${promptCell(row.registry.latest)} | ${promptCell(row.registry.classification)} | ${row.local ? "yes" : "no"} |`;
+          })
           .join("\n");
 
         return `You are a senior monorepo dependency-upgrade engineer working on the css-doctor repository.
 
 ## Context
-- Repository: css-doctor (Rust workspace + pnpm monorepo).
+- Repository: css-doctor — Rust core + NAPI binding + pnpm TypeScript packages (CLI/Vite/Next/Rsbuild/Remix/Nuxt).
+- Published packages: ${publishedPackageList()}.
+- Architecture: crates/core → packages/binding → adapters/CLI. Native binding must stay compatible with NAPI-RS 2.x (\`f64\` at the JS boundary).
+- Tooling stack to consider: TypeScript, Biome, Turborepo, tsx/tsup, Vite, Next.js 15, React 19, lightningcss, NAPI-RS 2.x, and example fixtures under examples/** (do not modify those for upgrades).
 - Scan time: ${generatedAt}
-- Scope: root package.json and packages/** (excluding examples/**), plus root Cargo.toml and the crates/ and packages/binding Rust crates.
-- Inventory: ${all.length} dependencies; ${outdated.length} outdated; ${local.length} local/workspace entries; ${errors.length} registry lookup errors.
+- Monitor summary (unique deps): total ${summary.total ?? "—"}, outdated ${summary.outdated ?? "—"}, up to date ${summary.upToDate ?? "—"}, registry errors ${summary.errors ?? "—"}.
+- Prompt scope: ${scopeNote} (${rows.length} row(s)).
+- Monitoring covers root package.json and packages/* only. examples/** and Cargo.toml/crates must never be modified via this prompt unless the user explicitly expands scope.
+- This prompt was generated by the local Dependency Monitor. It does NOT mean source code was already inspected.
 
-## Task
-Review every dependency in the inventory below and produce a safe, prioritized upgrade plan. Then apply the approved upgrades directly in the repository.
+## Inventory to review
+| Ecosystem | Location | Package name | Dependency | Type | Declared | Resolved | Proposed target | Patch | Minor | Major | Latest | Status | Local |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+${inventory || "| — | — | — | — | — | — | — | — | — | — | — | — | — | — |"}
 
-## Rules and constraints
-1. Never modify anything under examples/**. They are intentionally excluded from dependency monitoring.
-2. Never replace or upgrade workspace:* dependencies, path dependencies, git dependencies, or other local entries. Leave them unchanged and explain why.
-3. Prefer compatible patch/minor upgrades. Treat every major-version bump as a migration task: explain breaking changes, required code/config changes, and verification steps before applying it.
-4. If the latest version is incompatible with the current stack (for example Next.js 15, React 19, NAPI-RS 2.x, or lightningcss alpha.72), do not upgrade it blindly. Keep the current version and propose a separate migration.
-5. Upgrade only the packages where a newer version is the best fit for this repository and its supported consumers. Do not chase every "latest" version:
-   - Keep broad peerDependency ranges broad. For example, next >=13 and vite >=4 intentionally support older consumer majors; do not narrow them to the latest major just because the monitor reports a difference.
-   - Keep compatibility-test devDependencies on their supported major (Next 15, React 19, NAPI-RS 2.x) unless the task explicitly includes a migration.
-   - A range such as serde = "1.0", napi-build = "2", or a peer range that already accepts the latest compatible release does not need a manifest change even if a naive string comparison marks it outdated.
-   - Explain every skip: compatibility, peer-range policy, upstream constraints, or migration risk.
-6. Preserve the repository conventions and file layout. Update only the relevant package.json or Cargo.toml entries.
-7. Keep pnpm-lock.yaml and Cargo.lock consistent after Node/Rust changes.
-8. Do not touch generated assets, dist/, .next/, target/, or lockfile noise unrelated to these upgrades.
-9. Run the appropriate verification after changes:
-   - pnpm install --frozen-lockfile (or pnpm install when the lockfile was intentionally updated)
-   - pnpm check
-   - pnpm test
-   - cargo check --workspace
-   - cargo test --workspace
-   - cargo clippy --all-targets --all-features -- -D warnings
-10. If a command fails, report the exact failure and either fix the upgrade or revert only that dependency change.
-11. Separate safe upgrades from risky major upgrades. Do not mix unrelated migrations in one change set.
+## Required investigation
+Before recommending any upgrade, inspect the actual repository and determine:
 
-## Required response
-1. A summary table of safe upgrades, migrations, and skipped/local dependencies, including why each skip is intentional.
-2. An ordered execution plan with exact files and commands.
-3. The actual patch or commands for the safe upgrades.
-4. Verification results.
-5. A concise risk list for major upgrades that still need human approval.
-6. A compatibility note explaining any peerDependency range that was deliberately left broad.
+1. Whether the project currently uses APIs affected by the proposed upgrade.
+2. Whether breaking changes exist between the declared/resolved version and the proposed target.
+3. Whether peer dependency constraints remain compatible (especially vite/next/react peers vs pinned fixture versions).
+4. Whether the upgrade affects other packages in the workspace (binding / cli / adapters / root).
+5. Whether framework and build-tool versions remain compatible (Next 15, React 19, Vite, NAPI-RS 2.x, TypeScript, Biome, Turborepo, lightningcss).
+6. For \`@zealakit/css-doctor-binding\`: whether the native addon still builds and whether generated \`index.js\` / \`index.d.ts\` / \`*.node\` stay out of hand edits.
+7. Whether configuration, tests, skills, or README changes are required.
+8. Whether the upgrade should be performed now, postponed, or avoided.
 
-## Dependency inventory
-| Ecosystem | Sub-repo | Package | Type | Current | Latest | Status | Local | Note |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-${inventory || "| — | — | — | — | — | — | — | — | No dependencies found |"}
+## Recommendation format
+For each dependency, return exactly one of:
+- Safe to upgrade
+- Safe with code/configuration changes
+- Needs further investigation
+- Not recommended
+
+Explain the reason and identify relevant files or compatibility constraints where possible.
+If proposing a different target than the "Proposed target" column, say why.
+
+## Constraints
+- Never modify examples/**
+- Prefer patch/minor over major unless the user explicitly wants a major bump
+- Preserve intentional peerDependency ranges that are broader than pinned fixture/devDependencies
+- Do not edit generated artifacts (packages/binding/index.*, *.node, dist/, .next/, target/)
+- Do not automatically apply upgrades or execute commands unless the user explicitly asks after reviewing your recommendation
 `;
       }
 
-      function openPrompt() {
-        elements.promptText.value = buildPrompt();
-        elements.promptDialog.showModal();
-        elements.promptText.focus();
+      async function loadPackages() {
+        const res = await fetch("/api/packages");
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to load packages");
+        state.packages = data.packages || [];
       }
 
-      async function copyPrompt() {
-        const text = elements.promptText.value;
+      async function loadDependencies(refresh = false) {
+        els.loading.hidden = false;
+        els.sections.innerHTML = "";
+        els.refresh.disabled = true;
+        els.refresh.textContent = "Loading…";
+        showMessage("");
 
         try {
-          await navigator.clipboard.writeText(text);
+          const res = await fetch(
+            refresh ? "/api/refresh" : "/api/dependencies",
+            refresh
+              ? {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: "{}",
+                }
+              : undefined,
+          );
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Failed to load dependencies");
+          state.rows = data.dependencies || [];
+          state.summary = data.summary || null;
+          state.ecosystems = data.summary?.ecosystems || ["node"];
+          renderFilters();
+          renderStats();
+          renderSections();
+          showMessage(
+            refresh
+              ? "Registry data refreshed."
+              : `Loaded ${state.rows.length} declarations across ${state.summary?.uniqueDependencies ?? 0} unique dependencies.`,
+          );
+        } catch (error) {
+          els.loading.textContent = error instanceof Error ? error.message : String(error);
+          showMessage(els.loading.textContent, "error");
+        } finally {
+          els.loading.hidden = true;
+          els.refresh.disabled = false;
+          els.refresh.textContent = "Refresh Data";
+        }
+      }
+
+      els.refresh.addEventListener("click", () => {
+        void loadDependencies(true);
+      });
+
+      for (const el of [els.ecosystem, els.package, els.search, els.outdated]) {
+        el.addEventListener("change", () => {
+          if (el === els.ecosystem) renderFilters();
+          renderSections();
+        });
+        el.addEventListener("input", () => renderSections());
+      }
+
+      els.sections.addEventListener("click", (event) => {
+        const button = event.target.closest("button.update-one");
+        if (!(button instanceof HTMLButtonElement) || button.disabled) return;
+        const row = rowById(button.dataset.id);
+        if (!row) return;
+        const targetVersion = selectedTarget(row.id);
+        if (!targetVersion) {
+          showMessage("Select a target version first.", "error");
+          return;
+        }
+        openConfirm([{ id: row.id, targetVersion }], isMajorBump(row, targetVersion));
+      });
+
+      els.updateAll.addEventListener("click", () => {
+        const rows = filteredRows().filter(canUpdate);
+        openBatchDialog(rows);
+      });
+
+      els.batchBody.addEventListener("click", (event) => {
+        const button = event.target.closest("button.batch-remove");
+        if (!(button instanceof HTMLButtonElement)) return;
+        state.batch = state.batch.filter((item) => item.id !== button.dataset.id);
+        renderBatchDialog();
+      });
+
+      els.batchBody.addEventListener("change", (event) => {
+        const select = event.target.closest("select.batch-target");
+        if (!(select instanceof HTMLSelectElement)) return;
+        const item = state.batch.find((entry) => entry.id === select.dataset.id);
+        if (item) item.targetVersion = select.value;
+      });
+
+      els.batchCancel.addEventListener("click", () => els.batchDialog.close());
+      els.batchConfirm.addEventListener("click", async () => {
+        const updates = state.batch.map((item) => {
+          const select = els.batchBody.querySelector(
+            `select.batch-target[data-id="${CSS.escape(item.id)}"]`,
+          );
+          return {
+            id: item.id,
+            targetVersion: select?.value || item.targetVersion,
+          };
+        });
+        const allowMajor = updates.some((item) =>
+          isMajorBump(rowById(item.id), item.targetVersion),
+        );
+        if (
+          allowMajor &&
+          !window.confirm("This batch includes major upgrades. Continue?")
+        ) {
+          return;
+        }
+        els.batchConfirm.disabled = true;
+        try {
+          els.batchDialog.close();
+          await executeUpdates(updates, allowMajor);
+        } catch (error) {
+          showMessage(error instanceof Error ? error.message : String(error), "error");
+        } finally {
+          els.batchConfirm.disabled = false;
+        }
+      });
+
+      els.confirmCancel.addEventListener("click", () => els.confirmDialog.close());
+      els.confirmOk.addEventListener("click", async () => {
+        els.confirmOk.disabled = true;
+        try {
+          els.confirmDialog.close();
+          await executeUpdates(state.pending, state.allowMajor);
+        } catch (error) {
+          showMessage(error instanceof Error ? error.message : String(error), "error");
+        } finally {
+          els.confirmOk.disabled = false;
+        }
+      });
+
+      els.prompt.addEventListener("click", () => {
+        const selected = selectedIds().map(rowById).filter(Boolean);
+        const usingSelection = selected.length > 0;
+        const rows = usingSelection
+          ? selected.filter(isOutdated)
+          : filteredRows().filter(isOutdated);
+        if (rows.length === 0) {
+          showMessage(
+            usingSelection
+              ? "No outdated dependencies in the current selection."
+              : "No outdated dependencies in the current filter view.",
+            "error",
+          );
+          return;
+        }
+        els.promptText.value = buildPrompt(rows, {
+          scopeNote: usingSelection
+            ? "selected outdated rows"
+            : "outdated rows matching current filters",
+        });
+        els.promptDialog.showModal();
+        els.promptText.focus();
+      });
+
+      els.promptCopy.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(els.promptText.value);
           showMessage("AI prompt copied to clipboard.");
         } catch {
-          elements.promptText.focus();
-          elements.promptText.select();
+          els.promptText.select();
           document.execCommand("copy");
-          showMessage("AI prompt selected and copied.");
+          showMessage("AI prompt selected for copy.");
         }
-      }
+      });
+      els.promptClose.addEventListener("click", () => els.promptDialog.close());
 
-      function render() {
-        const rows = filteredDependencies();
-        const allOutdated = state.dependencies.filter(
-          (item) => item.status === "outdated",
-        );
-
-        elements.total.textContent = String(state.dependencies.length);
-        elements.outdatedCount.textContent = String(allOutdated.length);
-        elements.current.textContent = String(
-          state.dependencies.filter((item) => item.status === "up-to-date")
-            .length,
-        );
-        elements.errors.textContent = String(
-          state.dependencies.filter((item) => item.status === "error").length,
-        );
-
-        elements.prompt.disabled = state.dependencies.length === 0;
-        elements.upgradeAll.disabled =
-          state.upgrading ||
-          rows.filter((item) => item.status === "outdated" && !item.local)
-            .length === 0;
-
-        if (rows.length === 0) {
-          elements.rows.innerHTML =
-            '<tr><td colspan="6">No dependencies match the current filters.</td></tr>';
-          return;
-        }
-
-        elements.rows.innerHTML = rows
-          .map((item, index) => {
-            const canUpgrade =
-              item.status === "outdated" && !item.local && item.latest;
-            return `
-              <tr>
-                <td>
-                  <strong>${escapeHtml(item.name)}</strong><br />
-                  <small>${escapeHtml(item.subRepo)}</small>
-                  ${item.note ? `<br /><small>${escapeHtml(item.note)}</small>` : ""}
-                </td>
-                <td><code>${escapeHtml(typeLabel(item.type))}</code></td>
-                <td><code>${escapeHtml(item.current)}</code></td>
-                <td><code>${escapeHtml(item.latest ?? "—")}</code></td>
-                <td>
-                  <span class="badge badge-${escapeHtml(item.status)}">
-                    ${escapeHtml(statusLabel(item.status))}
-                  </span>
-                </td>
-                <td>
-                  ${
-                    item.local
-                      ? '<span class="local-label">local</span>'
-                      : `<button
-                          class="monitor-upgrade outline"
-                          data-index="${index}"
-                          type="button"
-                          ${canUpgrade ? "" : "disabled"}
-                        >
-                          Upgrade
-                        </button>`
-                  }
-                </td>
-              </tr>
-            `;
-          })
-          .join("");
-      }
-
-      async function upgrade(item, button) {
-        if (state.upgrading || !item.latest) return;
-
-        state.upgrading = true;
-        if (button) {
-          button.disabled = true;
-          button.textContent = "Upgrading…";
-        }
-        elements.upgradeAll.disabled = true;
-        showMessage(`Upgrading ${item.name} to ${item.latest}…`);
-
+      void (async () => {
         try {
-          const response = await fetch("/api/upgrade", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              ecosystem: item.ecosystem,
-              subRepo: item.subRepo,
-              package: item.name,
-              type: item.type,
-              latestVersion: item.latest,
-            }),
-          });
-          const result = await response.json();
-
-          if (!response.ok || !result.ok) {
-            throw new Error(result.error || `Request failed with ${response.status}`);
-          }
-
-          showMessage(
-            `${result.message}${result.output ? `\n${result.output}` : ""}`,
-          );
-          await load(true);
+          await loadPackages();
+          await loadDependencies(false);
         } catch (error) {
-          showMessage(`Upgrade failed: ${error.message}`, "error");
-        } finally {
-          state.upgrading = false;
-          if (button) {
-            button.disabled = false;
-            button.textContent = "Upgrade";
-          }
-          render();
+          showMessage(error instanceof Error ? error.message : String(error), "error");
         }
-      }
-
-      elements.prompt.addEventListener("click", openPrompt);
-      elements.copyPrompt.addEventListener("click", copyPrompt);
-      elements.closePrompt.addEventListener("click", () => {
-        elements.promptDialog.close();
-      });
-      elements.promptDialog.addEventListener("click", (event) => {
-        if (event.target === elements.promptDialog) {
-          elements.promptDialog.close();
-        }
-      });
-
-      elements.rows.addEventListener("click", (event) => {
-        const button = event.target.closest("button[data-index]");
-        if (!button) return;
-        const index = Number(button.dataset.index);
-        const item = filteredDependencies()[index];
-        if (item) upgrade(item, button);
-      });
-
-      elements.refresh.addEventListener("click", () => load(true));
-
-      elements.ecosystem.addEventListener("change", () => {
-        renderSubRepos();
-        render();
-      });
-
-      elements.subrepo.addEventListener("change", render);
-      elements.outdated.addEventListener("change", render);
-
-      elements.upgradeAll.addEventListener("click", async () => {
-        const outdated = filteredDependencies().filter(
-          (item) => item.status === "outdated" && !item.local && item.latest,
-        );
-
-        if (outdated.length === 0 || state.upgrading) return;
-        if (!window.confirm(`Upgrade ${outdated.length} outdated dependencies?`)) {
-          return;
-        }
-
-        for (const item of outdated) {
-          await upgrade(item);
-        }
-
-        await load(true);
-      });
-
-      load();
+      })();
     </script>
   </body>
 </html>

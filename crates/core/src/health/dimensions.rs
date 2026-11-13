@@ -1,6 +1,6 @@
 //! Dimension analyzers for CSS Health Score.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::convert::Infallible;
 
 use lightningcss::properties::Property;
@@ -11,6 +11,7 @@ use lightningcss::visit_types;
 use lightningcss::visitor::{Visit, VisitTypes, Visitor};
 
 use crate::model::{CssAnalysisResult, SourceLocation};
+use crate::property_key::property_identity_key;
 
 use super::config::HealthThresholds;
 use super::model::{DiagnosticCertainty, DimensionId, HealthDiagnostic, HealthSeverity};
@@ -22,6 +23,10 @@ pub struct AnalysisContext<'a> {
     pub size_bytes: usize,
     pub file_path: Option<&'a str>,
     pub thresholds: &'a HealthThresholds,
+    /// Optional page → used class names. When present, unused class selectors
+    /// are reported under the dead-CSS dimension. When absent, unused-selector
+    /// conclusions are not invented.
+    pub page_usage: Option<&'a HashMap<String, HashSet<String>>>,
 }
 
 pub fn analyze_selector_complexity(ctx: &AnalysisContext<'_>) -> Vec<HealthDiagnostic> {
@@ -172,36 +177,48 @@ pub fn analyze_duplicate_rules(ctx: &AnalysisContext<'_>) -> Vec<HealthDiagnosti
     diagnostics
 }
 
-pub fn analyze_size_efficiency(ctx: &AnalysisContext<'_>) -> Vec<HealthDiagnostic> {
+/// Size diagnostics driven by aggregated stylesheet bytes (single file or merge).
+#[must_use]
+pub fn size_diagnostics_for_bytes(
+    size_bytes: usize,
+    thresholds: &HealthThresholds,
+    file_path: Option<&str>,
+) -> Vec<HealthDiagnostic> {
     let mut diagnostics = Vec::new();
-    let stats = &ctx.analysis.stats;
-    let declarations = stats.declaration_count + stats.important_declaration_count;
 
-    if ctx.size_bytes >= ctx.thresholds.critical_stylesheet_bytes {
+    if size_bytes >= thresholds.critical_stylesheet_bytes {
         diagnostics.push(diag(
             "size.critical-stylesheet",
             HealthSeverity::Error,
             DimensionId::CssSizeEfficiency,
-            format!("Stylesheet is very large ({} bytes).", ctx.size_bytes),
-            ctx.file_path,
+            format!("Stylesheet is very large ({size_bytes} bytes)."),
+            file_path,
             None,
             None,
             "Split by route/page coverage or size budget, and remove unused rules.",
             DiagnosticCertainty::Confirmed,
         ));
-    } else if ctx.size_bytes >= ctx.thresholds.large_stylesheet_bytes {
+    } else if size_bytes >= thresholds.large_stylesheet_bytes {
         diagnostics.push(diag(
             "size.large-stylesheet",
             HealthSeverity::Warning,
             DimensionId::CssSizeEfficiency,
-            format!("Stylesheet is large ({} bytes).", ctx.size_bytes),
-            ctx.file_path,
+            format!("Stylesheet is large ({size_bytes} bytes)."),
+            file_path,
             None,
             None,
             "Consider page-coverage splitting or raising size-budget checks in CI.",
             DiagnosticCertainty::Confirmed,
         ));
     }
+
+    diagnostics
+}
+
+pub fn analyze_size_efficiency(ctx: &AnalysisContext<'_>) -> Vec<HealthDiagnostic> {
+    let mut diagnostics = size_diagnostics_for_bytes(ctx.size_bytes, ctx.thresholds, ctx.file_path);
+    let stats = &ctx.analysis.stats;
+    let declarations = stats.declaration_count + stats.important_declaration_count;
 
     if stats.selector_count >= ctx.thresholds.many_selectors {
         diagnostics.push(diag(
@@ -304,9 +321,11 @@ pub fn analyze_dead_css(ctx: &AnalysisContext<'_>) -> Vec<HealthDiagnostic> {
         }
     }
 
+    // Parser recovery warnings are not unused CSS; keep them separate so they
+    // do not look like dead-code conclusions.
     for warning in &ctx.analysis.warnings {
         diagnostics.push(diag(
-            "dead.syntax-warning",
+            "parser.syntax-warning",
             HealthSeverity::Info,
             DimensionId::DeadCss,
             format!("Parser skipped malformed CSS: {}", warning.message),
@@ -316,6 +335,55 @@ pub fn analyze_dead_css(ctx: &AnalysisContext<'_>) -> Vec<HealthDiagnostic> {
             "Fix the syntax so the intended rule is not dropped during recovery.",
             DiagnosticCertainty::Confirmed,
         ));
+    }
+
+    if let Some(page_usage) = ctx.page_usage {
+        if !page_usage.is_empty() {
+            let used_classes: BTreeSet<String> = page_usage
+                .values()
+                .flat_map(|classes| classes.iter())
+                .map(|class_name| class_name.to_ascii_lowercase())
+                .collect();
+
+            let mut seen = BTreeSet::new();
+            for selector in &ctx.analysis.selectors {
+                if selector.classes.is_empty() {
+                    continue;
+                }
+
+                let required: Vec<String> = selector
+                    .classes
+                    .iter()
+                    .map(|class_name| class_name.to_ascii_lowercase())
+                    .collect();
+                // Conservative: used when at least one required class appears.
+                if required
+                    .iter()
+                    .any(|class_name| used_classes.contains(class_name))
+                {
+                    continue;
+                }
+
+                if !seen.insert(selector.raw.clone()) {
+                    continue;
+                }
+
+                diagnostics.push(diag(
+                    "dead.unused-selector",
+                    HealthSeverity::Warning,
+                    DimensionId::DeadCss,
+                    format!(
+                        "Selector `{}` is unused across provided page usage.",
+                        selector.raw
+                    ),
+                    ctx.file_path,
+                    None,
+                    Some(selector.raw.clone()),
+                    "Remove the unused selector or expand pageUsage / forceCommon if it is loaded dynamically.",
+                    DiagnosticCertainty::Confirmed,
+                ));
+            }
+        }
     }
 
     diagnostics
@@ -456,20 +524,14 @@ impl<'i> Visitor<'i> for DuplicatePropertyVisitor {
                     SourceLocation::new(style.loc.line.saturating_add(1), style.loc.column);
                 self.rule_stack.push(location);
 
-                let mut seen = BTreeSet::new();
-                let mut duplicates = BTreeSet::new();
-
-                for property in style
-                    .declarations
-                    .declarations
-                    .iter()
-                    .chain(style.declarations.important_declarations.iter())
-                {
-                    let name = property_name(property);
-                    if !seen.insert(name.clone()) {
-                        duplicates.insert(name);
-                    }
-                }
+                // Normal and !important declarations occupy separate cascade
+                // buckets — `color: red; color: blue !important` is valid CSS,
+                // not a duplicate within one list.
+                let mut duplicates =
+                    find_duplicate_property_names(&style.declarations.declarations);
+                duplicates.extend(find_duplicate_property_names(
+                    &style.declarations.important_declarations,
+                ));
 
                 for name in duplicates {
                     self.diagnostics.push(diag(
@@ -494,26 +556,16 @@ impl<'i> Visitor<'i> for DuplicatePropertyVisitor {
     }
 }
 
-fn property_name(property: &Property<'_>) -> String {
-    match property {
-        Property::Custom(custom) => match &custom.name {
-            CustomPropertyName::Custom(name) => {
-                let raw = name.as_ref();
-                if raw.starts_with("--") {
-                    raw.to_string()
-                } else {
-                    format!("--{raw}")
-                }
-            }
-            CustomPropertyName::Unknown(name) => name.as_ref().to_string(),
-        },
-        other => format!("{other:?}")
-            .split_whitespace()
-            .next()
-            .unwrap_or("property")
-            .trim_matches(|ch| ch == '(' || ch == ')')
-            .to_ascii_lowercase(),
+fn find_duplicate_property_names(properties: &[Property<'_>]) -> BTreeSet<String> {
+    let mut seen = BTreeSet::new();
+    let mut duplicates = BTreeSet::new();
+    for property in properties {
+        let name = property_identity_key(property);
+        if !seen.insert(name.clone()) {
+            duplicates.insert(name);
+        }
     }
+    duplicates
 }
 
 fn collect_custom_property_definitions(css: &str) -> Vec<(String, SourceLocation)> {
