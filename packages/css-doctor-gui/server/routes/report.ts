@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { basename } from "node:path";
 
+import { discoverProjectReports, resolveProjectCwd } from "../report/discover";
 import { generateCheckReport } from "../report/generate-check";
 import { loadReportFromFile } from "../report/load-file";
 import {
@@ -176,6 +177,37 @@ export function handleClearReport(
 ): void {
   clearReportSession();
   sendJson(res, 200, { ok: true });
+}
+
+export async function handleDiscoverReports(
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
+  try {
+    const url = new URL(req.url ?? "/", "http://127.0.0.1");
+    const cwd = resolveProjectCwd(url.searchParams.get("cwd") ?? undefined);
+    const discovered = await discoverProjectReports({ cwd });
+    if (!discovered.ok) {
+      sendJson(res, 500, {
+        ok: false,
+        code: "read_failure",
+        message: discovered.message,
+      });
+      return;
+    }
+    sendJson(res, 200, {
+      ok: true,
+      cwd: discovered.cwd,
+      reports: discovered.reports,
+      note: "Discovers CLI --save envelopes under .css-doctor/reports. Does not run analysis.",
+    });
+  } catch (error) {
+    sendJson(res, 500, {
+      ok: false,
+      code: "read_failure",
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 function respondLoadResult(

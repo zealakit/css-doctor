@@ -6,11 +6,13 @@ export {
 } from "./runtime";
 export {
   clearReport,
+  discoverReports,
   fetchReport,
   generateReport,
   loadReportFile,
   reloadReport,
   uploadReportDocument,
+  type DiscoveredReport,
   type ReportApiError,
   type ReportApiSuccess,
   type ReportSessionSource,

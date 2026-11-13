@@ -596,5 +596,17 @@ test("gui --desktop fails clearly when desktop app is missing", () => {
   });
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /desktop/i);
-  assert.doesNotMatch(result.stdout, /listening on/);
+  assert.doesNotMatch(result.stdout, /listening on|web mode/i);
+});
+
+test("gui --help does not eagerly load the GUI package", () => {
+  const result = runCli(["gui", "--help"], {
+    env: {
+      ...process.env,
+      // Force a cwd without node_modules; help must still succeed.
+      npm_config_user_agent: "pnpm",
+    },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Open the CSS Doctor report viewer/);
 });

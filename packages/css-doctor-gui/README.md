@@ -2,8 +2,37 @@
 
 Local **CSS Analysis & Optimization Report Viewer** for CSS Doctor.
 
-Phase 6 focuses on release readiness: production Web packaging, Tauri Desktop
-(Option B Node sidecar), security hardening, and distribution docs.
+Phase 7/8: CLI JSON envelopes are the source of truth. Install this package
+optionally next to `@zealakit/css-doctor-cli`, then open the viewer with
+`css-doctor gui`. See [`docs/report-contract.md`](../../docs/report-contract.md).
+
+## Install
+
+```bash
+pnpm add -D @zealakit/css-doctor-gui
+# with the CLI executable:
+pnpm add -D @zealakit/css-doctor-cli css-doctor-gui
+```
+
+There is **no** npm package named `css-doctor`. The executable name is
+`css-doctor` from `@zealakit/css-doctor-cli`.
+
+## Usage
+
+```bash
+css-doctor gui
+css-doctor gui --port 4173
+css-doctor gui --no-open
+css-doctor gui --strict-port
+css-doctor gui --report ./report.json
+css-doctor gui --desktop
+```
+
+You can also run the package binary directly:
+
+```bash
+pnpm exec css-doctor-gui --help
+```
 
 ## Architecture
 
@@ -21,26 +50,38 @@ React SPA (src/)  --HTTP-->  Node server (server/)  --NAPI-->  binding/core
 - Desktop mode reuses the same production Node server + SPA (Option B).
 - Core/CLI analysis logic is not duplicated in the GUI.
 
-## Web mode (default, verified)
+### Public API (for CLI)
+
+Package exports (`@zealakit/css-doctor-gui` / `@zealakit/css-doctor-gui/server`):
+
+| Export | Role |
+| --- | --- |
+| `startGuiServer(options)` | Start Web runtime; returns `{ url, host, port, close }` |
+| `launchDesktopApp()` | Launch Desktop binary/app when built |
+| `resolveDesktopApp()` | Resolve Desktop path without launching |
+
+Assets resolve from the installed package directory (`dist/` next to
+`dist-server/`), not from the consumer working directory.
+
+## Web mode (default)
 
 ```bash
-pnpm --filter css-doctor-gui build
+pnpm --filter @zealakit/css-doctor-gui build   # monorepo
 css-doctor gui
 css-doctor gui --port 4200 --no-open --strict-port
-css-doctor gui --report ./report.json
 ```
 
 - Binds `127.0.0.1` (default port `4193`, fallback `4194–4293` unless strict/custom).
 - Serves production `dist/` + JSON APIs from `dist-server/`.
 - Graceful shutdown on Ctrl+C.
 
-## Desktop mode (partially verified)
+## Desktop mode (optional)
 
 Requires Rust toolchain + Tauri CLI, then:
 
 ```bash
-pnpm --filter css-doctor-gui add -D @tauri-apps/cli@2   # once
-pnpm --filter css-doctor-gui desktop:build
+pnpm --filter @zealakit/css-doctor-gui add -D @tauri-apps/cli@2   # once
+pnpm --filter @zealakit/css-doctor-gui desktop:build
 css-doctor gui --desktop
 ```
 
@@ -69,22 +110,38 @@ css-doctor gui --desktop
 | `optimize` / `split` | Optimization, Splitting, Files |
 | `diff` | Regression, Files |
 
+Persist from CLI (opt-in):
+
+```bash
+css-doctor check 'src/**/*.css' --json --save
+# → .css-doctor/reports/check-latest.json (success only)
+css-doctor optimize 'src/**/*.css' --json --out ./run.json
+```
+
+GUI Overview discovers `*-latest.json` under `.css-doctor/reports/` for the
+project cwd; open/reload still requires an explicit load (no silent swap).
+
 ## Troubleshooting
 
 | Symptom | Fix |
 | --- | --- |
-| Frontend build not found | `pnpm --filter css-doctor-gui build` |
+| `CSS Doctor GUI is not installed` | `pnpm add -D @zealakit/css-doctor-gui` |
+| Frontend build not found | Rebuild/reinstall so packaged `dist/` exists |
 | Port in use | omit `--port` for fallback, or `--strict-port` + free the port |
 | `--desktop` fails | build desktop app, or omit `--desktop` for Web |
-| Sidecar health timeout | ensure `node` works; rebuild GUI; check firewall on loopback |
+| Want analysis data | run `css-doctor check|optimize|…` first; GUI does not re-analyze |
 
-## Known limitations
+## Compatibility
 
-- Desktop end-user installers are not CI-published yet.
-- Desktop still depends on a local Node runtime for the sidecar.
-- Native file dialogs are not required (browser file input works in webview).
-- No telemetry, accounts, or cloud sync.
+- CLI report JSON `schemaVersion: 1` only (unsupported versions fail closed).
+- Pair with `@zealakit/css-doctor-cli` / `@zealakit/css-doctor-binding` at the
+  same minor line when possible (`1.1.x`).
+- Adapters (`@zealakit/css-doctor-vite`, Next, …) are independent of this package.
 
-## Release checklist
+## Release readiness
 
-See [`docs/gui-release-checklist.md`](../../docs/gui-release-checklist.md).
+- Checklist: [`docs/gui-release-checklist.md`](../../docs/gui-release-checklist.md)
+- Readiness decision: [`docs/gui-release-readiness.md`](../../docs/gui-release-readiness.md)
+- Changelog: [`docs/gui-changelog.md`](../../docs/gui-changelog.md)
+- Pack consumer smoke (no publish):
+  `node packages/css-doctor-gui/scripts/verify-consumer-pack.mjs`

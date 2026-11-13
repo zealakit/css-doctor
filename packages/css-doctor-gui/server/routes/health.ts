@@ -22,7 +22,10 @@ function readPackageVersion(): string {
         name?: string;
         version?: string;
       };
-      if (pkg.name === "css-doctor-gui" && typeof pkg.version === "string") {
+      if (
+        pkg.name === "@zealakit/css-doctor-gui" &&
+        typeof pkg.version === "string"
+      ) {
         return pkg.version;
       }
     } catch {

@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-const build = spawnSync("pnpm", ["--filter", "css-doctor-gui", "build"], {
+const build = spawnSync("pnpm", ["--filter", "@zealakit/css-doctor-gui", "build"], {
   cwd: root,
   stdio: "inherit",
   shell: process.platform === "win32",
@@ -38,12 +38,12 @@ if (local.status === 0) {
 Tauri CLI is not available. Desktop packaging requires Tauri 2 + Rust toolchain.
 
 Install:
-  pnpm --filter css-doctor-gui add -D @tauri-apps/cli@2
+  pnpm --filter @zealakit/css-doctor-gui add -D @tauri-apps/cli@2
   # or: cargo install tauri-cli --version "^2.0.0"
 
 Web production (verified without Tauri):
-  pnpm --filter css-doctor-gui build
-  pnpm --filter css-doctor-gui start
+  pnpm --filter @zealakit/css-doctor-gui build
+  pnpm --filter @zealakit/css-doctor-gui start
 `);
   process.exit(1);
 }

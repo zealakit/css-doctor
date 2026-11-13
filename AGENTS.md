@@ -21,7 +21,7 @@ Turborepo.
 | `packages/css-doctor-rsbuild` | Rsbuild/Rspack plugin (ESM + DTS) |
 | `packages/css-doctor-remix` | Remix 3 asset-server middleware (ESM + DTS) |
 | `packages/css-doctor-nuxt` | Nuxt 4 module wrapping the Vite plugin (ESM + DTS) |
-| `packages/css-doctor-gui` | Local report viewer (Web HTTP default + Tauri scaffold) |
+| `packages/css-doctor-gui` | Local report viewer package `@zealakit/css-doctor-gui` (Web + optional Tauri) |
 | `examples/vite-react-tailwind` | React 19 + Tailwind v4 SPA build-graph demo for Vite |
 | `examples/next-app-tailwind` | Next 15 App Router + Tailwind v4 CSS Modules safety fixture |
 | `examples/rsbuild-react-tailwind` | Rsbuild 2 + React 19 + Tailwind v4 fixture |

@@ -46,6 +46,7 @@ storybook-static/
 
 # Build output
 dist/
+dist-server/
 *.tsbuildinfo
 *.tgz
 

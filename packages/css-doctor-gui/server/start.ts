@@ -31,8 +31,10 @@ export async function startGuiServer(
 
   if (!apiOnly && (!staticDir || !existsSync(join(staticDir, "index.html")))) {
     throw new Error(
-      "Frontend build not found. Run `pnpm --filter css-doctor-gui build` first, " +
-        "or start with apiOnly for Vite-proxied development.",
+      "Frontend build not found next to the css-doctor-gui package " +
+        `(expected ${join(packageRoot, "dist", "index.html")}). ` +
+        "Reinstall css-doctor-gui (packaged installs must include `dist/`), " +
+        "or rebuild in the monorepo with `pnpm --filter @zealakit/css-doctor-gui build`.",
     );
   }
 

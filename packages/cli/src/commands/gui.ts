@@ -1,6 +1,9 @@
 import type { Command } from "commander";
 
-type GuiServerModule = typeof import("css-doctor-gui/server");
+import {
+  loadGuiServerModule,
+  type GuiServerModule,
+} from "../utils/resolve-gui";
 
 export type GuiCliOptions = {
   port?: number;
@@ -45,22 +48,20 @@ export function registerGuiCommand(program: Command): void {
     });
 }
 
-async function runDesktopMode(): Promise<void> {
-  let launchDesktopApp: GuiServerModule["launchDesktopApp"];
-  try {
-    ({ launchDesktopApp } = (await import(
-      "css-doctor-gui/server"
-    )) as GuiServerModule);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(
-      "Unable to load css-doctor-gui. Build it with " +
-        "`pnpm --filter css-doctor-gui build`.\n" +
-        message,
-    );
+async function loadGuiOrThrow(): Promise<GuiServerModule> {
+  const loaded = await loadGuiServerModule({
+    cwd: process.cwd(),
+    fromModuleUrl: import.meta.url,
+  });
+  if (!loaded.ok) {
+    throw new Error(loaded.message);
   }
+  return loaded.module;
+}
 
-  const result = await launchDesktopApp();
+async function runDesktopMode(): Promise<void> {
+  const gui = await loadGuiOrThrow();
+  const result = await gui.launchDesktopApp();
   if (!result.ok) {
     process.stderr.write(`css-doctor gui --desktop: ${result.message}\n`);
     process.exitCode = 1;
@@ -68,35 +69,52 @@ async function runDesktopMode(): Promise<void> {
   }
 
   process.stdout.write(
-    `css-doctor gui: launched desktop app (${result.path})\n`,
+    [
+      "css-doctor gui: desktop mode",
+      `Launched: ${result.path}`,
+      "Uses the same report viewer as Web mode.",
+      "",
+    ].join("\n"),
   );
 }
 
 async function runWebMode(options: GuiCliOptions): Promise<void> {
-  let startGuiServer: GuiServerModule["startGuiServer"];
+  const gui = await loadGuiOrThrow();
+  const openBrowser = options.open !== false;
+
+  process.stdout.write("css-doctor gui: starting web mode…\n");
+
+  let listened: Awaited<ReturnType<GuiServerModule["startGuiServer"]>>;
   try {
-    ({ startGuiServer } = (await import(
-      "css-doctor-gui/server"
-    )) as GuiServerModule);
+    listened = await gui.startGuiServer({
+      port: options.port,
+      host: options.host,
+      open: openBrowser,
+      strictPort: options.strictPort === true,
+      reportPath: options.report,
+      // CLI owns the user-facing startup banner.
+      printUrl: false,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(
-      "Unable to load css-doctor-gui. Build it with " +
-        "`pnpm --filter css-doctor-gui build`.\n" +
-        message,
-    );
+    throw new Error(message);
   }
 
-  const listened = await startGuiServer({
-    port: options.port,
-    host: options.host,
-    open: options.open !== false,
-    strictPort: options.strictPort === true,
-    reportPath: options.report,
-  });
+  process.stdout.write(
+    [
+      "css-doctor gui: web mode",
+      `URL:    ${listened.url}`,
+      `Host:   ${listened.host}`,
+      `Port:   ${listened.port}`,
+      `Browser:${openBrowser ? " launch requested" : " skipped (--no-open)"}`,
+      "Press Ctrl+C to stop.",
+      "",
+    ].join("\n"),
+  );
 
   const shutdown = async () => {
     try {
+      process.stdout.write("css-doctor gui: shutting down…\n");
       await listened.close();
     } finally {
       process.exit(0);

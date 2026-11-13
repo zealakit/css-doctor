@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { Lib } from "@/lib";
 import { useSettings } from "@/hooks/use-settings";
@@ -9,7 +9,7 @@ import {
   type RecentReportEntry,
 } from "@/lib/recent-reports";
 import type { GuiReport } from "@shared/report-model";
-import type { ReportSessionSource } from "@/lib/apis";
+import type { DiscoveredReport, ReportSessionSource } from "@/lib/apis";
 
 type ReportLoaderFormProps = {
   onLoaded: (report: GuiReport, source?: ReportSessionSource | null) => void;
@@ -25,11 +25,35 @@ export function ReportLoaderForm({ onLoaded, onError }: ReportLoaderFormProps) {
   const [recent, setRecent] = useState<RecentReportEntry[]>(() =>
     loadRecentReports(),
   );
+  const [discovered, setDiscovered] = useState<DiscoveredReport[]>([]);
+  const [discoverNote, setDiscoverNote] = useState<string | null>(null);
 
   const recentVisible = useMemo(
     () => (settings.recentHistoryEnabled ? recent : []),
     [recent, settings.recentHistoryEnabled],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const result = await Lib.apis.discoverReports({
+        cwd: cwd.trim() || undefined,
+      });
+      if (cancelled) {
+        return;
+      }
+      if (!result.ok) {
+        setDiscovered([]);
+        setDiscoverNote(result.message);
+        return;
+      }
+      setDiscovered(result.reports);
+      setDiscoverNote(result.note ?? null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [cwd]);
 
   async function onLoad(event: FormEvent) {
     event.preventDefault();
@@ -188,6 +212,60 @@ export function ReportLoaderForm({ onLoaded, onError }: ReportLoaderFormProps) {
           {busy === "generate" ? "Analyzing…" : "Run check"}
         </button>
       </form>
+
+      <div className="report-loader__panel report-loader__recent">
+        <h2>Project saved reports</h2>
+        <p>
+          From CLI <code>--save</code> under{" "}
+          <code>.css-doctor/reports/*-latest.json</code>. Load only — does not
+          re-analyze.
+        </p>
+        {discoverNote ? (
+          <p className="report-loader__muted">{discoverNote}</p>
+        ) : null}
+        {discovered.length === 0 ? (
+          <p className="report-loader__muted">
+            No saved reports found for this project cwd.
+          </p>
+        ) : (
+          <ul>
+            {discovered.map((entry) => (
+              <li key={entry.path}>
+                <button
+                  type="button"
+                  disabled={busy !== null}
+                  onClick={() => {
+                    setPath(entry.path);
+                    void (async () => {
+                      setBusy("load");
+                      const result = await Lib.apis.loadReportFile({
+                        path: entry.path,
+                      });
+                      setBusy(null);
+                      if (!result.ok) {
+                        onError(result.message, result.code);
+                        return;
+                      }
+                      onLoaded(result.report, result.source);
+                      setRecent(loadRecentReports());
+                    })();
+                  }}
+                >
+                  <strong>
+                    {entry.command ?? "report"}
+                    {entry.kind === "latest" ? " (latest)" : ""}
+                  </strong>
+                  <span>
+                    {settings.showFullPaths
+                      ? entry.path
+                      : entry.path.split(/[/\\]/).slice(-1)[0]}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       {settings.recentHistoryEnabled ? (
         <div className="report-loader__panel report-loader__recent">

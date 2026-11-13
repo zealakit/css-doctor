@@ -11,6 +11,7 @@ import { guiLog } from "./services/log";
 import { handleHealth } from "./routes/health";
 import {
   handleClearReport,
+  handleDiscoverReports,
   handleGenerateReport,
   handleGetReport,
   handleLoadReport,
@@ -77,6 +78,11 @@ async function handleRequest(
 
     if (method === "GET" && pathname === "/api/report") {
       handleGetReport(req, res);
+      return;
+    }
+
+    if (method === "GET" && pathname === "/api/report/discover") {
+      await handleDiscoverReports(req, res);
       return;
     }
 

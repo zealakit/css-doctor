@@ -11,9 +11,9 @@ import type {
 } from "@zealakit/css-doctor-binding";
 
 import packageJson from "../../package.json";
-import { formatJsonReport } from "../formatters/json";
 import { formatCompactHealthSummary } from "../formatters/health-terminal";
 import { formatTerminalReport, terminalExitCode } from "../formatters/terminal";
+import { emitCliReport } from "../utils/emit-report";
 import {
   describeError,
   isDirectory,
@@ -135,6 +135,8 @@ export type CheckRunOptions = {
 
 type CheckCliOptions = {
   json?: boolean;
+  out?: string;
+  save?: boolean;
   threshold?: number;
   failUnder?: number;
 };
@@ -149,6 +151,14 @@ export function registerCheckCommand(program: Command): void {
       "CSS files or glob patterns (quote globs to let css-doctor expand them)",
     )
     .option("-j, --json", "Output raw JSON for piping and CI/CD")
+    .option(
+      "--out <path>",
+      "Atomically write the JSON envelope to <path> (success or failure)",
+    )
+    .option(
+      "--save",
+      "On success, atomically write .css-doctor/reports/check-latest.json",
+    )
     .option(
       "--threshold <number>",
       "Warn when a file contains more than <number> selectors",
@@ -165,15 +175,21 @@ export function registerCheckCommand(program: Command): void {
         failUnder: options.failUnder,
       });
 
-      if (options.json === true) {
-        process.stdout.write(`${formatJsonReport(report)}\n`);
-      } else {
-        let output = formatTerminalReport(report);
-        if (report.health) {
-          output += `\n${formatCompactHealthSummary(report.health)}\n`;
-        }
-        process.stdout.write(`${output}\n`);
-      }
+      await emitCliReport(
+        report,
+        {
+          json: options.json,
+          out: options.out,
+          save: options.save,
+        },
+        () => {
+          let output = formatTerminalReport(report);
+          if (report.health) {
+            output += `\n${formatCompactHealthSummary(report.health)}\n`;
+          }
+          process.stdout.write(`${output}\n`);
+        },
+      );
 
       process.exitCode = terminalExitCode(report);
     });
