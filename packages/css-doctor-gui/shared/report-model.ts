@@ -116,6 +116,14 @@ export type GuiSelectorRow = {
   filePath: string;
   raw: string;
   kinds: string[];
+  /** Class names without a leading dot (from Core analyzeCss). */
+  classes: string[];
+  /** ID names without a leading `#`. */
+  ids: string[];
+  /** Element/type names. */
+  tags: string[];
+  /** Attribute local names (values not currently exported by Core). */
+  attributes: string[];
   specificityIds: number;
   specificityClasses: number;
   specificityTypes: number;
@@ -134,6 +142,61 @@ export type GuiDeadCssCandidate = {
   line?: number;
   column?: number;
   remediation?: string;
+};
+
+/** Per-file usage hit for a class token (HTML/JS/pageUsage — future). */
+export type GuiClassUsageHit = {
+  file: string;
+  count: number;
+};
+
+/**
+ * Source usage locations keyed by symbol kind.
+ * Older reports may only populate `byClass`.
+ */
+export type GuiCssUsage = {
+  byClass: Record<string, GuiClassUsageHit[]>;
+  byId: Record<string, GuiClassUsageHit[]>;
+  byTag: Record<string, GuiClassUsageHit[]>;
+  byAttribute: Record<string, GuiClassUsageHit[]>;
+};
+
+/** Canonical selector analysis (from check `selectorAnalysis`). */
+export type GuiSelectorAnalysis = {
+  schemaVersion: number;
+  completeness: "full" | "symbols-only" | "legacy-class-only" | "absent";
+  metrics: {
+    totalSelectors: number;
+    totalDefinitions: number;
+    confirmedUsages: number;
+    distinctUsageFiles: number | null;
+    confirmedMatchedElements: number;
+    partialMatches: number;
+    unresolvedSelectors: number;
+    unusedSelectors: number;
+  };
+  selectors: Array<{
+    selector: string;
+    category: string;
+    status: "used" | "unused" | "partial" | "unknown";
+    confidence: string;
+    matchedElements: number;
+    usageOccurrences: number;
+    usageFiles: number;
+    partialElements: number;
+    unresolvedElements: number;
+    hasUnprovenRuntimeState: boolean;
+    hasUnprovenPositional: boolean;
+    definitions: Array<{
+      file: string;
+      line?: number;
+      column?: number;
+      count: number;
+    }>;
+    usageByFile: Array<{ file: string; count: number }>;
+    notes: string[];
+  }>;
+  notes: string[];
 };
 
 /**
@@ -159,8 +222,17 @@ export type GuiCssAnalysis = {
   kindDistribution: GuiCountBucket[];
   specificityBuckets: GuiCountBucket[];
   deadCssCandidates: GuiDeadCssCandidate[];
-  /** Page usage / coverage — not available from check/health alone. */
-  usage: null;
+  /**
+   * Page/file usage of class tokens. Null until a report source provides
+   * pageUsage (not fabricated from CSS definition selectors).
+   */
+  usage: GuiCssUsage | null;
+  /**
+   * Canonical selector analysis contract. Null when absent on the envelope
+   * (legacy reports). Empty selectors with completeness `legacy-class-only`
+   * means class bags only — not full selector analysis.
+   */
+  selectorAnalysis: GuiSelectorAnalysis | null;
   /** At-rule inventory — not exported by analyzeCss today. */
   atRules: null;
   notes: string[];

@@ -1,7 +1,5 @@
 import assert from "node:assert/strict";
-import { dirname, join } from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
 
 import {
   createGuiHttpServer,
@@ -14,11 +12,6 @@ import {
   rejectDisallowedMutation,
 } from "../server/middleware/security";
 import { redactPath } from "../server/services/log";
-
-const fixturePath = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "fixtures/sample-check-report.json",
-);
 
 test("loopback origin helper accepts only local web origins", () => {
   assert.equal(isLoopbackWebOrigin("http://127.0.0.1:4193"), true);
@@ -47,7 +40,7 @@ test("mutating API rejects non-loopback Origin", async () => {
         "content-type": "application/json",
         origin: "https://evil.example",
       },
-      body: JSON.stringify({ path: fixturePath }),
+      body: JSON.stringify({ path: "/tmp/x.json" }),
     });
     assert.equal(response.status, 403);
     const body = (await response.json()) as { code?: string };
@@ -58,7 +51,7 @@ test("mutating API rejects non-loopback Origin", async () => {
   }
 });
 
-test("mutating API still accepts loopback Origin", async () => {
+test("removed mutation routes return 404 for loopback callers", async () => {
   setCurrentReport(null);
   const server = createGuiHttpServer({ apiOnly: true });
   const listened = await listenGuiServer(server, {
@@ -73,9 +66,9 @@ test("mutating API still accepts loopback Origin", async () => {
         "content-type": "application/json",
         origin: "http://127.0.0.1:4282",
       },
-      body: JSON.stringify({ path: fixturePath }),
+      body: JSON.stringify({ path: "/tmp/x.json" }),
     });
-    assert.equal(response.status, 200);
+    assert.equal(response.status, 404);
   } finally {
     await listened.close();
     setCurrentReport(null);

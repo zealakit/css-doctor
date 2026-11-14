@@ -143,7 +143,7 @@ test("serves static assets and rejects path traversal", async () => {
   }
 });
 
-test("runtime endpoint reports phase-7 capabilities", async () => {
+test("runtime endpoint reports read-only viewer capabilities", async () => {
   const server = createGuiHttpServer({ apiOnly: true });
   const listened = await listenGuiServer(server, {
     port: 4261,
@@ -163,12 +163,12 @@ test("runtime endpoint reports phase-7 capabilities", async () => {
         desktopSidecar: boolean;
       };
     };
-    assert.equal(body.phase, 7);
-    assert.equal(body.capabilities.loadReport, true);
-    assert.equal(body.capabilities.generateCheck, true);
-    assert.equal(body.capabilities.discoverReports, true);
+    assert.equal(body.phase, 8);
+    assert.equal(body.capabilities.loadReport, false);
+    assert.equal(body.capabilities.generateCheck, false);
+    assert.equal(body.capabilities.discoverReports, false);
     assert.equal(body.capabilities.settings, true);
-    assert.equal(body.capabilities.uploadReport, true);
+    assert.equal(body.capabilities.uploadReport, false);
     assert.equal(body.capabilities.desktopSidecar, true);
   } finally {
     await listened.close();

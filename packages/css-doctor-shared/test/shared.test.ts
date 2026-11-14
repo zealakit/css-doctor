@@ -4,10 +4,13 @@ import test from "node:test";
 import {
   clampMaxChunkSize,
   clampMinPageRatio,
+  createMarkupUsageBucket,
   describeError,
   isClassToken,
   matchesPatterns,
   scanClasses,
+  scanClassOccurrences,
+  scanMarkupUsage,
 } from "../src/index";
 
 test("scanClasses extracts literal class tokens case-insensitively", () => {
@@ -15,6 +18,45 @@ test("scanClasses extracts literal class tokens case-insensitively", () => {
   scanClasses(`<div className="Foo md:flex" class='bar'>`, classes);
   scanClasses(`el.classList.add("Baz")`, classes);
   assert.deepEqual([...classes].sort(), ["bar", "baz", "foo", "md:flex"]);
+});
+
+test("scanClassOccurrences counts repeated tokens in one attribute", () => {
+  const counts = new Map<string, number>();
+  scanClassOccurrences(`<div className="card hero card" />`, counts);
+  assert.equal(counts.get("card"), 2);
+  assert.equal(counts.get("hero"), 1);
+});
+
+test("scanMarkupUsage extracts class id tag and attribute evidence", () => {
+  const bucket = scanMarkupUsage(`
+    <div id="App" className="card" data-state="open" disabled>
+      <button type="button">Ok</button>
+    </div>
+    <!-- <span id="commented">no</span> -->
+  `);
+  assert.equal(bucket.classes.get("card"), 1);
+  assert.equal(bucket.ids.get("app"), 1);
+  assert.ok((bucket.tags.get("div") ?? 0) >= 1);
+  assert.ok((bucket.tags.get("button") ?? 0) >= 1);
+  assert.equal(bucket.attributes.get("data-state"), 1);
+  assert.equal(bucket.attributes.get("data-state=open"), 1);
+  assert.equal(bucket.attributes.get("disabled"), 1);
+  assert.equal(bucket.ids.has("commented"), false);
+});
+
+test("scanMarkupUsage treats dynamic attribute values as presence-only", () => {
+  const bucket = createMarkupUsageBucket();
+  scanMarkupUsage(`<div data-state={state} id={\`x\${n}\`} />`, bucket);
+  assert.equal(bucket.attributes.get("data-state"), 1);
+  assert.equal(bucket.attributes.has("data-state=open"), false);
+  assert.equal(bucket.ids.size, 0);
+});
+
+test("scanMarkupUsage ignores PascalCase components as tags", () => {
+  const bucket = scanMarkupUsage(`<Button className="primary" /><div />`);
+  assert.equal(bucket.tags.has("button"), false);
+  assert.equal(bucket.tags.get("div"), 1);
+  assert.equal(bucket.classes.get("primary"), 1);
 });
 
 test("isClassToken rejects template leftovers", () => {

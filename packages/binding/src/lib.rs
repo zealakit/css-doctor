@@ -235,6 +235,200 @@ fn analyze_core(css_content: &str) -> Result<JsCssAnalysisResult, napi::Error> {
         .map_err(napi::Error::from_reason)
 }
 
+/// Confidence of a static selector ↔ markup match.
+#[napi(string_enum = "camelCase")]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum JsMatchConfidence {
+    /// All statically verifiable structural requirements matched.
+    Confirmed,
+    /// Incomplete compound/combinator evidence, or runtime/positional unproven.
+    Partial,
+    /// Only unresolved dynamic evidence was available.
+    Unresolved,
+    /// Runtime-only / pseudo-element; cannot confirm statically.
+    Unsupported,
+    /// No evidence.
+    None,
+}
+
+impl From<core::MatchConfidence> for JsMatchConfidence {
+    fn from(value: core::MatchConfidence) -> Self {
+        match value {
+            core::MatchConfidence::Confirmed => Self::Confirmed,
+            core::MatchConfidence::Partial => Self::Partial,
+            core::MatchConfidence::Unresolved => Self::Unresolved,
+            core::MatchConfidence::Unsupported => Self::Unsupported,
+            core::MatchConfidence::None => Self::None,
+        }
+    }
+}
+
+/// Unused / usage classification for a selector.
+#[napi(string_enum = "camelCase")]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum JsSelectorUsageStatus {
+    Used,
+    Unused,
+    Partial,
+    Unknown,
+}
+
+impl From<core::SelectorUsageStatus> for JsSelectorUsageStatus {
+    fn from(value: core::SelectorUsageStatus) -> Self {
+        match value {
+            core::SelectorUsageStatus::Used => Self::Used,
+            core::SelectorUsageStatus::Unused => Self::Unused,
+            core::SelectorUsageStatus::Partial => Self::Partial,
+            core::SelectorUsageStatus::Unknown => Self::Unknown,
+        }
+    }
+}
+
+/// One markup element used as static usage evidence.
+#[napi(object)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsMarkupElement {
+    pub tag: Option<String>,
+    pub id: Option<String>,
+    #[serde(default)]
+    pub classes: Vec<String>,
+    #[serde(default)]
+    pub dynamic_classes: Vec<String>,
+    /// Attribute name → literal values (empty = presence only).
+    #[serde(default)]
+    pub attributes: HashMap<String, Vec<String>>,
+    #[serde(default)]
+    pub dynamic_attributes: Vec<String>,
+    pub parent_index: Option<u32>,
+    #[serde(default)]
+    pub depth: u32,
+}
+
+/// Markup from a single source file (combinators stay inside this tree).
+#[napi(object)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsMarkupFileEvidence {
+    #[serde(default)]
+    pub path: String,
+    pub elements: Vec<JsMarkupElement>,
+}
+
+/// Markup evidence payload for selector matching.
+#[napi(object)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsMarkupEvidence {
+    /// Legacy flat list (treated as one anonymous file when `files` is empty).
+    #[serde(default)]
+    pub elements: Vec<JsMarkupElement>,
+    /// Preferred per-file trees. Combinators never cross files.
+    #[serde(default)]
+    pub files: Vec<JsMarkupFileEvidence>,
+}
+
+/// Per-file confirmed usage hit.
+#[napi(object)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsSelectorFileUsageHit {
+    pub file: String,
+    pub count: u32,
+}
+
+/// Result of matching one selector against markup evidence.
+#[napi(object)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsSelectorUsageMatch {
+    pub selector: String,
+    pub confidence: JsMatchConfidence,
+    pub status: JsSelectorUsageStatus,
+    pub match_count: u32,
+    pub matched_elements: u32,
+    pub usage_occurrences: u32,
+    pub usage_files: u32,
+    #[serde(default)]
+    pub usage_by_file: Vec<JsSelectorFileUsageHit>,
+    pub partial_elements: u32,
+    pub unresolved_elements: u32,
+    pub has_unproven_runtime_state: bool,
+    pub has_unproven_positional: bool,
+    pub notes: Vec<String>,
+}
+
+fn map_markup_element(element: JsMarkupElement) -> core::MarkupElement {
+    core::MarkupElement {
+        tag: element.tag,
+        id: element.id,
+        classes: element.classes,
+        dynamic_classes: element.dynamic_classes,
+        attributes: element.attributes.into_iter().collect(),
+        dynamic_attributes: element.dynamic_attributes,
+        parent_index: element.parent_index,
+        depth: element.depth,
+    }
+}
+
+/// Matches CSS selectors against static markup evidence (Core source of truth).
+///
+/// Prefer `files` so parent/sibling combinators never cross source files.
+/// Runtime states like `:hover` never produce `confirmed` confidence.
+#[napi(js_name = "matchSelectorsAgainstMarkup")]
+pub fn match_selectors_against_markup(
+    selectors: Vec<String>,
+    evidence: JsMarkupEvidence,
+) -> Result<Vec<JsSelectorUsageMatch>, napi::Error> {
+    let core_evidence = core::MarkupEvidence {
+        elements: evidence
+            .elements
+            .into_iter()
+            .map(map_markup_element)
+            .collect(),
+        files: evidence
+            .files
+            .into_iter()
+            .map(|file| core::MarkupFileEvidence {
+                path: file.path,
+                elements: file.elements.into_iter().map(map_markup_element).collect(),
+            })
+            .collect(),
+    };
+
+    core::match_selectors_against_markup(&selectors, &core_evidence)
+        .map(|matches| {
+            matches
+                .into_iter()
+                .map(|item| JsSelectorUsageMatch {
+                    selector: item.selector,
+                    confidence: item.confidence.into(),
+                    status: item.status.into(),
+                    match_count: item.match_count,
+                    matched_elements: item.matched_elements,
+                    usage_occurrences: item.usage_occurrences,
+                    usage_files: item.usage_files,
+                    usage_by_file: item
+                        .usage_by_file
+                        .into_iter()
+                        .map(|hit| JsSelectorFileUsageHit {
+                            file: hit.file,
+                            count: hit.count,
+                        })
+                        .collect(),
+                    partial_elements: item.partial_elements,
+                    unresolved_elements: item.unresolved_elements,
+                    has_unproven_runtime_state: item.has_unproven_runtime_state,
+                    has_unproven_positional: item.has_unproven_positional,
+                    notes: item.notes,
+                })
+                .collect()
+        })
+        .map_err(napi::Error::from_reason)
+}
+
 fn to_u32(value: usize) -> u32 {
     u32::try_from(value).unwrap_or(u32::MAX)
 }

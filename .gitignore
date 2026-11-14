@@ -61,6 +61,16 @@ packages/cli/test/tmp-baseline/
 .stylelintcache
 
 # -----------------------------------------------------------------------------
+# css-doctor local run artifacts
+# Keep `.css-doctor/baseline.json` and `.css-doctor/config.json` commit-able
+# for regression gates / project defaults. Only ignore generated reports and
+# atomic-write leftovers.
+# -----------------------------------------------------------------------------
+**/.css-doctor/reports/
+**/.css-doctor/.css-doctor-*.tmp
+**/.css-doctor/**/*.bak
+
+# -----------------------------------------------------------------------------
 # Rust / Cargo
 # -----------------------------------------------------------------------------
 target/

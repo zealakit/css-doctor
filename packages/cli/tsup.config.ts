@@ -10,8 +10,9 @@ export default defineConfig({
   splitting: false,
   dts: false,
   outDir: "dist",
-  // Bundle CLI JS deps for npx, but never fold the native binding or the GUI
-  // server into this binary (GUI resolves its own dist/ via import.meta.url).
+  // Bundle CLI JS deps (including internal css-doctor-shared) for npx, but
+  // never fold the native binding or the GUI server into this binary
+  // (GUI resolves its own dist/ via import.meta.url).
   noExternal: [
     /^(?!@zealakit\/css-doctor-binding$)(?!@zealakit\/css-doctor-gui(?:\/|$)).+$/,
   ],

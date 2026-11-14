@@ -9,15 +9,7 @@ import {
 } from "./middleware/security";
 import { guiLog } from "./services/log";
 import { handleHealth } from "./routes/health";
-import {
-  handleClearReport,
-  handleDiscoverReports,
-  handleGenerateReport,
-  handleGetReport,
-  handleLoadReport,
-  handleReloadReport,
-  handleUploadReport,
-} from "./routes/report";
+import { handleGetReport } from "./routes/report";
 import { handleRuntimeInfo } from "./routes/runtime";
 import {
   resolveSafePath,
@@ -63,7 +55,6 @@ async function handleRequest(
     }
 
     const method = req.method ?? "GET";
-    // Prefer the raw request path so ".." segments are not collapsed by URL().
     const pathname = rawPathname(req.url);
 
     if (method === "GET" && pathname === "/api/health") {
@@ -78,36 +69,6 @@ async function handleRequest(
 
     if (method === "GET" && pathname === "/api/report") {
       handleGetReport(req, res);
-      return;
-    }
-
-    if (method === "GET" && pathname === "/api/report/discover") {
-      await handleDiscoverReports(req, res);
-      return;
-    }
-
-    if (method === "POST" && pathname === "/api/report/load") {
-      await handleLoadReport(req, res);
-      return;
-    }
-
-    if (method === "POST" && pathname === "/api/report/upload") {
-      await handleUploadReport(req, res);
-      return;
-    }
-
-    if (method === "POST" && pathname === "/api/report/generate") {
-      await handleGenerateReport(req, res);
-      return;
-    }
-
-    if (method === "POST" && pathname === "/api/report/reload") {
-      await handleReloadReport(req, res);
-      return;
-    }
-
-    if (method === "POST" && pathname === "/api/report/clear") {
-      handleClearReport(req, res);
       return;
     }
 
@@ -143,7 +104,6 @@ async function handleRequest(
       return;
     }
 
-    // SPA fallback only for document navigations (not bare asset probes).
     const accept = req.headers.accept ?? "";
     const wantsHtml =
       accept.includes("text/html") || accept === "" || accept === "*/*";

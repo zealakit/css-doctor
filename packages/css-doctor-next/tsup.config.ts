@@ -10,10 +10,7 @@ export default defineConfig({
   platform: 'node',
   splitting: false,
   outDir: 'dist',
-  external: [
-    'next',
-    'webpack',
-    '@zealakit/css-doctor-binding',
-    '@zealakit/css-doctor-shared',
-  ],
+  // Bundle internal shared helpers; keep binding + host bundlers external.
+  noExternal: ['@zealakit/css-doctor-shared'],
+  external: ['next', 'webpack', '@zealakit/css-doctor-binding'],
 });

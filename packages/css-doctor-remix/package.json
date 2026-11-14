@@ -1,6 +1,6 @@
 {
   "name": "@zealakit/css-doctor-remix",
-  "version": "1.1.2",
+  "version": "1.1.1",
   "description": "Remix 3 asset-server middleware for css-doctor CSS optimization",
   "keywords": [
     "css",

@@ -69,6 +69,7 @@ version = "0.1.0"
 dependencies = [
  "cssparser",
  "lightningcss",
+ "parcel_selectors",
  "serde",
  "serde_json",
 ]

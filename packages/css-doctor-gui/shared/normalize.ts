@@ -1,10 +1,17 @@
 import {
+  legacyClassOnlyAnalysis,
+  parseSelectorAnalysis,
+  type SelectorAnalysisReport,
+} from "@zealakit/css-doctor-shared";
+
+import {
   GUI_REPORT_SCHEMA_VERSION,
   type GuiChunk,
   type GuiChunkClassification,
   type GuiSplitStatus,
   type GuiCountBucket,
   type GuiCssAnalysis,
+  type GuiCssUsage,
   type GuiDeadCssCandidate,
   type GuiDiagnostic,
   type GuiDiagnosticCounts,
@@ -21,6 +28,7 @@ import {
   type GuiRegressionStatus,
   type GuiReport,
   type GuiReportSource,
+  type GuiSelectorAnalysis,
   type GuiSelectorRow,
   type GuiSeverity,
   type GuiSnapshotRef,
@@ -115,8 +123,18 @@ export function normalizeCheckReport(
 
   const diagnostics = [...healthDiagnostics, ...checkDiagnostics];
   const summary = normalizeCheckSummary(value.summary, files);
+  const classUsage = normalizeCheckClassUsage(value.classUsage);
+  const selectorAnalysis = resolveCheckSelectorAnalysis(
+    value.selectorAnalysis,
+    classUsage,
+  );
   const cssAnalysis = Array.isArray(value.files)
-    ? buildCssAnalysisFromCheckFiles(value.files, diagnostics)
+    ? buildCssAnalysisFromCheckFiles(
+        value.files,
+        diagnostics,
+        classUsage,
+        selectorAnalysis,
+      )
     : null;
 
   return {
@@ -910,9 +928,209 @@ function normalizeDecision(
   };
 }
 
+function normalizeCheckClassUsage(value: unknown): GuiCssUsage | null {
+  if (!isRecord(value) || !isRecord(value.byClass)) {
+    return null;
+  }
+  // Empty byClass still marks usage as present (scan ran; no hits).
+  // Newer fields are optional for backward-compatible reports.
+  return {
+    byClass: normalizeUsageHitRecord(value.byClass, "class"),
+    byId: isRecord(value.byId) ? normalizeUsageHitRecord(value.byId, "id") : {},
+    byTag: isRecord(value.byTag)
+      ? normalizeUsageHitRecord(value.byTag, "tag")
+      : {},
+    byAttribute: isRecord(value.byAttribute)
+      ? normalizeUsageHitRecord(value.byAttribute, "attribute")
+      : {},
+  };
+}
+
+/**
+ * Prefer canonical `selectorAnalysis`. Legacy `classUsage`-only envelopes become
+ * a `legacy-class-only` projection — never treated as full selector analysis.
+ * Unsupported future schema versions fail closed with a note (report still loads).
+ */
+function resolveCheckSelectorAnalysis(
+  value: unknown,
+  classUsage: GuiCssUsage | null,
+): GuiSelectorAnalysis | null {
+  const parsed = parseSelectorAnalysis(value);
+  if (parsed.ok) {
+    return toGuiSelectorAnalysis(parsed.report);
+  }
+
+  if (parsed.code === "unsupported_schema") {
+    return {
+      schemaVersion:
+        typeof value === "object" &&
+        value !== null &&
+        "schemaVersion" in value &&
+        typeof (value as { schemaVersion?: unknown }).schemaVersion === "number"
+          ? (value as { schemaVersion: number }).schemaVersion
+          : -1,
+      completeness: "absent",
+      metrics: {
+        totalSelectors: 0,
+        totalDefinitions: 0,
+        confirmedUsages: 0,
+        distinctUsageFiles: null,
+        confirmedMatchedElements: 0,
+        partialMatches: 0,
+        unresolvedSelectors: 0,
+        unusedSelectors: 0,
+      },
+      selectors: [],
+      notes: [parsed.message],
+    };
+  }
+
+  if (parsed.code === "invalid") {
+    return {
+      schemaVersion: 0,
+      completeness: "absent",
+      metrics: {
+        totalSelectors: 0,
+        totalDefinitions: 0,
+        confirmedUsages: 0,
+        distinctUsageFiles: null,
+        confirmedMatchedElements: 0,
+        partialMatches: 0,
+        unresolvedSelectors: 0,
+        unusedSelectors: 0,
+      },
+      selectors: [],
+      notes: [parsed.message],
+    };
+  }
+
+  // Absent: optional legacy classUsage → never invent selector match rows.
+  if (classUsage) {
+    const hasNonClass =
+      Object.keys(classUsage.byId).length > 0 ||
+      Object.keys(classUsage.byTag).length > 0 ||
+      Object.keys(classUsage.byAttribute).length > 0;
+    if (!hasNonClass) {
+      return toGuiSelectorAnalysis(
+        legacyClassOnlyAnalysis({
+          byClass: classUsage.byClass,
+          scannedFiles: 0,
+        }),
+      );
+    }
+    // Symbol bags without selectorAnalysis → symbols-only completeness.
+    return toGuiSelectorAnalysis({
+      ...legacyClassOnlyAnalysis({
+        byClass: classUsage.byClass,
+        scannedFiles: 0,
+        notes: [
+          "Report has symbol bags without selectorAnalysis; not full Core match output.",
+        ],
+      }),
+      completeness: "symbols-only",
+    });
+  }
+
+  return null;
+}
+
+function toGuiSelectorAnalysis(
+  report: SelectorAnalysisReport,
+): GuiSelectorAnalysis {
+  return {
+    schemaVersion: report.schemaVersion,
+    completeness: report.completeness,
+    metrics: {
+      totalSelectors: report.metrics.totalSelectors,
+      totalDefinitions: report.metrics.totalDefinitions,
+      confirmedUsages: report.metrics.confirmedUsages,
+      distinctUsageFiles: report.metrics.distinctUsageFiles,
+      confirmedMatchedElements: report.metrics.confirmedMatchedElements,
+      partialMatches: report.metrics.partialMatches,
+      unresolvedSelectors: report.metrics.unresolvedSelectors,
+      unusedSelectors: report.metrics.unusedSelectors,
+    },
+    selectors: report.selectors.map((row) => ({
+      selector: row.selector,
+      category: row.category,
+      status: row.status,
+      confidence: row.confidence,
+      matchedElements: row.matchedElements,
+      usageOccurrences: row.usageOccurrences,
+      usageFiles: row.usageFiles,
+      partialElements: row.partialElements,
+      unresolvedElements: row.unresolvedElements,
+      hasUnprovenRuntimeState: row.hasUnprovenRuntimeState,
+      hasUnprovenPositional: row.hasUnprovenPositional,
+      definitions: row.definitions.map((definition) => ({
+        file: definition.file,
+        line: definition.line,
+        column: definition.column,
+        count: definition.count,
+      })),
+      usageByFile: row.usageByFile.map((hit) => ({
+        file: hit.file,
+        count: hit.count,
+      })),
+      notes: [...row.notes],
+    })),
+    notes: [...report.notes],
+  };
+}
+
+function normalizeUsageHitRecord(
+  record: Record<string, unknown>,
+  kind: "class" | "id" | "tag" | "attribute",
+): Record<string, Array<{ file: string; count: number }>> {
+  const out: Record<string, Array<{ file: string; count: number }>> = {};
+  for (const [rawToken, hits] of Object.entries(record)) {
+    const token = normalizeUsageToken(rawToken, kind);
+    if (!token || !Array.isArray(hits)) {
+      continue;
+    }
+    const normalizedHits = [];
+    for (const hit of hits) {
+      if (!isRecord(hit) || typeof hit.file !== "string" || !hit.file.trim()) {
+        continue;
+      }
+      const count =
+        typeof hit.count === "number" && Number.isFinite(hit.count)
+          ? Math.max(0, Math.trunc(hit.count))
+          : 0;
+      if (count <= 0) {
+        continue;
+      }
+      normalizedHits.push({ file: hit.file.trim(), count });
+    }
+    if (normalizedHits.length > 0) {
+      out[token] = normalizedHits;
+    }
+  }
+  return out;
+}
+
+function normalizeUsageToken(
+  raw: string,
+  kind: "class" | "id" | "tag" | "attribute",
+): string {
+  const trimmed = raw.trim().toLowerCase();
+  if (!trimmed) {
+    return "";
+  }
+  if (kind === "class") {
+    return trimmed.replace(/^\./, "");
+  }
+  if (kind === "id") {
+    return trimmed.replace(/^#/, "");
+  }
+  return trimmed;
+}
+
 function buildCssAnalysisFromCheckFiles(
   files: unknown[],
   diagnostics: GuiDiagnostic[],
+  usage: GuiCssUsage | null = null,
+  selectorAnalysis: GuiSelectorAnalysis | null = null,
 ): GuiCssAnalysis | null {
   const insights = files.map((file, index) =>
     normalizeFileInsight(file, index),
@@ -968,6 +1186,10 @@ function buildCssAnalysisFromCheckFiles(
         filePath,
         raw: selector.raw,
         kinds,
+        classes: asStringArray(selector.classes) ?? [],
+        ids: asStringArray(selector.ids) ?? [],
+        tags: asStringArray(selector.tags) ?? [],
+        attributes: asStringArray(selector.attributes) ?? [],
         specificityIds: ids,
         specificityClasses: classes,
         specificityTypes: types,
@@ -1024,15 +1246,58 @@ function buildCssAnalysisFromCheckFiles(
     kindDistribution: mapToBuckets(kindCounts),
     specificityBuckets: mapToBuckets(specificityCounts),
     deadCssCandidates,
-    usage: null,
+    usage,
+    selectorAnalysis,
     atRules: null,
     notes: [
       "Selector kinds and specificity come from Core analyzeCss output.",
       "At-rule inventories are not exported by analyzeCss yet.",
-      "Page usage / coverage requires optimize/split with pageUsage — marked missing here.",
+      ...selectorAnalysisNotes(selectorAnalysis, usage),
       "Dead CSS entries are candidates from diagnostics (empty-rule / health dead_*), not confirmed unused-via-usage.",
     ],
   };
+}
+
+function selectorAnalysisNotes(
+  selectorAnalysis: GuiSelectorAnalysis | null,
+  usage: GuiCssUsage | null,
+): string[] {
+  if (selectorAnalysis) {
+    const notes = [...selectorAnalysis.notes];
+    switch (selectorAnalysis.completeness) {
+      case "full":
+        notes.push(
+          "Selector analysis metrics come from Core matchSelectorsAgainstMarkup (confirmed usages only).",
+        );
+        break;
+      case "symbols-only":
+        notes.push(
+          "Symbol bags present without full Core selector match rows.",
+        );
+        break;
+      case "legacy-class-only":
+        notes.push(
+          "Legacy class-only usage — not interpreted as complete selector analysis.",
+        );
+        break;
+      case "absent":
+        notes.push(
+          "Selector analysis section is present but incomplete or unsupported.",
+        );
+        break;
+      default:
+        break;
+    }
+    return notes;
+  }
+  if (usage) {
+    return [
+      "Selector usage comes from literal class/id/tag/attribute scans in project source (cn/clsx and :hover/:focus are not claimed).",
+    ];
+  }
+  return [
+    "Class usage was not present on this report (run `css-doctor gui` to attach source usage).",
+  ];
 }
 
 function diagnosticsToDeadCandidates(

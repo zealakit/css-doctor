@@ -11,6 +11,7 @@ export type GuiServerModule = {
     open?: boolean;
     strictPort?: boolean;
     reportPath?: string;
+    cwd?: string;
     printUrl?: boolean;
     apiOnly?: boolean;
     staticDir?: string;

@@ -5,12 +5,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import test from "node:test";
 
-import {
-  createGuiHttpServer,
-  discoverProjectReports,
-  listenGuiServer,
-  setCurrentReport,
-} from "../server/index";
+import { discoverProjectReports } from "../server/index";
 
 test("discover lists CLI --save latest envelopes without parsing bodies", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "cssd-discover-"));
@@ -37,28 +32,16 @@ test("discover lists CLI --save latest envelopes without parsing bodies", async 
   }
 });
 
-test("discover API returns empty list when reports dir is missing", async () => {
-  setCurrentReport(null);
-  const cwd = await mkdtemp(join(tmpdir(), "cssd-discover-api-"));
-  const server = createGuiHttpServer({ apiOnly: true });
-  const listened = await listenGuiServer(server, {
-    port: 4288,
-    open: false,
-  });
+test("discover returns empty list when reports dir is missing", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "cssd-discover-missing-"));
   try {
-    const response = await fetch(
-      `${listened.url}api/report/discover?cwd=${encodeURIComponent(cwd)}`,
-    );
-    assert.equal(response.status, 200);
-    const body = (await response.json()) as {
-      ok: boolean;
-      reports: unknown[];
-    };
-    assert.equal(body.ok, true);
-    assert.deepEqual(body.reports, []);
+    const discovered = await discoverProjectReports({ cwd });
+    assert.equal(discovered.ok, true);
+    if (!discovered.ok) {
+      return;
+    }
+    assert.deepEqual(discovered.reports, []);
   } finally {
-    await listened.close();
     await rm(cwd, { recursive: true, force: true });
-    setCurrentReport(null);
   }
 });

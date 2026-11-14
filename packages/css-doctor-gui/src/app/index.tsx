@@ -1,13 +1,15 @@
+import { ToastHost } from "@/components/ui";
 import { ReportProvider } from "@/hooks/use-report";
 import { SettingsProvider } from "@/hooks/use-settings";
 
-import { AppRouter } from "./router";
+import { DashboardPage } from "./dashboard/dashboard-page";
 
 export function App() {
   return (
     <SettingsProvider>
       <ReportProvider>
-        <AppRouter />
+        <DashboardPage />
+        <ToastHost />
       </ReportProvider>
     </SettingsProvider>
   );

@@ -588,13 +588,14 @@ test("gui --help documents web runtime flags", () => {
 });
 
 test("gui --desktop fails clearly when desktop app is missing", () => {
-  const result = runCli(["gui", "--desktop"], {
+  const result = runCli(["gui", "test/fixtures/basic.css", "--desktop"], {
     env: {
       ...process.env,
       CSS_DOCTOR_GUI_DESKTOP: "/tmp/css-doctor-gui-missing-app.app",
     },
   });
   assert.notEqual(result.status, 0);
+  assert.match(result.stdout, /running check/i);
   assert.match(result.stderr, /desktop/i);
   assert.doesNotMatch(result.stdout, /listening on|web mode/i);
 });
@@ -608,5 +609,8 @@ test("gui --help does not eagerly load the GUI package", () => {
     },
   });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /Open the CSS Doctor report viewer/);
+  assert.match(
+    result.stdout,
+    /Run CSS check once, then open the local report viewer/,
+  );
 });

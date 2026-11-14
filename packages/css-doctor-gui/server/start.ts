@@ -2,13 +2,10 @@ import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { basename } from "node:path";
-
 import { createGuiHttpServer } from "./create-server";
 import { listenGuiServer } from "./listen";
-import { loadReportFromFile } from "./report/load-file";
-import { setCurrentReport } from "./report/session";
-import { guiLog, redactPath } from "./services/log";
+import { preloadStartupReport } from "./report/preload-startup";
+import { guiLog } from "./services/log";
 import { openBrowser } from "./services/open-browser";
 import type { GuiServerListenResult, GuiServerOptions } from "./types";
 
@@ -21,6 +18,7 @@ export type StartGuiServerOptions = GuiServerOptions & {
 
 /**
  * Starts the local Web runtime: API + optional SPA static assets.
+ * Loads an existing/preload report only — CSS analysis is owned by `css-doctor gui`.
  */
 export async function startGuiServer(
   options: StartGuiServerOptions = {},
@@ -33,31 +31,21 @@ export async function startGuiServer(
     throw new Error(
       "Frontend build not found next to the css-doctor-gui package " +
         `(expected ${join(packageRoot, "dist", "index.html")}). ` +
-        "Reinstall css-doctor-gui (packaged installs must include `dist/`), " +
+        "Reinstall @zealakit/css-doctor-gui (packaged installs must include `dist/`), " +
         "or rebuild in the monorepo with `pnpm --filter @zealakit/css-doctor-gui build`.",
     );
   }
 
-  if (options.reportPath) {
-    const loaded = await loadReportFromFile({ path: options.reportPath });
-    if (!loaded.ok) {
-      guiLog("error", "preload report failed", {
-        path: redactPath(options.reportPath),
-        message: loaded.message,
-      });
-      throw new Error(`Failed to preload report: ${loaded.message}`);
-    }
-    setCurrentReport(loaded.report, {
-      kind: "file",
-      path: loaded.report.source.path,
-      label: loaded.report.source.path
-        ? basename(loaded.report.source.path)
-        : basename(options.reportPath),
-      reloadable: true,
-    });
-    guiLog("info", "preloaded report", {
-      path: redactPath(options.reportPath),
-      command: loaded.report.source.command,
+  const preload = await preloadStartupReport({
+    reportPath: options.reportPath,
+    cwd: options.cwd,
+  });
+  if (!preload.ok) {
+    throw new Error(`Failed to preload report: ${preload.message}`);
+  }
+  if (preload.mode === "none") {
+    guiLog("info", "no startup report found", {
+      cwd: options.cwd ?? process.cwd(),
     });
   }
 

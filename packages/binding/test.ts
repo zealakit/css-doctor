@@ -76,6 +76,136 @@ async function main(): Promise<void> {
 
   assert.deepEqual(binding.analyzeCss("").selectors, []);
 
+  const partialOnly = binding.matchSelectorsAgainstMarkup([".card.active"], {
+    elements: [
+      {
+        tag: "div",
+        classes: ["card"],
+        dynamicClasses: [],
+        attributes: {},
+        dynamicAttributes: [],
+        depth: 0,
+      },
+    ],
+    files: [],
+  });
+  assert.equal(partialOnly[0]?.confidence, "partial");
+  assert.equal(partialOnly[0]?.status, "partial");
+  assert.equal(partialOnly[0]?.matchCount, 0);
+
+  const markupMatches = binding.matchSelectorsAgainstMarkup(
+    [".card.active", "button.primary", ".btn:hover"],
+    {
+      elements: [],
+      files: [
+        {
+          path: "app.tsx",
+          elements: [
+            {
+              tag: "div",
+              classes: ["card", "active"],
+              dynamicClasses: [],
+              attributes: {},
+              dynamicAttributes: [],
+              depth: 0,
+            },
+            {
+              tag: "button",
+              classes: ["primary"],
+              dynamicClasses: [],
+              attributes: {},
+              dynamicAttributes: [],
+              depth: 0,
+            },
+            {
+              tag: "button",
+              classes: ["btn"],
+              dynamicClasses: [],
+              attributes: {},
+              dynamicAttributes: [],
+              depth: 0,
+            },
+          ],
+        },
+      ],
+    },
+  );
+  assert.equal(markupMatches[0]?.confidence, "confirmed");
+  assert.equal(markupMatches[0]?.status, "used");
+  assert.equal(markupMatches[1]?.confidence, "confirmed");
+  assert.equal(markupMatches[2]?.confidence, "partial");
+  assert.equal(markupMatches[2]?.hasUnprovenRuntimeState, true);
+  assert.equal(markupMatches[2]?.usageFiles, 1);
+  assert.deepEqual(markupMatches[0]?.usageByFile, [
+    { file: "app.tsx", count: 1 },
+  ]);
+
+  const attrOps = binding.matchSelectorsAgainstMarkup(
+    ['[href^="/docs"]', '[href*="guide"]', '[href^="/api"]'],
+    {
+      elements: [
+        {
+          tag: "a",
+          classes: [],
+          dynamicClasses: [],
+          attributes: { href: ["/docs/guide"] },
+          dynamicAttributes: [],
+          depth: 0,
+        },
+      ],
+      files: [],
+    },
+  );
+  assert.equal(attrOps[0]?.confidence, "confirmed");
+  assert.equal(attrOps[1]?.confidence, "confirmed");
+  assert.equal(attrOps[2]?.confidence, "none");
+
+  const multiFile = binding.matchSelectorsAgainstMarkup([".card"], {
+    elements: [],
+    files: [
+      {
+        path: "a.tsx",
+        elements: [
+          {
+            tag: "div",
+            classes: ["card"],
+            dynamicClasses: [],
+            attributes: {},
+            dynamicAttributes: [],
+            depth: 0,
+          },
+        ],
+      },
+      {
+        path: "b.tsx",
+        elements: [
+          {
+            tag: "div",
+            classes: ["card"],
+            dynamicClasses: [],
+            attributes: {},
+            dynamicAttributes: [],
+            depth: 0,
+          },
+          {
+            tag: "span",
+            classes: ["card"],
+            dynamicClasses: [],
+            attributes: {},
+            dynamicAttributes: [],
+            depth: 0,
+          },
+        ],
+      },
+    ],
+  });
+  assert.equal(multiFile[0]?.usageFiles, 2);
+  assert.equal(multiFile[0]?.matchedElements, 3);
+  assert.deepEqual(multiFile[0]?.usageByFile, [
+    { file: "b.tsx", count: 2 },
+    { file: "a.tsx", count: 1 },
+  ]);
+
   const split = binding.splitCssByPages({
     cssContent:
       ".shared { color: red; } .about { color: blue; } .dead { display: none; }",

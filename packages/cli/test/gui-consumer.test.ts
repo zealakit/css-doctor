@@ -95,6 +95,7 @@ test("css-doctor gui resolves GUI from consumer node_modules and serves producti
       [
         cliPath,
         "gui",
+        "styles.css",
         "--port",
         String(port),
         "--strict-port",
@@ -126,16 +127,19 @@ test("css-doctor gui resolves GUI from consumer node_modules and serves producti
       await waitForMatch(
         () => stdout + stderr,
         /css-doctor gui: web mode|listening on/i,
-        15_000,
+        30_000,
       );
 
+      assert.match(stdout, /running check/i);
       assert.match(stdout, /web mode/i);
       assert.match(stdout, new RegExp(`Port:\\s+${port}`));
-      assert.doesNotMatch(stdout + stderr, /analyzeCss|running analysis/i);
 
       const health = await fetchJson(`http://127.0.0.1:${port}/api/health`);
       assert.equal(health.ok, true);
       assert.equal(health.service, "css-doctor-gui");
+
+      const report = await fetchJson(`http://127.0.0.1:${port}/api/report`);
+      assert.equal(report.ok, true);
 
       const index = await fetchText(`http://127.0.0.1:${port}/`);
       assert.match(index, /<!doctype html>/i);

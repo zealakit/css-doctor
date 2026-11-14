@@ -1,7 +1,8 @@
 {
   "name": "@zealakit/css-doctor-shared",
-  "version": "1.1.2",
-  "description": "Shared pure helpers for css-doctor framework adapters (class scanning, option clamps, diagnostics)",
+  "version": "1.1.1",
+  "private": true,
+  "description": "Internal-only shared helpers for css-doctor adapters (class scanning, option clamps, diagnostics). Built in-repo and bundled into publishable packages; never published to npm.",
   "author": "nqhed - Huy Edward Nguyen",
   "type": "module",
   "license": "MIT",
@@ -37,9 +38,6 @@
   },
   "engines": {
     "node": ">=18"
-  },
-  "publishConfig": {
-    "access": "public"
   },
   "repository": {
     "type": "git",

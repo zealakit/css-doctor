@@ -27,6 +27,8 @@ complete without command evidence from the current checkout.
 - [ ] Package `exports` / `files` / `bin` inspected for publishable packages
 - [ ] Temporary consumer install from packed tarballs verified
 - [ ] Pack contents exclude tests, secrets, and local tool state
+- [ ] `@zealakit/css-doctor-shared` builds in-repo and is **bundled** into CLI /
+      Vite / Next / Rsbuild (`dist` has no unresolved `@zealakit/css-doctor-shared` import)
 
 ## Documentation
 
@@ -35,6 +37,7 @@ complete without command evidence from the current checkout.
 - [ ] Adapter READMEs state supported / partial / unsupported clearly
 - [ ] Config examples match runtime validation
 - [ ] Known limitations documented (CSS Modules, content-hash rewrite, host minify)
+- [ ] Publishing docs state that `css-doctor-shared` is internal-only
 
 ## Release
 
@@ -42,8 +45,11 @@ complete without command evidence from the current checkout.
 - [ ] Changelog / release notes drafted when shipping user-visible changes
 - [ ] Breaking changes listed explicitly
 - [ ] Publishable tarballs inspected (`pnpm pack` per package)
+- [ ] `pnpm publish:npm:validate` passes (packed manifests: no `workspace:*`, no
+      `@zealakit/css-doctor-shared` runtime dependency; shared is not a publish target)
 - [ ] No accidental publish from CI PR workflows
 - [ ] Version bump is intentional and performed in a dedicated release change
+- [ ] `@zealakit/css-doctor-shared` is **not** published independently
 
 ## Platform notes
 

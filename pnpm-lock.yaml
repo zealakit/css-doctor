@@ -494,6 +494,9 @@ importers:
       '@zealakit/css-doctor-gui':
         specifier: workspace:*
         version: link:../css-doctor-gui
+      '@zealakit/css-doctor-shared':
+        specifier: workspace:*
+        version: link:../css-doctor-shared
       commander:
         specifier: ^12.1.0
         version: 12.1.0
@@ -514,13 +517,6 @@ importers:
         version: 6.0.3
 
   packages/css-doctor-gui:
-    dependencies:
-      '@zealakit/css-doctor-binding':
-        specifier: workspace:*
-        version: link:../binding
-      fast-glob:
-        specifier: ^3.3.3
-        version: 3.3.3
     devDependencies:
       '@types/node':
         specifier: ^22.20.5
@@ -534,15 +530,15 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^6.3.0
         version: 6.3.0(vite@8.3.8(@types/node@22.20.5)(esbuild@0.27.7)(jiti@2.7.0)(sass@1.106.1)(terser@5.51.2)(tsx@4.23.15)(yaml@1.10.3))
+      '@zealakit/css-doctor-shared':
+        specifier: workspace:*
+        version: link:../css-doctor-shared
       react:
         specifier: ^19.3.1
         version: 19.3.1
       react-dom:
         specifier: ^19.3.1
         version: 19.3.1(react@19.3.1)
-      react-router-dom:
-        specifier: ^7.18.4
-        version: 7.18.4(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       tsup:
         specifier: ^8.5.1
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.32)(tsx@4.23.15)(typescript@6.0.3)(yaml@1.10.3)
@@ -561,9 +557,6 @@ importers:
       '@zealakit/css-doctor-binding':
         specifier: workspace:*
         version: link:../binding
-      '@zealakit/css-doctor-shared':
-        specifier: workspace:*
-        version: link:../css-doctor-shared
       jiti:
         specifier: ^2.7.0
         version: 2.7.0
@@ -580,6 +573,9 @@ importers:
       '@types/react-dom':
         specifier: ^19.3.0
         version: 19.3.0(@types/react@19.3.0)
+      '@zealakit/css-doctor-shared':
+        specifier: workspace:*
+        version: link:../css-doctor-shared
       next:
         specifier: ^15.5.29
         version: 15.5.29(@types/node@22.20.5)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(sass@1.106.1)
@@ -651,9 +647,6 @@ importers:
       '@zealakit/css-doctor-binding':
         specifier: workspace:*
         version: link:../binding
-      '@zealakit/css-doctor-shared':
-        specifier: workspace:*
-        version: link:../css-doctor-shared
       picocolors:
         specifier: ^1.1.1
         version: 1.1.1
@@ -667,6 +660,9 @@ importers:
       '@types/node':
         specifier: ^22.20.5
         version: 22.20.5
+      '@zealakit/css-doctor-shared':
+        specifier: workspace:*
+        version: link:../css-doctor-shared
       tsup:
         specifier: ^8.5.1
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.32)(tsx@4.23.15)(typescript@6.0.3)(yaml@1.10.3)
@@ -700,9 +696,6 @@ importers:
       '@zealakit/css-doctor-binding':
         specifier: workspace:*
         version: link:../binding
-      '@zealakit/css-doctor-shared':
-        specifier: workspace:*
-        version: link:../css-doctor-shared
       picocolors:
         specifier: ^1.1.1
         version: 1.1.1
@@ -710,6 +703,9 @@ importers:
       '@types/node':
         specifier: ^22.20.5
         version: 22.20.5
+      '@zealakit/css-doctor-shared':
+        specifier: workspace:*
+        version: link:../css-doctor-shared
       tsup:
         specifier: ^8.5.1
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.32)(tsx@4.23.15)(typescript@6.0.3)(yaml@1.10.3)

@@ -1,10 +1,5 @@
 import { defineConfig } from "tsup";
 
-const external = [
-  "@zealakit/css-doctor-binding",
-  "fast-glob",
-];
-
 export default defineConfig([
   {
     entry: {
@@ -19,7 +14,8 @@ export default defineConfig([
     clean: true,
     outDir: "dist-server",
     splitting: false,
-    external,
+    // Bundle internal shared helpers; never leave workspace:* in published dist.
+    noExternal: ["@zealakit/css-doctor-shared"],
   },
   {
     entry: {
@@ -34,7 +30,7 @@ export default defineConfig([
     clean: false,
     outDir: "dist-server",
     splitting: false,
-    external,
+    noExternal: ["@zealakit/css-doctor-shared"],
     banner: {
       js: "#!/usr/bin/env node",
     },

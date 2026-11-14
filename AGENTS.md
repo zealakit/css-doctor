@@ -15,7 +15,7 @@ Turborepo.
 | `crates/core` | Rust engine: parse, selector extraction, usage matrix, page-coverage splitter, CSS Health Score |
 | `packages/binding` | NAPI-RS bridge exposing `analyzeCss`, `splitCssByPages`, `optimizeCss`, and JS types |
 | `packages/cli` | `css-doctor` terminal CLI (`check`, `health`, `baseline`, `diff`, `optimize`, `split`, `fix`; Commander + tsup, ESM) |
-| `packages/css-doctor-shared` | Pure adapter helpers (class scan, option clamps, pattern match); no bundler hooks |
+| `packages/css-doctor-shared` | Internal-only pure helpers (class scan, clamps, patterns); built in-repo and bundled into publishable packages — never published to npm |
 | `packages/css-doctor-vite` | Vite/Rollup plugin (ESM + CJS + DTS) |
 | `packages/css-doctor-next` | Next.js config wrapper + Webpack plugin (ESM + CJS + DTS) |
 | `packages/css-doctor-rsbuild` | Rsbuild/Rspack plugin (ESM + DTS) |
@@ -49,6 +49,9 @@ Turborepo.
    `crates/core` → `packages/binding` → consumers (CLI/Vite/Next) → tests/docs.
    Adapter-only pure helpers live in `packages/css-doctor-shared` (no Core/Node
    reverse deps; adapters must not depend on each other or on the CLI).
+   `css-doctor-shared` is private/internal: keep it as a workspace
+   `devDependency` of publishable packages and bundle it (`tsup` `noExternal`);
+   never publish it or leave it as a runtime npm dependency.
 4. Build the native binding before running TypeScript integration tests:
    `pnpm --filter @zealakit/css-doctor-binding build`.
 5. NAPI-RS 2.x does not support `f32`. Use `f64` at the JS boundary and cast
@@ -156,6 +159,8 @@ target directory is involved.
   (no CSS source). The CLI owns baseline persistence
   (`.css-doctor/baseline.json` + optional `.css-doctor/config.json`); framework
   adapters reuse the shared scoring engine and do not need to persist baselines.
+  Gitignore only `**/.css-doctor/reports/` (and temp/backup leftovers)—keep
+  baseline/config commit-able; never ignore the whole `.css-doctor/` tree.
 - Optimization intelligence lives in `crates/core/src/optimization`: explanations
   and reports are derived from `optimize_css_pipeline` metadata; Safe autofixes
   use LightningCSS AST rewrites. Do not count split redistribution as byte

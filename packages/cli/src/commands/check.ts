@@ -9,6 +9,7 @@ import type {
   JsHealthReport,
   JsSelectorInfo,
 } from "@zealakit/css-doctor-binding";
+import type { SelectorAnalysisReport } from "@zealakit/css-doctor-shared";
 
 import packageJson from "../../package.json";
 import { formatCompactHealthSummary } from "../formatters/health-terminal";
@@ -105,6 +106,42 @@ export type CheckSummary = {
   totalMs: number;
 };
 
+/** Optional source usage matrix attached by GUI startup (or future check flags). */
+export type CheckClassUsageReport = {
+  byClass: Record<string, Array<{ file: string; count: number }>>;
+  /** Bare id tokens (no `#`). Absent on older reports. */
+  byId?: Record<string, Array<{ file: string; count: number }>>;
+  /** HTML element/type names. Absent on older reports. */
+  byTag?: Record<string, Array<{ file: string; count: number }>>;
+  /** Attribute name or `name=value`. Absent on older reports. */
+  byAttribute?: Record<string, Array<{ file: string; count: number }>>;
+  /** Named but unresolved dynamic class tokens (not confirmed usage). */
+  unresolvedByClass?: Record<string, Array<{ file: string; count: number }>>;
+  unresolvedById?: Record<string, Array<{ file: string; count: number }>>;
+  unresolvedByAttribute?: Record<
+    string,
+    Array<{ file: string; count: number }>
+  >;
+  /** Core matcher results when CSS selectors were available at scan time. */
+  selectorMatches?: Array<{
+    selector: string;
+    confidence: "confirmed" | "partial" | "unresolved" | "unsupported" | "none";
+    status: "used" | "unused" | "partial" | "unknown";
+    matchCount: number;
+    matchedElements: number;
+    usageOccurrences: number;
+    usageFiles: number;
+    partialElements: number;
+    unresolvedElements: number;
+    hasUnprovenRuntimeState: boolean;
+    hasUnprovenPositional: boolean;
+    notes: string[];
+  }>;
+  scannedFiles: number;
+  elementsScanned?: number;
+  notes: string[];
+};
+
 /** Structured report emitted by `css-doctor check --json`. */
 export type CheckReport = {
   schemaVersion: 1;
@@ -121,6 +158,19 @@ export type CheckReport = {
   summary: CheckSummary;
   /** Aggregated CSS Health Score for successfully read files. */
   health: JsHealthReport | null;
+  /**
+   * Literal source usage (class / id / tag / attribute).
+   * Omitted by plain `check` unless a caller attaches it (e.g. `css-doctor gui`).
+   * Older reports may only populate `byClass`.
+   */
+  classUsage?: CheckClassUsageReport;
+  /**
+   * Canonical selector analysis contract (`selectorAnalysis.schemaVersion`).
+   * Built by `css-doctor gui` (and future check flags) from Core definitions +
+   * matches. Absent on plain `check` and legacy reports — not the same as an
+   * empty analysis.
+   */
+  selectorAnalysis?: SelectorAnalysisReport;
 };
 
 /** Options accepted by the programmatic `runCheck` API. */

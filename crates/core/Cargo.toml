@@ -21,5 +21,7 @@ cssparser = "0.37"
 # default features avoids pulling in the bundler, source map and Node.js
 # integrations.
 lightningcss = { version = "=1.0.0-alpha.72", default-features = false, features = ["visitor"] }
+# Same version lightningcss 1.0.0-alpha.72 pins; used for AttributeOther operator matching.
+parcel_selectors = "0.28.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

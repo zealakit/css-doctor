@@ -68,6 +68,21 @@ API changes intentional and propagate them to `packages/binding`.
 - Use `error_recovery: true` for parsing. Invalid config ratios must return a
   descriptive `Err(String)`; do not panic.
 
+## Markup selector matching (`markup_match.rs`)
+
+Static usage matching against source evidence (separate from page-coverage DCE):
+
+- Prefer `MarkupEvidence.files` — combinators never cross source files.
+- Compounds require all positive atoms on the same element.
+- `:not()` excludes; `:is()`/`:where()` are OR; `:has()` needs a descendant.
+- Runtime pseudos / pseudo-elements and positional (`:nth-*`, `:first-child`)
+  never yield `Confirmed` — status is `Partial` or `Unknown`.
+- Metrics: `matchedElements` / `usageOccurrences` (one per matching subject),
+  `usageFiles`, `partialElements`, `unresolvedElements`, plus `status`
+  (`used` | `unused` | `partial` | `unknown`).
+- Page-coverage splitting still uses class-set heuristics; do not conflate the
+  two.
+
 ## Change workflow
 
 1. Add or update a focused unit test first in the relevant module (`splitter.rs`

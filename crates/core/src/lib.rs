@@ -43,6 +43,7 @@
 
 mod analyzer;
 mod health;
+mod markup_match;
 mod model;
 mod optimization;
 mod pipeline;
@@ -58,6 +59,11 @@ pub use health::{
     HealthGrade, HealthReport, HealthScoreConfig, HealthScoreSummary, HealthSeverity, HealthStatus,
     HealthThresholds, HealthWeights, ScoreBand, evaluate_css_health,
     evaluate_css_health_with_usage, evaluate_health_report, grade_for_score, merge_health_reports,
+};
+pub use markup_match::{
+    MarkupElement, MarkupEvidence, MarkupFileEvidence, MatchConfidence, SelectorFileUsageHit,
+    SelectorUsageMatch, SelectorUsageStatus, match_selector_against_markup,
+    match_selectors_against_markup,
 };
 pub use model::{
     AnalysisStats, AnalysisWarning, CssAnalysisResult, SelectorInfo, SelectorKind, SourceLocation,

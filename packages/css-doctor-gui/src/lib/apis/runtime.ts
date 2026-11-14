@@ -13,6 +13,7 @@ export type RuntimeInfo = {
     openExternal: boolean;
     settings: boolean;
     recentReports: boolean;
+    desktopSidecar?: boolean;
   };
   phase: number;
   hasReport: boolean;

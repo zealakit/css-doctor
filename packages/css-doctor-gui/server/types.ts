@@ -8,6 +8,8 @@ export type GuiServerOptions = {
   apiOnly?: boolean;
   /** Optional JSON report to preload into the session before listen. */
   reportPath?: string;
+  /** Project cwd for automatic report discovery (default: process.cwd()). */
+  cwd?: string;
 };
 
 export type GuiServerListenResult = {

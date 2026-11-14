@@ -41,8 +41,9 @@ on large stylesheets.
 ### Zero-config CLI
 
 Run `css-doctor` immediately with `npx`, or install it as a development
-dependency. The published CLI bundles its JavaScript dependencies; only the
-native binding remains a dynamic runtime require.
+dependency. The published CLI bundles its JavaScript dependencies (including
+internal `@zealakit/css-doctor-shared` helpers); only the native binding remains
+a dynamic runtime require. `css-doctor-shared` itself is never published to npm.
 
 ### Comprehensive diagnostics + CSS Health Score
 
@@ -324,6 +325,14 @@ export default withCssDoctor(
 Remix 3 has no build-time page-to-CSS dependency graph. Its middleware uses
 `sizeBudget`, `isolateVariables`, `minify`, and a response cache instead of
 runtime page coverage.
+
+### Selector analysis (GUI)
+
+`css-doctor gui` runs one check, attaches a versioned `selectorAnalysis` section
+(Core matching), and opens the Selector Explorer. This is **static** analysis —
+see [`docs/selector-analysis.md`](./docs/selector-analysis.md) for category
+coverage, metric definitions, and limitations. Plain `css-doctor check` JSON is
+unchanged unless a caller attaches the section.
 
 ### Known limitations
 

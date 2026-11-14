@@ -1,1 +1,2 @@
-export { NAV_ITEMS, ROUTES, type AppRoutePath, type NavItem } from "./routes";
+/** Reserved for shared frontend constants. */
+export {};

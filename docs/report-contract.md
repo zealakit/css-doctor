@@ -9,12 +9,11 @@ existing CLI JSON envelopes over a second schema.
 
 ```
 Adapters (Vite/Next/…)  →  pageUsage / CSS assets  →  Core via binding
-CLI commands            →  Core via binding         →  JSON/terminal stdout
+CLI `check` / other     →  Core via binding         →  JSON/terminal stdout
                                                   →  optional --save / --out
-                                                  →  baseline under .css-doctor/
-GUI                     →  discover / load / upload CLI JSON
-                        →  normalize → GuiReport (presentation)
-                        →  optional generate-check via binding (user action)
+CLI `gui`               →  runCheck once            →  check-gui-startup.json
+                        →  startGuiServer(reportPath)
+GUI                     →  GET /api/report (session) →  normalize → GuiReport
 ```
 
 | Layer | Role |
@@ -22,19 +21,23 @@ GUI                     →  discover / load / upload CLI JSON
 | Adapters | Build-time optimize/split; **do not** write GUI/CLI report files |
 | Core | Sole CSS analysis / health / optimize / regression engine |
 | Binding | NAPI expose of Core results |
-| CLI | Orchestrates runs; emits per-command JSON; optional atomic persist |
-| GUI | Viewer: discover/load/validate/display; does not re-analyze to view |
+| CLI | Orchestrates runs (including `gui` auto-check); optional atomic persist |
+| GUI | Read-only viewer of the CLI-preloaded report; does not re-analyze |
 
 ### Persistence
 
-| Artifact | Path | Writer | Atomic? |
-| --- | --- | --- | --- |
-| Baseline fingerprint | `.css-doctor/baseline.json` | `baseline create` | Yes |
-| CLI config | `.css-doctor/config.json` | user / tooling | N/A |
-| Latest analysis envelope | `.css-doctor/reports/<command>-latest.json` | CLI `--save` on success | Yes |
-| Explicit run envelope | path from `--out` / optimize `--report` | CLI | Yes |
-| GuiReport session | in-memory HTTP session | GUI server | N/A |
-| Recent history | browser `localStorage` metadata | GUI | N/A |
+| Artifact | Path | Writer | Atomic? | Git |
+| --- | --- | --- | --- | --- |
+| Baseline fingerprint | `.css-doctor/baseline.json` | `baseline create` | Yes | Commit for regression gates |
+| CLI config | `.css-doctor/config.json` | user / tooling | N/A | Optional commit |
+| Latest analysis envelope | `.css-doctor/reports/<command>-latest.json` | CLI `--save` on success | Yes | Ignored (`**/.css-doctor/reports/`) |
+| GUI startup envelope | `.css-doctor/reports/check-gui-startup.json` | `css-doctor gui` (every run) | Yes | Ignored |
+| Explicit run envelope | path from `--out` / optimize `--report` | CLI | Yes | Depends on path |
+| GuiReport session | in-memory HTTP session | GUI server preload | N/A | N/A |
+
+Do **not** gitignore the entire `.css-doctor/` directory: baselines and config
+are intentional project inputs. Only generated `reports/` (and temp/backup
+siblings) belong in `.gitignore`.
 
 ## 2. Shared contract (reuse)
 
@@ -86,15 +89,17 @@ Command shapes differ (not one mega-report):
 
 Stdout behavior is unchanged unless `--json` is set. Persist is opt-in.
 
-## 4. GUI discovery & read
+## 4. GUI startup & read
 
-- `GET /api/report/discover?cwd=` lists `.css-doctor/reports/*-latest.json`
-  (metadata only; bodies are not parsed until load).
-- `POST /api/report/load` / upload / reload read a consistent file snapshot.
-- Overview lists discovered project reports; user must open one explicitly
-  (no silent swap of the viewed session).
-- Generate-check remains an **optional** second analysis via binding; viewing
-  a saved report never requires it.
+- `css-doctor gui` resolves CSS patterns like other project-aware CLI commands
+  (CLI args → `.css-doctor/config.json` `patterns` → baseline `config.patterns`),
+  then probes documented candidates via `resolveCssFiles` only when they match
+  real stylesheets.
+- The CLI runs `runCheck` once, writes `check-gui-startup.json`, updates
+  `check-latest.json` only on success, then starts the GUI with that path.
+- GUI exposes `GET /api/report` for the preloaded session only.
+- Manual load/upload/generate/discover routes are not part of the viewer API.
+- Browser refresh re-fetches the session; it does not re-run check.
 
 ## 5. CLI ↔ GUI package integration (Phase 8)
 
@@ -105,7 +110,77 @@ Stdout behavior is unchanged unless `--json` is set. Persist is opt-in.
 - Missing package → install hint (`pnpm add -D @zealakit/css-doctor-gui`, adapted by PM).
 - GUI is loaded only when the `gui` command runs.
 
-## 6. Non-goals (Phase 7–8)
+## 6. Selector analysis contract (Phase 4)
+
+Nested under check envelopes as `selectorAnalysis` (independent of CLI
+`schemaVersion`):
+
+| Field | Notes |
+| --- | --- |
+| `schemaVersion` | Currently `1` (`SELECTOR_ANALYSIS_SCHEMA_VERSION`) |
+| `completeness` | `full` \| `symbols-only` \| `legacy-class-only` \| `absent` |
+| `metrics` | Aggregate counts from Core match rows (see below) |
+| `selectors[]` | Per-selector definition + usage records (independent) |
+| `symbols` | Optional class/id/tag/attribute bags for GUI columns |
+| `scannedFiles` / `elementsScanned` / `notes` | Scan context |
+
+### Metric counting rules
+
+- **totalSelectors** — distinct selector texts.
+- **totalDefinitions** — sum of definition occurrence counts (not usages).
+- **confirmedUsages** / **confirmedMatchedElements** — only
+  `confidence === "confirmed"`; partial/unresolved/unused contribute 0.
+- **distinctUsageFiles** — unique paths from `usageByFile`; `null` when
+  per-file paths are unavailable.
+- **partialMatches** / **unresolvedSelectors** / **unusedSelectors** —
+  selector counts by `status`.
+- Definitions are never counted as usages. Partial matches are never confirmed
+  usages. One source occurrence is not double-counted via overlapping extractors.
+
+### Compatibility
+
+| Envelope | GUI behavior |
+| --- | --- |
+| Has `selectorAnalysis` v1 | Normalize into `GuiCssAnalysis.selectorAnalysis` |
+| Has only `classUsage.byClass` | `completeness: "legacy-class-only"`; empty `selectors[]` |
+| Missing both | `selectorAnalysis: null` |
+| Future `selectorAnalysis.schemaVersion` | Fail closed: `completeness: "absent"`, actionable note, no invented rows |
+
+Canonical TypeScript helpers live in `@zealakit/css-doctor-shared`
+(`buildSelectorAnalysisReport`, `parseSelectorAnalysis`). Rust Core remains
+the source of truth for matching; CLI/GUI must not re-match.
+
+### Adapters
+
+Vite / Next / Rsbuild / Remix / Nuxt still pass **class token** `pageUsage` into
+`optimizeCss` / `splitCssByPages` for page-coverage splitting. That path is
+intentionally class-based and does **not** write CLI/GUI selector reports.
+No adapter-local selector matching was added in Phase 4.
+
+## 7. GUI Selector Explorer (Phase 5)
+
+The GUI dashboard projects `selectorAnalysis` into a Selector Explorer:
+
+- Overview metrics come from canonical `metrics` (no React recalculation).
+- One unified table: Selector, Type, Status, Usages, Files, Created In, Used In.
+- Expandable row details for partial/unresolved notes and limitations.
+- Client-side search / category / status filters and sortable columns.
+- Legacy `classUsage`-only reports remain viewable with
+  `completeness: "legacy-class-only"` and an explicit limited-coverage banner.
+- Refresh re-fetches the session report only; it does not re-run analysis.
+
+## 8. Validation notes (Phase 6)
+
+- Aggregate `selectorAnalysis.metrics` must reconcile with per-selector rows
+  (confirmed usages only where `confidence === "confirmed"`).
+- Core emits `usageByFile` paths for confirmed matches; aggregate
+  `distinctUsageFiles` is derived from those paths (null only when paths are
+  absent).
+- Adapters are not required to emit `selectorAnalysis`; GUI startup does.
+
+Coverage matrices: [`selector-analysis.md`](./selector-analysis.md).
+
+## 9. Non-goals (Phase 7–8 / Phase 4–5)
 
 - New GUI pages / editor / autofix execution
 - Adapter GUI options (`gui.enabled`, hooks, …)
@@ -113,3 +188,4 @@ Stdout behavior is unchanged unless `--json` is set. Persist is opt-in.
 - Requiring Tauri for Web
 - Database or background report service
 - Making GUI a required CLI dependency
+- Migrating page-coverage split off class tokens in this phase

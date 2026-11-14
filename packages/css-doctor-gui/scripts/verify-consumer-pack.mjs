@@ -118,6 +118,7 @@ if (!existsSync(bindingNode)) {
 }
 
 process.stdout.write("verify-consumer-pack: building packages…\n");
+// shared is internal-only and gets bundled into vite/cli; build it first.
 run("pnpm", ["--filter", "@zealakit/css-doctor-shared", "build"], {
   cwd: repoRoot,
 });
@@ -141,13 +142,36 @@ process.stdout.write(`verify-consumer-pack: packs → ${packRoot}\n`);
 process.stdout.write(`verify-consumer-pack: consumer → ${consumerRoot}\n`);
 
 const tarballs = {
-  shared: packPackage(join(repoRoot, "packages/css-doctor-shared"), packRoot),
   binding: packPackage(join(repoRoot, "packages/binding"), packRoot),
   platform: packPackage(platformPkgDir, packRoot),
   vite: packPackage(join(repoRoot, "packages/css-doctor-vite"), packRoot),
   cli: packPackage(join(repoRoot, "packages/cli"), packRoot),
   gui: packPackage(guiRoot, packRoot),
 };
+
+for (const [name, tarball] of Object.entries(tarballs)) {
+  if (name === "platform" || name === "binding" || name === "gui") {
+    continue;
+  }
+  const packedJson = spawnSync(
+    "tar",
+    ["-xOf", tarball, "package/package.json"],
+    { encoding: "utf8" },
+  ).stdout;
+  const packed = JSON.parse(packedJson);
+  if (packed.dependencies?.["@zealakit/css-doctor-shared"]) {
+    fail(
+      `Packed ${name} must not depend on internal @zealakit/css-doctor-shared`,
+    );
+  }
+  if (
+    Object.values(packed.dependencies ?? {}).some((v) =>
+      String(v).startsWith("workspace:"),
+    )
+  ) {
+    fail(`Packed ${name} still contains workspace:* dependencies`);
+  }
+}
 
 for (const [name, path] of Object.entries(tarballs)) {
   process.stdout.write(`  packed ${name}: ${path}\n`);
@@ -172,8 +196,8 @@ const packedGuiJson = spawnSync(
   { encoding: "utf8" },
 ).stdout;
 const packedGui = JSON.parse(packedGuiJson);
-if (packedGui.dependencies?.["@zealakit/css-doctor-binding"]?.includes("workspace:")) {
-  fail("Packed GUI still contains workspace: dependency protocol");
+if (packedGui.dependencies?.["@zealakit/css-doctor-binding"]) {
+  fail("Packed GUI should not depend on css-doctor-binding (viewer is read-only)");
 }
 if (packedGui.dependencies?.react) {
   fail("Packed GUI should not list react as a runtime dependency (SPA is prebundled)");
@@ -189,7 +213,6 @@ writeFileSync(
       devDependencies: {
         "@zealakit/css-doctor-binding": `file:${tarballs.binding}`,
         [platformMeta.name]: `file:${tarballs.platform}`,
-        "@zealakit/css-doctor-shared": `file:${tarballs.shared}`,
         "@zealakit/css-doctor-cli": `file:${tarballs.cli}`,
         "@zealakit/css-doctor-vite": `file:${tarballs.vite}`,
         "@zealakit/css-doctor-gui": `file:${tarballs.gui}`,
@@ -228,12 +251,13 @@ if (!existsSync(latest)) {
 }
 
 const port = await freePort();
-process.stdout.write(`verify-consumer-pack: css-doctor gui --port ${port}…\n`);
+process.stdout.write(`verify-consumer-pack: css-doctor gui styles.css --port ${port}…\n`);
 const gui = spawn(
   "npx",
   [
     "css-doctor",
     "gui",
+    "styles.css",
     "--port",
     String(port),
     "--strict-port",
@@ -259,12 +283,12 @@ gui.stderr.on("data", (chunk) => {
 try {
   await waitFor(
     () => /css-doctor gui: web mode|listening on/i.test(output),
-    20_000,
+    30_000,
     "gui startup",
   );
 
-  if (/analyzeCss|running analysis/i.test(output)) {
-    fail("GUI startup unexpectedly mentioned analysis");
+  if (!/running check/i.test(output)) {
+    fail("GUI startup did not run automatic check");
   }
 
   const health = await fetch(`http://127.0.0.1:${port}/api/health`);
@@ -282,15 +306,13 @@ try {
     fail("Production index.html not served");
   }
 
-  const discover = await fetch(
-    `http://127.0.0.1:${port}/api/report/discover?cwd=${encodeURIComponent(consumerRoot)}`,
-  );
-  if (!discover.ok) {
-    fail(`/api/report/discover -> ${discover.status}`);
+  const report = await fetch(`http://127.0.0.1:${port}/api/report`);
+  if (!report.ok) {
+    fail(`/api/report -> ${report.status}`);
   }
-  const discovered = await discover.json();
-  if (!Array.isArray(discovered.reports) || discovered.reports.length < 1) {
-    fail(`Expected discovered reports, got ${JSON.stringify(discovered)}`);
+  const reportBody = await report.json();
+  if (!reportBody.ok || reportBody.report?.source?.command !== "check") {
+    fail(`Expected preloaded check report, got ${JSON.stringify(reportBody)}`);
   }
 
   // Missing-GUI consumer: CLI without css-doctor-gui must print install help.
