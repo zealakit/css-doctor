@@ -15,10 +15,13 @@ import {
   DEFAULT_MIN_PAGE_RATIO,
   clampMaxChunkSize,
   clampMinPageRatio,
+  createModuleResolver,
   describeError,
   matchesPatterns,
   scanClasses,
+  setActiveClassHelpers,
 } from "@zealakit/css-doctor-shared";
+import type { ModuleResolver } from "@zealakit/css-doctor-shared";
 import type { Compilation, Compiler, Entrypoint, Module } from "webpack";
 
 import { printDiagnostics } from "./reporter";
@@ -117,6 +120,7 @@ export class CssDoctorWebpackPlugin {
         },
         async () => {
           try {
+            setActiveClassHelpers(this.options.classHelpers);
             await this.process(compiler, compilation);
           } catch (error) {
             compilation
@@ -641,6 +645,7 @@ async function collectPages(
   const pagesByCss = new Map<string, Set<string>>();
   const projectRoot = compilation.compiler?.context ?? process.cwd();
   const sourceCache = new Map<string, Promise<string | undefined>>();
+  moduleResolverFor(projectRoot).clear();
   const sharedClasses = new Set<string>();
 
   for (const entry of sharedEntries) {
@@ -1051,42 +1056,31 @@ function extractImportSpecifiers(source: string): string[] {
   return [...specifiers];
 }
 
+const moduleResolvers = new Map<string, ModuleResolver>();
+
+/** One shared resolver per project root: tsconfig `paths`, `exports`, `@/`. */
+function moduleResolverFor(projectRoot: string): ModuleResolver {
+  let resolver = moduleResolvers.get(projectRoot);
+
+  if (!resolver) {
+    resolver = createModuleResolver({
+      fallbackRoots: projectSourceRoots(projectRoot),
+    });
+    moduleResolvers.set(projectRoot, resolver);
+  }
+
+  return resolver;
+}
+
 function resolveImportSpecifier(
   specifier: string,
   fromFile: string,
   projectRoot: string,
 ): string | null {
-  if (specifier.startsWith("@/")) {
-    const relative = specifier.slice(2);
+  const result = moduleResolverFor(projectRoot).resolve(specifier, fromFile);
 
-    for (const root of projectSourceRoots(projectRoot)) {
-      const basePath = resolve(root, relative);
-
-      if (isStyleFile(basePath)) {
-        return null;
-      }
-
-      const found = findSourceFile(basePath);
-
-      if (found) {
-        return found;
-      }
-    }
-
-    return null;
-  }
-
-  if (specifier.startsWith("./") || specifier.startsWith("../")) {
-    const basePath = resolve(dirname(fromFile), specifier);
-
-    if (isStyleFile(basePath)) {
-      return null;
-    }
-
-    return findSourceFile(basePath);
-  }
-
-  return null;
+  // Unresolvable / external / style imports are skipped, never thrown.
+  return result.kind === "file" ? result.path : null;
 }
 
 async function collectEntryClasses(

@@ -801,3 +801,79 @@ test("wrapCommonImports uses relative paths for nested assets", async () => {
 test("clamps an invalid size budget instead of crashing the build", () => {
   assert.doesNotThrow(() => cssDoctor({ sizeBudget: { maxChunkSize: 0 } }));
 });
+
+test("splits CSS Modules by usage and keeps dynamic modules whole", async () => {
+  const captured: CssDoctorDiagnostics[] = [];
+  const root = join(packageRoot, "test/fixtures/modules");
+  const hooked: string[] = [];
+
+  const result = (await build({
+    root,
+    logLevel: "silent",
+    css: {
+      modules: {
+        getJSON(file) {
+          hooked.push(file);
+        },
+      },
+    },
+    plugins: [
+      cssDoctor({
+        report: false,
+        minify: false,
+        minPageRatio: 1,
+        sizeBudget: { enabled: false },
+        onDiagnostics: (d) => {
+          captured.push(d);
+        },
+      }),
+    ],
+    build: { write: false },
+  })) as {
+    output: Array<{
+      type: string;
+      fileName: string;
+      source?: unknown;
+      code?: string;
+    }>;
+  };
+
+  assert.equal(hooked.length, 2, "user getJSON hook still runs");
+  const css = result.output
+    .filter((o) => o.type === "asset" && o.fileName.endsWith(".css"))
+    .map((o) => String(o.source))
+    .join("\n");
+
+  // static usage keeps only referenced classes; the unused one is removed
+  assert.match(css, /hero/);
+  assert.match(css, /is-open/);
+  assert.doesNotMatch(css, /unused-home/);
+  // dynamic access keeps every class of that module
+  assert.match(css, /card/);
+  assert.match(css, /footer/);
+  assert.equal(captured[0]?.errors.length, 0);
+});
+
+test("cssModules: false leaves module CSS untouched", async () => {
+  const root = join(packageRoot, "test/fixtures/modules");
+  const result = (await build({
+    root,
+    logLevel: "silent",
+    plugins: [
+      cssDoctor({
+        report: false,
+        minify: false,
+        cssModules: false,
+        minPageRatio: 1,
+      }),
+    ],
+    build: { write: false },
+  })) as {
+    output: Array<{ type: string; fileName: string; source?: unknown }>;
+  };
+  const css = result.output
+    .filter((o) => o.type === "asset" && o.fileName.endsWith(".css"))
+    .map((o) => String(o.source))
+    .join("\n");
+  assert.match(css, /unused-home/);
+});

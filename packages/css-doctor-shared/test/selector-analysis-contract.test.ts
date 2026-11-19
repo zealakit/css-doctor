@@ -218,3 +218,15 @@ test("missing metrics field is rebuilt; empty selectors stay empty", () => {
     assert.equal(parsed.report.symbols, null);
   }
 });
+
+test("normalizeLevelAndSources keeps valid values and drops invalid ones", async () => {
+  const { normalizeLevelAndSources } = await import("../src/index");
+  assert.deepEqual(
+    normalizeLevelAndSources("high", ["static", "runtime", "static"]),
+    {
+      level: "high",
+      sources: ["static", "runtime"],
+    },
+  );
+  assert.deepEqual(normalizeLevelAndSources("max", ["nope"]), {});
+});

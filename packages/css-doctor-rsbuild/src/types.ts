@@ -35,6 +35,12 @@ export type CssDoctorRsbuildOptions = {
   minify?: boolean;
   /** Print the diagnostics summary. @default true */
   report?: boolean;
+  /**
+   * Function names resolved as class helpers when scanning source
+   * (`cn("a", { b: on })`). Defaults to clsx, cn, cx, classnames, classNames,
+   * twMerge, twJoin, cva, tv. `[]` disables helper resolution.
+   */
+  classHelpers?: string[];
   /** Only process CSS assets whose name matches these patterns. */
   include?: Array<string | RegExp>;
   /** Skip CSS assets whose name matches these patterns. */

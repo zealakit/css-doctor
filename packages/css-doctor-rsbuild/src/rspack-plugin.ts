@@ -16,6 +16,7 @@ import {
   describeError,
   matchesPatterns,
   scanClasses,
+  setActiveClassHelpers,
 } from "@zealakit/css-doctor-shared";
 import type { Compilation, Compiler } from "@rspack/core";
 
@@ -66,6 +67,7 @@ type ResolvedOptions = {
   pageCoverage: Required<PageCoverageOptions> & { forceCommon: string[] };
   sizeBudget: Required<SizeBudgetOptions>;
   pageUsage?: Record<string, string[]>;
+  classHelpers?: string[];
   minify: boolean;
   report: boolean;
   include: Array<string | RegExp>;
@@ -108,6 +110,7 @@ export class CssDoctorRspackPlugin {
         isolateVariables: options.sizeBudget?.isolateVariables ?? true,
       },
       pageUsage: options.pageUsage,
+      classHelpers: options.classHelpers,
       minify: options.minify ?? true,
       report: options.report ?? true,
       include: options.include ?? [],
@@ -138,6 +141,7 @@ export class CssDoctorRspackPlugin {
         },
         async () => {
           try {
+            setActiveClassHelpers(this.options.classHelpers);
             await this.process(compiler, compilation);
           } catch (error) {
             compilation

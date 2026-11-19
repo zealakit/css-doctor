@@ -89,6 +89,10 @@ export type SelectorAnalysisRecord = {
   unresolvedElements: number;
   hasUnprovenRuntimeState: boolean;
   hasUnprovenPositional: boolean;
+  /** Trust level of the verdict. Absent in reports from older versions. */
+  level?: SelectorConfidenceLevel;
+  /** Evidence sources behind the verdict. Absent in older reports. */
+  sources?: SelectorEvidenceSource[];
   /**
    * Per-file confirmed usage. Empty when Core did not emit file paths
    * (aggregate `usageFiles` remains authoritative).
@@ -96,6 +100,9 @@ export type SelectorAnalysisRecord = {
   usageByFile: SelectorFileHit[];
   notes: string[];
 };
+
+export type SelectorConfidenceLevel = "low" | "medium" | "high";
+export type SelectorEvidenceSource = "static" | "runtime" | "config";
 
 export type SelectorSymbolBags = {
   byClass: Record<string, SelectorFileHit[]>;
@@ -435,6 +442,7 @@ function normalizeRecord(value: unknown): SelectorAnalysisRecord | null {
     unresolvedElements: nonNegInt(value.unresolvedElements, 0),
     hasUnprovenRuntimeState: value.hasUnprovenRuntimeState === true,
     hasUnprovenPositional: value.hasUnprovenPositional === true,
+    ...normalizeLevelAndSources(value.level, value.sources),
     usageByFile: normalizeFileHits(value.usageByFile),
     notes: stringArray(value.notes),
   };
@@ -593,4 +601,28 @@ function stringArray(value: unknown): string[] {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Validates optional confidence fields; invalid values are dropped. */
+export function normalizeLevelAndSources(
+  level: unknown,
+  sources: unknown,
+): { level?: SelectorConfidenceLevel; sources?: SelectorEvidenceSource[] } {
+  const out: {
+    level?: SelectorConfidenceLevel;
+    sources?: SelectorEvidenceSource[];
+  } = {};
+  if (level === "low" || level === "medium" || level === "high") {
+    out.level = level;
+  }
+  if (Array.isArray(sources)) {
+    const valid = sources.filter(
+      (item): item is SelectorEvidenceSource =>
+        item === "static" || item === "runtime" || item === "config",
+    );
+    if (valid.length > 0) {
+      out.sources = [...new Set(valid)];
+    }
+  }
+  return out;
 }

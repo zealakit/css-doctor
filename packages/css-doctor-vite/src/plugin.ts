@@ -14,7 +14,10 @@ import {
   clampMaxChunkSize,
   clampMinPageRatio,
   describeError,
+  isCssModuleSpecifier,
   scanClasses,
+  scanCssModuleUsage,
+  setActiveClassHelpers,
 } from "@zealakit/css-doctor-shared";
 import type { Plugin } from "vite";
 
@@ -68,10 +71,128 @@ type EmitAsset = {
 };
 
 type AnalysisEnvironment = {
-  getModuleInfo: (id: string) => { code?: string | null } | null;
+  getModuleInfo: (
+    id: string,
+  ) => { code?: string | null; importedIds?: readonly string[] } | null;
   emitFile: (asset: EmitAsset) => string;
   getFileName: (referenceId: string) => string;
 };
+
+/** CSS Modules class maps captured through `css.modules.getJSON`. */
+type CssModuleState = {
+  /** module file (no query) -> local name -> emitted (hashed) class */
+  maps: Map<string, Record<string, string>>;
+  /** module files referenced by a scanned JS module. */
+  seen: Set<string>;
+};
+
+let cssModuleState: CssModuleState | null = null;
+
+function stripQuery(id: string): string {
+  const index = id.indexOf("?");
+  return index < 0 ? id : id.slice(0, index);
+}
+
+/**
+ * Adds the emitted class names of CSS Modules a JS module reads. Dynamic
+ * access (`styles[x]`) keeps every class of that module.
+ */
+function addCssModuleClasses(
+  code: string,
+  importedIds: readonly string[],
+  classes: Set<string>,
+): void {
+  const state = cssModuleState;
+
+  if (!state || state.maps.size === 0 || !/\.module\./.test(code)) {
+    return;
+  }
+
+  const candidates = importedIds
+    .map(stripQuery)
+    .filter((id) => state.maps.has(id) || isCssModuleSpecifier(id));
+
+  for (const usage of scanCssModuleUsage(code)) {
+    const name = basename(stripQuery(usage.specifier));
+    const files = candidates.filter((id) => basename(id) === name);
+
+    for (const file of files) {
+      const map = state.maps.get(file);
+
+      if (!map) {
+        continue;
+      }
+
+      state.seen.add(file);
+
+      const locals = usage.dynamic ? Object.keys(map) : usage.locals;
+
+      for (const local of locals) {
+        const emitted = map[local];
+
+        if (emitted) {
+          for (const token of emitted.split(/\s+/)) {
+            if (token) {
+              classes.add(token.toLowerCase());
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Emitted classes of CSS Modules no scanned chunk imports. They cannot be
+ * attributed to a page, so they stay common instead of being removed.
+ */
+function unseenCssModuleClasses(): string[] {
+  const state = cssModuleState;
+  const out: string[] = [];
+
+  if (!state) {
+    return out;
+  }
+
+  for (const [file, map] of state.maps) {
+    if (!state.seen.has(file)) {
+      for (const emitted of Object.values(map)) {
+        out.push(...emitted.split(/\s+/).filter(Boolean));
+      }
+    }
+  }
+
+  return out;
+}
+
+/** True when every scoped-looking class in `css` is a captured module class. */
+function isCoveredCssModuleAsset(css: string): boolean {
+  const state = cssModuleState;
+
+  if (!state || state.maps.size === 0) {
+    return false;
+  }
+
+  const known = new Set<string>();
+
+  for (const map of state.maps.values()) {
+    for (const emitted of Object.values(map)) {
+      for (const token of emitted.split(/\s+/)) {
+        known.add(token);
+      }
+    }
+  }
+
+  for (const match of css.matchAll(
+    /\.([A-Za-z0-9_-]+_[A-Za-z0-9]{5,}_[0-9]+)/g,
+  )) {
+    if (match[1] && !known.has(match[1])) {
+      return false;
+    }
+  }
+
+  return true;
+}
 
 /**
  * Creates a Vite plugin that splits emitted CSS by page coverage and removes
@@ -133,6 +254,27 @@ export function cssDoctor(options: CssDoctorViteOptions = {}): Plugin {
     enforce: "post",
 
     config(config) {
+      if (options.cssModules !== false) {
+        const existing = config.css?.modules;
+
+        if (existing !== false) {
+          // Capture local -> emitted class maps; always call the user's hook.
+          const userGetJSON = existing?.getJSON;
+          cssModuleState = { maps: new Map(), seen: new Set() };
+          const state = cssModuleState;
+          config.css ??= {};
+          config.css.modules = {
+            ...existing,
+            getJSON(cssFileName, json, outputFileName) {
+              state.maps.set(stripQuery(cssFileName), { ...json });
+              userGetJSON?.(cssFileName, json, outputFileName);
+            },
+          };
+        }
+      } else {
+        cssModuleState = null;
+      }
+
       if (options.minify === false) {
         config.build ??= {};
         config.build.cssMinify = false;
@@ -151,6 +293,8 @@ export function cssDoctor(options: CssDoctorViteOptions = {}): Plugin {
     },
 
     async generateBundle(_outputOptions, bundle) {
+      setActiveClassHelpers(options.classHelpers);
+      cssModuleState?.seen.clear();
       // Vite 6 may resolve the same plugin for client + SSR environments.
       // Only skip the server consumer; do not sticky-skip the client build.
       const environmentConsumer = (
@@ -318,7 +462,10 @@ async function analyzeAndSplit(
       continue;
     }
 
-    if (isCssModuleAsset(output.fileName, sourceToCss(output.source))) {
+    if (
+      isCssModuleAsset(output.fileName, sourceToCss(output.source)) &&
+      !isCoveredCssModuleAsset(sourceToCss(output.source))
+    ) {
       diagnostics.skippedCssAssets += 1;
       continue;
     }
@@ -353,7 +500,10 @@ async function analyzeAndSplit(
         pageCoverage: {
           enabled: splitApplied,
           minPageRatio: options.pageCoverage.minPageRatio,
-          forceCommon: options.pageCoverage.forceCommon,
+          forceCommon: [
+            ...options.pageCoverage.forceCommon,
+            ...unseenCssModuleClasses(),
+          ],
         },
         sizeBudget: {
           enabled: options.sizeBudget.enabled,
@@ -914,6 +1064,11 @@ function collectChunkContent(
 
       if (moduleInfo?.code) {
         scanClasses(moduleInfo.code, classes);
+        addCssModuleClasses(
+          moduleInfo.code,
+          moduleInfo.importedIds ?? [],
+          classes,
+        );
       }
     }
 

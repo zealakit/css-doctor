@@ -3,11 +3,31 @@
  *
  * Intentionally conservative: literal `class` / `className` / `classList`
  * strings plus statically identifiable tokens inside simple expressions
- * (ternary string branches, template static segments). Helper-built strings
- * (`cn`, `clsx`) are not resolved — callers should use explicit `pageUsage`.
+ * (ternary string branches, template static segments). Helper calls
+ * (`cn`, `clsx`, `cva`, ...) are resolved via `scanClassHelpers`; interpolated
+ * or identifier arguments stay unknown (use `pageUsage` for those).
  */
 
 import { extractClassLiterals } from "./extract-class-literals";
+import { normalizeClassHelpers, scanClassHelpers } from "./scan-class-helpers";
+
+let activeClassHelpers: readonly string[] | undefined;
+
+/**
+ * Sets the helper list used by `scanClasses` / `scanClassOccurrences` when no
+ * explicit list is passed. Adapters call this once per build from their
+ * validated `classHelpers` option (`undefined` restores the defaults).
+ */
+export function setActiveClassHelpers(
+  helpers: readonly string[] | undefined,
+): void {
+  activeClassHelpers = helpers ? normalizeOrEmpty(helpers) : undefined;
+}
+
+function normalizeOrEmpty(helpers: readonly string[]): readonly string[] {
+  // An explicit empty list disables helper resolution.
+  return helpers.length === 0 ? [] : normalizeClassHelpers([...helpers]);
+}
 
 /** Accept Tailwind-style tokens (`md:flex`, `w-1/2`, `w-[10px]`, `!p-2`). */
 export function isClassToken(token: string): boolean {
@@ -27,8 +47,12 @@ export function isClassToken(token: string): boolean {
  * Scans source text for literal class tokens and inserts lowercased names into
  * `classes`.
  */
-export function scanClasses(source: string, classes: Set<string>): void {
-  for (const [token, count] of collectClassOccurrences(source)) {
+export function scanClasses(
+  source: string,
+  classes: Set<string>,
+  classHelpers?: readonly string[],
+): void {
+  for (const [token, count] of collectClassOccurrences(source, classHelpers)) {
     if (count > 0) {
       classes.add(token);
     }
@@ -42,14 +66,32 @@ export function scanClasses(source: string, classes: Set<string>): void {
 export function scanClassOccurrences(
   source: string,
   counts: Map<string, number>,
+  classHelpers?: readonly string[],
 ): void {
-  for (const [token, count] of collectClassOccurrences(source)) {
+  for (const [token, count] of collectClassOccurrences(source, classHelpers)) {
     counts.set(token, (counts.get(token) ?? 0) + count);
   }
 }
 
-function collectClassOccurrences(source: string): Map<string, number> {
+function collectClassOccurrences(
+  source: string,
+  classHelpers?: readonly string[],
+): Map<string, number> {
   const counts = new Map<string, number>();
+  classHelpers = classHelpers ?? activeClassHelpers;
+
+  // Helper calls (`cn`, `clsx`, `cva`, ...). Conditional object keys count as
+  // possible usage so they are never reported dead. `[]` disables.
+  if (!classHelpers || classHelpers.length > 0) {
+    const scan = classHelpers
+      ? scanClassHelpers(source, classHelpers)
+      : scanClassHelpers(source);
+    for (const call of scan.calls) {
+      for (const token of [...call.confirmed, ...call.unresolved]) {
+        counts.set(token, (counts.get(token) ?? 0) + 1);
+      }
+    }
+  }
 
   const attrPattern =
     /(?:class|className|:class|v-bind:class)\s*=\s*(?:"([^"]*)"|'([^']*)'|`([^`]*)`|\{([^}]*)\})/g;

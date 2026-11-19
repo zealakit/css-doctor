@@ -35,6 +35,18 @@ export type CssDoctorViteOptions = {
   minPageRatio?: number;
   /** @deprecated Use `pageCoverage.forceCommon`. */
   forceCommonSelectors?: string[];
+  /**
+   * Function names resolved as class helpers when scanning source
+   * (`cn("a", { b: on })`). Defaults to clsx, cn, cx, classnames, classNames,
+   * twMerge, twJoin, cva, tv. `[]` disables helper resolution.
+   */
+  classHelpers?: string[];
+  /**
+   * Track CSS Modules usage (`styles.foo`) and split module CSS by page
+   * instead of leaving it untouched. Captures `css.modules.getJSON` (your own
+   * hook still runs). Set `false` to always skip module CSS. @default true
+   */
+  cssModules?: boolean;
   /** Tier 1 configuration. */
   pageCoverage?: PageCoverageOptions;
   /** Tier 2 configuration. */

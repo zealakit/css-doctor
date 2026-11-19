@@ -54,6 +54,12 @@ export type CssDoctorNextOptions = {
   minPageRatio?: number;
   /** @deprecated Use `pageCoverage.forceCommon`. */
   forceCommonSelectors?: string[];
+  /**
+   * Function names resolved as class helpers when scanning source
+   * (`cn("a", { b: on })`). Defaults to clsx, cn, cx, classnames, classNames,
+   * twMerge, twJoin, cva, tv. `[]` disables helper resolution.
+   */
+  classHelpers?: string[];
 };
 
 /** Options passed to the internal webpack plugin. */

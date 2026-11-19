@@ -154,6 +154,14 @@ function normalizeConfig(value: unknown): CssDoctorNextOptions {
   if (typeof candidate.minPageRatio === "number") {
     options.minPageRatio = candidate.minPageRatio;
   }
+  if (
+    Array.isArray(candidate.classHelpers) &&
+    candidate.classHelpers.every(
+      (name) => typeof name === "string" && /^[A-Za-z_$][\w$]*$/.test(name),
+    )
+  ) {
+    options.classHelpers = candidate.classHelpers as string[];
+  }
   if (Array.isArray(candidate.forceCommonSelectors)) {
     options.forceCommonSelectors = candidate.forceCommonSelectors as string[];
   }

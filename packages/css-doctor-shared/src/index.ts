@@ -16,6 +16,7 @@ export {
   isClassToken,
   scanClasses,
   scanClassOccurrences,
+  setActiveClassHelpers,
 } from "./scan-classes";
 export {
   createMarkupUsageBucket,
@@ -29,7 +30,18 @@ export type {
   MarkupUsageKind,
 } from "./scan-markup-usage";
 export { scanSourceEvidence } from "./scan-source-evidence";
+export {
+  DEFAULT_CLASS_HELPERS,
+  normalizeClassHelpers,
+  scanClassHelpers,
+} from "./scan-class-helpers";
 export type {
+  ClassHelperCall,
+  ClassHelperScan,
+  UnknownEvidence,
+} from "./scan-class-helpers";
+export type {
+  ScanSourceEvidenceOptions,
   SourceElementEvidence,
   SourceFileEvidence,
 } from "./scan-source-evidence";
@@ -40,11 +52,14 @@ export {
   categorizeSelectorText,
   emptySymbolBags,
   legacyClassOnlyAnalysis,
+  normalizeLevelAndSources,
   parseSelectorAnalysis,
 } from "./selector-analysis-contract";
 export type {
   ParseSelectorAnalysisResult,
   SelectorAnalysisCompleteness,
+  SelectorConfidenceLevel,
+  SelectorEvidenceSource,
   SelectorAnalysisMetrics,
   SelectorAnalysisRecord,
   SelectorAnalysisReport,
@@ -62,3 +77,11 @@ export type {
   SelectorDefinitionInput,
   SelectorMatchInput,
 } from "./build-selector-analysis";
+export { createModuleResolver } from "./resolve-module";
+export type {
+  ModuleResolver,
+  ModuleResolverOptions,
+  ResolveResult,
+} from "./resolve-module";
+export { isCssModuleSpecifier, scanCssModuleUsage } from "./scan-css-modules";
+export type { CssModuleUsage } from "./scan-css-modules";

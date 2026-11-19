@@ -8,6 +8,7 @@ import {
   categorizeSelectorKinds,
   categorizeSelectorText,
   emptySymbolBags,
+  normalizeLevelAndSources,
   SELECTOR_ANALYSIS_SCHEMA_VERSION,
   type SelectorAnalysisRecord,
   type SelectorAnalysisReport,
@@ -39,6 +40,8 @@ export type SelectorMatchInput = {
   unresolvedElements?: number;
   hasUnprovenRuntimeState?: boolean;
   hasUnprovenPositional?: boolean;
+  level?: string;
+  sources?: string[];
   notes?: string[];
 };
 
@@ -140,6 +143,7 @@ export function buildSelectorAnalysisReport(
         unresolvedElements: nonNeg(match.unresolvedElements ?? 0),
         hasUnprovenRuntimeState: match.hasUnprovenRuntimeState === true,
         hasUnprovenPositional: match.hasUnprovenPositional === true,
+        ...normalizeLevelAndSources(match.level, match.sources),
         usageByFile: normalizeMatchUsageByFile(match.usageByFile),
         notes: match.notes ?? [],
       });

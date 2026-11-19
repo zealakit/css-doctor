@@ -7,6 +7,8 @@
  * recorded separately and never invented.
  */
 
+import { scanClassHelpers } from "./scan-class-helpers";
+import type { UnknownEvidence } from "./scan-class-helpers";
 import {
   extractClassLiterals,
   extractFrameworkClassBinding,
@@ -50,6 +52,15 @@ export type SourceFileEvidence = {
     ids: Map<string, number>;
     attributes: Map<string, number>;
   };
+  /** Class-helper arguments the scanner could not resolve (analysis blind spots). */
+  unknown: UnknownEvidence[];
+  /** Convenience: `unknown.length`. */
+  unknownEvidenceCount: number;
+};
+
+export type ScanSourceEvidenceOptions = {
+  /** Helper function names to resolve (default: clsx, cn, cva, ...). Empty array disables. */
+  classHelpers?: readonly string[];
 };
 
 const VOID_TAGS = new Set([
@@ -82,7 +93,10 @@ type TagEvent =
 /**
  * Scans one source file once and returns element + symbol evidence.
  */
-export function scanSourceEvidence(source: string): SourceFileEvidence {
+export function scanSourceEvidence(
+  source: string,
+  options: ScanSourceEvidenceOptions = {},
+): SourceFileEvidence {
   const cleaned = stripScanNoise(source);
   const evidence = emptyEvidence();
   const lineStarts = buildLineStarts(cleaned);
@@ -159,7 +173,48 @@ export function scanSourceEvidence(source: string): SourceFileEvidence {
   }
 
   scanLooseClassReferences(cleaned, evidence);
+  applyClassHelpers(cleaned, evidence, options.classHelpers);
   return evidence;
+}
+
+function applyClassHelpers(
+  source: string,
+  evidence: SourceFileEvidence,
+  helpers: readonly string[] | undefined,
+): void {
+  if (helpers && helpers.length === 0) {
+    return;
+  }
+  const scan = helpers
+    ? scanClassHelpers(source, helpers)
+    : scanClassHelpers(source);
+  for (const call of scan.calls) {
+    if (call.confirmed.length === 0 && call.unresolved.length === 0) {
+      continue;
+    }
+    // One synthetic element per call: its arguments almost always style one
+    // node, but the owning element is unknown, so tag/parent stay empty.
+    evidence.elements.push({
+      tag: null,
+      id: null,
+      classes: call.confirmed,
+      dynamicClasses: call.unresolved,
+      attributes: {},
+      dynamicAttributes: [],
+      parentIndex: null,
+      depth: 0,
+      line: call.line,
+      column: call.column,
+    });
+    for (const token of call.confirmed) {
+      bump(evidence.confirmed.classes, token, 1);
+    }
+    for (const token of call.unresolved) {
+      bump(evidence.unresolved.classes, token, 1);
+    }
+  }
+  evidence.unknown.push(...scan.unknown);
+  evidence.unknownEvidenceCount = evidence.unknown.length;
 }
 
 function collectTagEvents(source: string): TagEvent[] {
@@ -365,6 +420,8 @@ function emptyEvidence(): SourceFileEvidence {
       ids: new Map(),
       attributes: new Map(),
     },
+    unknown: [],
+    unknownEvidenceCount: 0,
   };
 }
 
