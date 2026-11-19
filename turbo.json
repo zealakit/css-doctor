@@ -83,7 +83,8 @@
     },
     "test": {
       "dependsOn": [
-        "build"
+        "build",
+        "^test"
       ],
       "cache": true,
       "inputs": [

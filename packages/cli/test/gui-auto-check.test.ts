@@ -211,7 +211,11 @@ test("css-doctor gui still displays report when check finds CSS diagnostics", as
     });
 
     try {
-      await waitForMatch(() => stdout + stderr, /web mode/i, 30_000);
+      await waitForMatch(
+        () => stdout + stderr,
+        /css-doctor gui: web mode/i,
+        30_000,
+      );
       const response = await fetch(`http://127.0.0.1:${port}/api/report`);
       assert.equal(response.status, 200);
       const body = (await response.json()) as {
@@ -270,7 +274,11 @@ test("analysis execution failure loads this-run report and keeps prior latest", 
     });
 
     try {
-      await waitForMatch(() => stdout + stderr, /web mode/i, 30_000);
+      await waitForMatch(
+        () => stdout + stderr,
+        /css-doctor gui: web mode/i,
+        30_000,
+      );
       assert.match(
         stdout + stderr,
         /previous check-latest\.json .* left unchanged/i,
