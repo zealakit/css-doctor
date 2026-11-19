@@ -81,7 +81,11 @@ function patternToRegExp(pattern: string): RegExp {
       if (segment === "**") {
         return ".*";
       }
-      if (segment === "*" || /^:[\w-]+$/.test(segment) || /^\[[^\]]+\]$/.test(segment)) {
+      if (
+        segment === "*" ||
+        /^:[\w-]+$/.test(segment) ||
+        /^\[[^\]]+\]$/.test(segment)
+      ) {
         return "[^/]+";
       }
       return segment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

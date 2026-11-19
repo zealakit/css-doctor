@@ -126,7 +126,10 @@ function fromCdp(
   return entries;
 }
 
-function normalizeRanges(value: unknown[], textLength: number): CoverageRange[] {
+function normalizeRanges(
+  value: unknown[],
+  textLength: number,
+): CoverageRange[] {
   const out: CoverageRange[] = [];
   for (const item of value) {
     if (
