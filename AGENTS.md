@@ -90,6 +90,7 @@ pnpm format                 # turbo format (Biome format --write)
 pnpm format:check           # turbo format:check (no writes)
 pnpm check                  # turbo check (Biome lint + format)
 pnpm dev                    # turbo dev (persistent, uncached)
+pnpm snapshot:examples      # rebuild examples/* and compare emitted CSS to examples/css-snapshots.json (--update to accept)
 pnpm monitor                # dependency dashboard at http://127.0.0.1:4177
 
 # Rust

@@ -30,7 +30,8 @@
     "publish:npm:binding": "tsx scripts/publish-npm.ts --binding --skip-missing",
     "publish:npm:adapters": "tsx scripts/publish-npm.ts --adapters --skip-missing",
     "publish:npm:dry": "tsx scripts/publish-npm.ts --all --skip-missing --dry-run",
-    "publish:npm:validate": "tsx scripts/publish-npm.ts --adapters --validate-only --skip-missing"
+    "publish:npm:validate": "tsx scripts/publish-npm.ts --adapters --validate-only --skip-missing",
+    "snapshot:examples": "tsx scripts/example-snapshots.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.7",

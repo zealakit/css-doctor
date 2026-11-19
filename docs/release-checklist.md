@@ -41,6 +41,8 @@ complete without command evidence from the current checkout.
 
 ## Release
 
+- [ ] `pnpm snapshot:examples` passes (emitted example CSS unchanged, or the diff was reviewed and `--update` committed)
+- [ ] `cargo bench -p css_doctor_core` shows no regression > 10% against the previous release
 - [ ] Workspace package versions reviewed for consistency (no silent mismatch)
 - [ ] Changelog / release notes drafted when shipping user-visible changes
 - [ ] Breaking changes listed explicitly

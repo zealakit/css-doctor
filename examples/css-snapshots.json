@@ -1,0 +1,184 @@
+{
+  "schemaVersion": 1,
+  "byteTolerance": 0.01,
+  "examples": {
+    "vite-react-tailwind": [
+      {
+        "file": "index.css",
+        "bytes": 7789,
+        "rules": 70,
+        "selectors": 103
+      },
+      {
+        "file": "page-dashboard.css",
+        "bytes": 377,
+        "rules": 6,
+        "selectors": 6
+      },
+      {
+        "file": "page-home.css",
+        "bytes": 516,
+        "rules": 7,
+        "selectors": 7
+      },
+      {
+        "file": "page-settings.css",
+        "bytes": 315,
+        "rules": 5,
+        "selectors": 5
+      }
+    ],
+    "vite-react-3rd-ui": [
+      {
+        "file": "common-part-1.css",
+        "bytes": 40828,
+        "rules": 305,
+        "selectors": 334
+      },
+      {
+        "file": "common-part-2.css",
+        "bytes": 8619,
+        "rules": 51,
+        "selectors": 51
+      },
+      {
+        "file": "common-vars.css",
+        "bytes": 3181,
+        "rules": 10,
+        "selectors": 22
+      },
+      {
+        "file": "index.css",
+        "bytes": 0,
+        "rules": 0,
+        "selectors": 0
+      },
+      {
+        "file": "page-antd.css",
+        "bytes": 594,
+        "rules": 7,
+        "selectors": 7
+      },
+      {
+        "file": "page-chakra.css",
+        "bytes": 74,
+        "rules": 1,
+        "selectors": 1
+      },
+      {
+        "file": "page-home.css",
+        "bytes": 2527,
+        "rules": 25,
+        "selectors": 25
+      },
+      {
+        "file": "page-mui.css",
+        "bytes": 71,
+        "rules": 1,
+        "selectors": 1
+      }
+    ],
+    "rsbuild-react-tailwind": [
+      {
+        "file": "index.css",
+        "bytes": 7729,
+        "rules": 85,
+        "selectors": 119
+      },
+      {
+        "file": "page-dashboard.css",
+        "bytes": 702,
+        "rules": 12,
+        "selectors": 12
+      },
+      {
+        "file": "page-home.css",
+        "bytes": 766,
+        "rules": 10,
+        "selectors": 10
+      },
+      {
+        "file": "page-settings.css",
+        "bytes": 974,
+        "rules": 16,
+        "selectors": 16
+      },
+      {
+        "file": "w.css",
+        "bytes": 188,
+        "rules": 2,
+        "selectors": 2
+      }
+    ],
+    "astro-tailwind-sass": [
+      {
+        "file": "index.css",
+        "bytes": 38456,
+        "rules": 211,
+        "selectors": 244
+      }
+    ],
+    "next-app-tailwind": [
+      {
+        "file": "<hash>.css",
+        "bytes": 0,
+        "rules": 0,
+        "selectors": 0
+      },
+      {
+        "file": "<hash>.css",
+        "bytes": 115,
+        "rules": 0,
+        "selectors": 0
+      },
+      {
+        "file": "common-part-1.css",
+        "bytes": 40640,
+        "rules": 194,
+        "selectors": 228
+      },
+      {
+        "file": "common-part-2.css",
+        "bytes": 15390,
+        "rules": 49,
+        "selectors": 49
+      },
+      {
+        "file": "common-vars.css",
+        "bytes": 2974,
+        "rules": 13,
+        "selectors": 25
+      },
+      {
+        "file": "page-dashboard.css",
+        "bytes": 484,
+        "rules": 10,
+        "selectors": 10
+      },
+      {
+        "file": "page-dashboard.css",
+        "bytes": 619,
+        "rules": 3,
+        "selectors": 3
+      },
+      {
+        "file": "page-index.css",
+        "bytes": 13823,
+        "rules": 68,
+        "selectors": 68
+      },
+      {
+        "file": "page-settings.css",
+        "bytes": 351,
+        "rules": 6,
+        "selectors": 6
+      },
+      {
+        "file": "page-settings.css",
+        "bytes": 625,
+        "rules": 4,
+        "selectors": 4
+      }
+    ]
+  }
+}
