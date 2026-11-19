@@ -336,10 +336,16 @@ unchanged unless a caller attaches the section.
 
 ### Known limitations
 
-- CSS Modules (`*.module.css`) and helper-built class strings (`cn` / `clsx`) are
-  not fully resolved by static scanning. Prefer literal `class` / `className`
-  tokens, or supply `pageUsage` / `forceCommon`.
-- Next.js path aliases beyond `@/` need explicit `pageUsage`.
+- Class helpers (`cn`, `clsx`, `cva`, `tv`, `twMerge`, ... — set `classHelpers`
+  to add your own) are resolved when their arguments are literals; identifiers
+  and interpolated names are reported as unknown evidence. Supply `pageUsage` /
+  `forceCommon` for those.
+- CSS Modules are split by usage in Vite (`cssModules: false` opts out); Next
+  and Rsbuild still skip `*.module.css`.
+- Next path aliases come from `tsconfig`/`jsconfig` `paths` and workspace
+  `exports`; other custom aliases need explicit `pageUsage`.
+- `pageCoverage.matching: "precise"` removes compound selectors (`.btn.primary`)
+  on pages where any required class is missing. Default is `"conservative"`.
 - Content-hashed CSS asset rewrites may leave the original filename hash stale
   after in-place CSS updates (adapters emit additional hashed chunk files for
   split output).

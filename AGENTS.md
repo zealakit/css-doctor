@@ -233,7 +233,12 @@ Do not merge CLI and adapter config loaders into one discovery path — lifecycl
   fallback for CLI-style scans.
 - `classHelpers` is applied per build via `setActiveClassHelpers` (process-wide
   setting; concurrent builds with different lists in one process would race).
-- A selector with multiple classes is matched conservatively by any class.
+- A selector with multiple classes is matched conservatively by any class by
+  default. `pageCoverage.matching: "precise"` (Vite/Next/Rsbuild/`optimizeCss`)
+  requires every strictly required class (compound + combinator chain, outside
+  `:is`/`:not`/`:has`) to appear on the page; it is still page-level, not
+  same-element. Per-element matching and the "never matches together"
+  diagnostic (`classUsage.compoundNeverMatch`) exist only in the CLI/GUI path.
 - `@keyframes` are always common; animation usage is not tracked per page.
 - **Content hash integrity:** Vite / Next (webpack) / Rsbuild finalize hashed
   CSS filenames before or during asset optimization. css-doctor rewrites CSS

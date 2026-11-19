@@ -9,7 +9,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 
 use crate::size_splitter::{SizeSplitterConfig, split_css_by_size};
-use crate::splitter::{ChunkConfig, SelectorStat, SplitInput, split_css_by_pages};
+use crate::splitter::{ChunkConfig, MatchingMode, SelectorStat, SplitInput, split_css_by_pages};
 
 /// Configuration for tier 1 (semantic page-coverage splitting).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -24,6 +24,9 @@ pub struct PageCoverageConfig {
     /// Selectors or classes that always stay in the common chunk.
     #[serde(default)]
     pub force_common: Vec<String>,
+    /// Class matching strictness. Defaults to conservative (any class).
+    #[serde(default)]
+    pub matching: MatchingMode,
 }
 
 impl Default for PageCoverageConfig {
@@ -32,6 +35,7 @@ impl Default for PageCoverageConfig {
             enabled: true,
             min_page_ratio: default_min_page_ratio(),
             force_common: Vec::new(),
+            matching: MatchingMode::Conservative,
         }
     }
 }
@@ -191,6 +195,7 @@ pub fn optimize_css_pipeline(input: &PipelineInput) -> Result<PipelineOutput, St
                 min_page_ratio: input.page_coverage.min_page_ratio,
                 force_common_selectors: input.page_coverage.force_common.clone(),
                 minify: input.minify,
+                matching: input.page_coverage.matching,
             },
         })?;
 
@@ -419,6 +424,7 @@ mod tests {
                 enabled: true,
                 min_page_ratio: 0.5,
                 force_common: Vec::new(),
+                matching: Default::default(),
             },
             size_budget: SizeBudgetConfig {
                 enabled: false,
@@ -555,6 +561,7 @@ mod tests {
                 enabled: true,
                 min_page_ratio: 0.5,
                 force_common: Vec::new(),
+                matching: Default::default(),
             },
             size_budget: SizeBudgetConfig {
                 enabled: true,

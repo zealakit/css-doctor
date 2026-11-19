@@ -626,6 +626,19 @@ pub struct JsChunkConfig {
     pub force_common_selectors: Vec<String>,
     /// Minify serialized CSS. Defaults to `true`.
     pub minify: Option<bool>,
+    /// `"conservative"` (default, any class) or `"precise"` (all required classes).
+    pub matching: Option<String>,
+}
+
+/// Parses a `matching` option; `None` means the conservative default.
+fn parse_matching_mode(value: Option<&str>) -> Result<core::MatchingMode, napi::Error> {
+    match value {
+        None | Some("conservative") => Ok(core::MatchingMode::Conservative),
+        Some("precise") => Ok(core::MatchingMode::Precise),
+        Some(other) => Err(napi::Error::from_reason(format!(
+            "invalid matching mode '{other}': expected 'conservative' or 'precise'"
+        ))),
+    }
 }
 
 /// Input for [`split_css_by_pages`].
@@ -692,6 +705,7 @@ pub fn split_css_by_pages(input: JsSplitInput) -> Result<JsSplitOutput, napi::Er
             min_page_ratio: input.config.min_page_ratio as f32,
             force_common_selectors: input.config.force_common_selectors,
             minify: input.config.minify.unwrap_or(true),
+            matching: parse_matching_mode(input.config.matching.as_deref())?,
         },
     };
 
@@ -711,6 +725,8 @@ pub struct JsPageCoverageConfig {
     pub min_page_ratio: Option<f64>,
     /// Selectors or classes that always stay in the common chunk.
     pub force_common: Option<Vec<String>>,
+    /// `"conservative"` (default) or `"precise"`; see `JsChunkConfig.matching`.
+    pub matching: Option<String>,
 }
 
 /// Configuration for the physical size-budget tier.
@@ -812,7 +828,7 @@ pub struct JsPipelineOutput {
 /// stylesheet/AST cannot be processed.
 #[napi]
 pub fn optimize_css(input: JsPipelineInput) -> Result<JsPipelineOutput, napi::Error> {
-    let core_input = build_pipeline_input(input);
+    let core_input = build_pipeline_input(input)?;
     core::optimize_css_pipeline(&core_input)
         .map(JsPipelineOutput::from)
         .map_err(napi::Error::from_reason)
@@ -841,7 +857,7 @@ pub fn optimize_css_explained(
     max_selector_decisions: Option<u32>,
 ) -> Result<JsOptimizeExplained, napi::Error> {
     let started = std::time::Instant::now();
-    let core_input = build_pipeline_input(input);
+    let core_input = build_pipeline_input(input)?;
     let output = core::optimize_css_pipeline(&core_input).map_err(napi::Error::from_reason)?;
     let mut explain = core::ExplainOptions::default();
     if let Some(limit) = max_selector_decisions {
@@ -922,11 +938,11 @@ pub fn apply_css_fixes(input: JsFixInput) -> Result<String, napi::Error> {
         .map_err(|error| napi::Error::from_reason(error.to_string()))
 }
 
-fn build_pipeline_input(input: JsPipelineInput) -> core::PipelineInput {
+fn build_pipeline_input(input: JsPipelineInput) -> Result<core::PipelineInput, napi::Error> {
     let page_coverage = input.page_coverage;
     let size_budget = input.size_budget;
 
-    core::PipelineInput {
+    Ok(core::PipelineInput {
         css_content: input.css_content,
         page_usage: input
             .page_usage
@@ -943,6 +959,11 @@ fn build_pipeline_input(input: JsPipelineInput) -> core::PipelineInput {
                 .and_then(|config| config.min_page_ratio)
                 .map(|value| value as f32)
                 .unwrap_or(0.5),
+            matching: parse_matching_mode(
+                page_coverage
+                    .as_ref()
+                    .and_then(|config| config.matching.as_deref()),
+            )?,
             force_common: page_coverage
                 .and_then(|config| config.force_common)
                 .unwrap_or_default(),
@@ -962,7 +983,7 @@ fn build_pipeline_input(input: JsPipelineInput) -> core::PipelineInput {
                 .unwrap_or(true),
         },
         minify: input.minify.unwrap_or(true),
-    }
+    })
 }
 
 impl From<core::PipelineChunkKind> for JsPipelineChunkKind {
@@ -1790,6 +1811,7 @@ mod tests {
             config: JsChunkConfig {
                 min_page_ratio: 0.5,
                 force_common_selectors: Vec::new(),
+                matching: None,
                 minify: None,
             },
         };
@@ -1820,6 +1842,7 @@ mod tests {
             config: JsChunkConfig {
                 min_page_ratio: 2.0,
                 force_common_selectors: Vec::new(),
+                matching: None,
                 minify: None,
             },
         };
@@ -1886,6 +1909,7 @@ mod tests {
                     enabled: Some(true),
                     min_page_ratio: Some(0.5),
                     force_common: None,
+                    matching: None,
                 }),
                 size_budget: Some(JsSizeBudgetConfig {
                     enabled: Some(false),
@@ -1913,6 +1937,7 @@ mod tests {
                     enabled: Some(true),
                     min_page_ratio: Some(0.5),
                     force_common: None,
+                matching: None,
                 }),
                 size_budget: Some(JsSizeBudgetConfig {
                     enabled: Some(true),
@@ -2020,6 +2045,7 @@ mod tests {
                 enabled: Some(false),
                 min_page_ratio: None,
                 force_common: None,
+                matching: None,
             }),
             size_budget: Some(JsSizeBudgetConfig {
                 enabled: Some(true),

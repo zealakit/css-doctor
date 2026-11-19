@@ -240,6 +240,7 @@ mod tests {
                 enabled: true,
                 min_page_ratio: 1.0,
                 force_common: vec![],
+                matching: Default::default(),
             },
             size_budget: SizeBudgetConfig {
                 enabled: false,

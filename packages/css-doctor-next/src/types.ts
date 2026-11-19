@@ -11,6 +11,15 @@ export type PageCoverageOptions = {
   minPageRatio?: number;
   /** Selectors or classes that always stay in the common chunk. */
   forceCommon?: string[];
+  /**
+   * Class matching strictness for page coverage.
+   * - `"conservative"` (default): a selector is used when any required class is.
+   * - `"precise"`: every class a selector strictly requires must be used on the
+   *   page, so `.btn.primary` is removed where `.primary` never appears.
+   *   Classes added at runtime that are not statically visible can be removed
+   *   wrongly; use `forceCommon` / `pageUsage` for those.
+   */
+  matching?: "conservative" | "precise";
 };
 
 /** Tier 2: physical size-budget splitting. */

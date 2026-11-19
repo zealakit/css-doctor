@@ -212,6 +212,7 @@ export function cssDoctor(options: CssDoctorViteOptions = {}): Plugin {
       DEFAULT_MIN_PAGE_RATIO,
     forceCommon:
       options.pageCoverage?.forceCommon ?? options.forceCommonSelectors ?? [],
+    matching: options.pageCoverage?.matching ?? "conservative",
   };
   const sizeBudget: SizeBudgetOptions = {
     enabled: options.sizeBudget?.enabled ?? true,
@@ -321,6 +322,7 @@ export function cssDoctor(options: CssDoctorViteOptions = {}): Plugin {
               enabled: pageCoverage.enabled ?? true,
               minPageRatio,
               forceCommon: pageCoverage.forceCommon ?? [],
+              matching: pageCoverage.matching ?? "conservative",
             },
             sizeBudget: {
               enabled: sizeBudget.enabled ?? true,
@@ -500,6 +502,7 @@ async function analyzeAndSplit(
         pageCoverage: {
           enabled: splitApplied,
           minPageRatio: options.pageCoverage.minPageRatio,
+          matching: options.pageCoverage.matching,
           forceCommon: [
             ...options.pageCoverage.forceCommon,
             ...unseenCssModuleClasses(),

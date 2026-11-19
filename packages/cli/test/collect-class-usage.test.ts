@@ -227,3 +227,33 @@ test("runtime coverage upgrades selector verdicts via Core rules", async () => {
     assert.equal(by(".plain")?.level, "medium");
   });
 });
+
+test("reports compound selectors whose classes never meet on one element", async () => {
+  await withTempDir(async (cwd) => {
+    await mkdir(join(cwd, "src"), { recursive: true });
+    await writeFile(
+      join(cwd, "src/a.tsx"),
+      `export const A = () => <div className="btn" />;`,
+    );
+    await writeFile(
+      join(cwd, "src/b.tsx"),
+      `export const B = () => <div className="primary" />;`,
+    );
+    await writeFile(
+      join(cwd, "src/c.tsx"),
+      `export const C = () => <div className="card active" />;`,
+    );
+
+    const usage = await collectProjectClassUsage(cwd, {
+      selectors: [".btn.primary", ".card.active", ".btn.ghost", ".btn:not(.x)"],
+    });
+    assert.deepEqual(
+      usage.compoundNeverMatch.map((item) => item.selector),
+      [".btn.primary"],
+    );
+    assert.deepEqual(usage.compoundNeverMatch[0]?.filesByClass, {
+      btn: ["src/a.tsx"],
+      primary: ["src/b.tsx"],
+    });
+  });
+});

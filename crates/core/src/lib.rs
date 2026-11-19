@@ -96,5 +96,7 @@ pub use regression::{
     validate_baseline_document,
 };
 pub use size_splitter::{SizeSplitOutput, SizeSplitterConfig, split_css_by_size};
-pub use splitter::{ChunkConfig, SelectorStat, SplitInput, SplitOutput, split_css_by_pages};
+pub use splitter::{
+    ChunkConfig, MatchingMode, SelectorStat, SplitInput, SplitOutput, split_css_by_pages,
+};
 pub use usage::UsageMatrix;

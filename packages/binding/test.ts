@@ -340,6 +340,32 @@ async function main(): Promise<void> {
   assert.equal(unused?.status, "unused");
   assert.equal(unused?.level, "medium");
 
+  const compoundCss = ".btn.primary { color: red; } .btn { color: blue; }";
+  const compoundInput = {
+    cssContent: compoundCss,
+    pageUsage: { home: ["btn"], about: ["btn"] },
+    sizeBudget: { enabled: false },
+    minify: true,
+  };
+  const conservative = binding.optimizeCss({
+    ...compoundInput,
+    pageCoverage: { enabled: true, minPageRatio: 0.5 },
+  });
+  const precise = binding.optimizeCss({
+    ...compoundInput,
+    pageCoverage: { enabled: true, minPageRatio: 0.5, matching: "precise" },
+  });
+  assert.equal(conservative.deadCodeCount, 0);
+  assert.equal(precise.deadCodeCount, 1);
+  assert.throws(
+    () =>
+      binding.optimizeCss({
+        ...compoundInput,
+        pageCoverage: { enabled: true, matching: "strict" },
+      }),
+    /invalid matching mode/,
+  );
+
   console.log("\n✅ css-doctor NAPI binding OK");
   console.log(
     `   ${result.stats.ruleCount} rules, ${result.stats.selectorCount} selectors, ` +

@@ -90,6 +90,7 @@ export class CssDoctorWebpackPlugin {
       minPageRatio: clampedRatio.value,
       forceCommon:
         options.pageCoverage?.forceCommon ?? options.forceCommonSelectors ?? [],
+      matching: options.pageCoverage?.matching ?? "conservative",
     };
 
     if (clampedRatio.warning) {
@@ -273,6 +274,7 @@ export class CssDoctorWebpackPlugin {
             enabled: pageCoverageApplied,
             minPageRatio: this.pageCoverage.minPageRatio,
             forceCommon: this.pageCoverage.forceCommon,
+            matching: this.pageCoverage.matching,
           },
           sizeBudget: {
             enabled: this.sizeBudget.enabled,

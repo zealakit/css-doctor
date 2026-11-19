@@ -60,7 +60,17 @@ export type CheckClassUsage = {
   /** Class-helper arguments that could not be resolved, per file (blind spots). */
   unknownEvidenceByFile: Record<string, UnknownEvidence[]>;
   unknownEvidenceCount: number;
+  /** Compound selectors whose classes all appear in source but never on one element. */
+  compoundNeverMatch: CompoundNeverMatch[];
   notes: string[];
+};
+
+export type CompoundNeverMatch = {
+  selector: string;
+  /** Classes the selector requires (each used somewhere in source). */
+  classes: string[];
+  /** Files using each class, to show where the classes live apart. */
+  filesByClass: Record<string, string[]>;
 };
 
 export type CollectClassUsageOptions = {
@@ -249,8 +259,69 @@ export async function collectProjectClassUsage(
     elementsScanned,
     unknownEvidenceByFile,
     unknownEvidenceCount,
+    compoundNeverMatch: findCompoundNeverMatch(selectorMatches, byClass),
     notes,
   };
+}
+
+/**
+ * "Compound selector never matches together": `.a.b` (or `.a .b`) is unused
+ * although every class it needs exists in source, just never on one element.
+ */
+function findCompoundNeverMatch(
+  matches: SelectorUsageMatchHit[],
+  byClass: Map<string, Map<string, number>>,
+): CompoundNeverMatch[] {
+  const out: CompoundNeverMatch[] = [];
+  for (const match of matches) {
+    // Unused, or only partially matched (classes seen on different elements),
+    // with no confirmed element, no dynamic/unresolved evidence, and no
+    // runtime/positional pseudo that could explain the miss.
+    const neverTogether =
+      (match.status === "unused" || match.status === "partial") &&
+      match.matchedElements === 0 &&
+      match.unresolvedElements === 0 &&
+      !match.hasUnprovenRuntimeState &&
+      !match.hasUnprovenPositional;
+    if (!neverTogether) {
+      continue;
+    }
+    const classes = requiredClasses(match.selector);
+    if (classes.length < 2) {
+      continue;
+    }
+    const filesByClass: Record<string, string[]> = {};
+    let allPresent = true;
+    for (const name of classes) {
+      const files = byClass.get(name);
+      if (!files || files.size === 0) {
+        allPresent = false;
+        break;
+      }
+      filesByClass[name] = [...files.keys()].sort().slice(0, 5);
+    }
+    if (allPresent) {
+      out.push({ selector: match.selector, classes, filesByClass });
+    }
+  }
+  return out;
+}
+
+/** Lowercased classes outside `:not(...)` / `:is(...)` / `:where(...)` / `:has(...)`. */
+function requiredClasses(selector: string): string[] {
+  let stripped = selector;
+  let previous: string;
+  do {
+    previous = stripped;
+    stripped = stripped.replace(/:(?:not|is|where|has|any)\([^()]*\)/gi, " ");
+  } while (stripped !== previous);
+  const found = new Set<string>();
+  for (const match of stripped.matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)) {
+    if (match[1]) {
+      found.add(match[1].toLowerCase());
+    }
+  }
+  return [...found];
 }
 
 /**
@@ -340,6 +411,7 @@ function emptyUsage(notes: string[]): CheckClassUsage {
     elementsScanned: 0,
     unknownEvidenceByFile: {},
     unknownEvidenceCount: 0,
+    compoundNeverMatch: [],
     notes,
   };
 }
