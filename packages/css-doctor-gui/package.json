@@ -1,6 +1,6 @@
 {
   "name": "@zealakit/css-doctor-gui",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Local Web report viewer for CSS Doctor CLI analysis JSON (optional Desktop shell)",
   "keywords": [
     "css",

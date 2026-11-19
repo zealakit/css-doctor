@@ -1,8 +1,8 @@
 # css-doctor-gui changelog
 
-## 1.1.1 (first public GUI release — candidate)
+## 1.2.0 (first public GUI release — candidate)
 
-Not published yet. Version matches the current monorepo workspace (`1.1.1`).
+Not published yet. Version matches the current monorepo workspace (`1.2.0`).
 npm registry currently has Core/CLI/adapters at `1.1.0`; `@zealakit/css-doctor-gui` has
 never been published.
 
@@ -43,7 +43,7 @@ never been published.
 | --- | --- |
 | CLI JSON report `schemaVersion` | `1` only (fail closed on unknown) |
 | GUI presentation `schemaVersion` | `1` (separate namespace) |
-| `@zealakit/css-doctor-cli` peer | optional `^1.1.1` |
+| `@zealakit/css-doctor-cli` peer | optional `^1.2.0` |
 | Adapters | Independent of GUI; no GUI options |
 
 ### Known limitations

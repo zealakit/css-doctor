@@ -15,7 +15,7 @@ prep pass. Evidence below is from the current checkout (2026-11-13).
 | Desktop isolated | Pass — Tauri not in npm package; `--desktop` optional |
 | Shared report contract | Pass — CLI JSON / `--save` discover |
 | No second analysis pipeline | Pass — view path does not re-analyze; generate-check optional |
-| `workspace:*` in published tarball | Pass — `pnpm pack` rewrites to `1.1.1` |
+| `workspace:*` in published tarball | Pass — `pnpm pack` rewrites to `1.2.0` |
 | React not required at runtime | Pass — moved to `devDependencies` (SPA prebundled) |
 
 ## Release checklist status
@@ -47,13 +47,13 @@ node packages/css-doctor-gui/scripts/verify-consumer-pack.mjs
 
 | Package | Registry (approx.) | Workspace |
 | --- | --- | --- |
-| `@zealakit/css-doctor-binding` | `1.1.0` published | `1.1.1` |
-| `@zealakit/css-doctor-cli` | `1.1.0` published | `1.1.1` |
-| `@zealakit/css-doctor-vite` | `1.1.0` published | `1.1.1` |
-| `@zealakit/css-doctor-gui` | **not published** | `1.1.1` |
+| `@zealakit/css-doctor-binding` | `1.1.0` published | `1.2.0` |
+| `@zealakit/css-doctor-cli` | `1.1.0` published | `1.2.0` |
+| `@zealakit/css-doctor-vite` | `1.1.0` published | `1.2.0` |
+| `@zealakit/css-doctor-gui` | **not published** | `1.2.0` |
 
 First publish must ship a coherent set (at least binding + CLI + gui at matching
-semver), or document that gui `1.1.1` requires CLI/binding `1.1.1`.
+semver), or document that gui `1.2.0` requires CLI/binding `1.2.0`.
 
 ## Limitations (non-blocking for Web)
 

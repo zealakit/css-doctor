@@ -3,12 +3,11 @@
 User-visible changes per release. The GUI has its own notes in
 [`gui-changelog.md`](./gui-changelog.md).
 
-## 1.1.1 (unreleased — previous published: 1.1.0)
+## 1.2.0 (unreleased — previous published: 1.1.0)
 
-All publishable packages are versioned together. This release contains more
-than a patch-level change (new CLI command and new options); the version
-number was kept at `1.1.1` on purpose. Revisit before publishing if strict
-semver matters to you.
+All publishable packages are versioned together. This is a minor release: it
+adds a CLI command (`coverage import`), a CLI subpath export and new options,
+and is otherwise backward compatible (see "Breaking / behavior notes").
 
 ### Usage detection (fewer false "dead selector" results)
 

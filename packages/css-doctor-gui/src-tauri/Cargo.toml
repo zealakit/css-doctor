@@ -2,7 +2,7 @@
 
 [package]
 name = "css-doctor-gui"
-version = "1.1.1"
+version = "1.2.0"
 description = "CSS Doctor desktop shell (Node sidecar + Tauri webview)"
 authors = ["nqhed - Huy Edward Nguyen"]
 edition = "2021"
