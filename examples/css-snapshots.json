@@ -179,6 +179,82 @@
         "rules": 4,
         "selectors": 4
       }
+    ],
+    "vite-svelte-tailwind": [
+      {
+        "file": "index.css",
+        "bytes": 6697,
+        "rules": 75,
+        "selectors": 108
+      },
+      {
+        "file": "page-dashboard.css",
+        "bytes": 0,
+        "rules": 0,
+        "selectors": 0
+      },
+      {
+        "file": "page-dashboard.css",
+        "bytes": 228,
+        "rules": 3,
+        "selectors": 3
+      },
+      {
+        "file": "page-dashboard.css",
+        "bytes": 635,
+        "rules": 10,
+        "selectors": 10
+      },
+      {
+        "file": "page-home.css",
+        "bytes": 766,
+        "rules": 10,
+        "selectors": 10
+      },
+      {
+        "file": "page-settings.css",
+        "bytes": 1125,
+        "rules": 17,
+        "selectors": 17
+      }
+    ],
+    "vite-vue-tailwind": [
+      {
+        "file": "index.css",
+        "bytes": 7211,
+        "rules": 78,
+        "selectors": 111
+      },
+      {
+        "file": "page-dashboard.css",
+        "bytes": 0,
+        "rules": 0,
+        "selectors": 0
+      },
+      {
+        "file": "page-dashboard.css",
+        "bytes": 188,
+        "rules": 2,
+        "selectors": 2
+      },
+      {
+        "file": "page-dashboard.css",
+        "bytes": 630,
+        "rules": 10,
+        "selectors": 10
+      },
+      {
+        "file": "page-home.css",
+        "bytes": 716,
+        "rules": 9,
+        "selectors": 9
+      },
+      {
+        "file": "page-settings.css",
+        "bytes": 1122,
+        "rules": 17,
+        "selectors": 17
+      }
     ]
   }
 }

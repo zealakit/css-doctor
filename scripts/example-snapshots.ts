@@ -48,14 +48,12 @@ type SnapshotFile = {
   examples: Record<string, CssEntry[]>;
 };
 
-/**
- * Examples that currently build in CI-like conditions. `vite-svelte-tailwind`
- * and `vite-vue-tailwind` are excluded while their type-check fails on a
- * duplicated Vite install (6.4.5 vs 6.4.6).
- */
+/** Examples covered by the snapshot (nuxt and remix do not emit comparable CSS). */
 const EXAMPLES: ExampleSpec[] = [
   { dir: "vite-react-tailwind", outputs: ["dist"] },
   { dir: "vite-react-3rd-ui", outputs: ["dist"] },
+  { dir: "vite-svelte-tailwind", outputs: ["dist"] },
+  { dir: "vite-vue-tailwind", outputs: ["dist"] },
   { dir: "rsbuild-react-tailwind", outputs: ["dist"] },
   { dir: "astro-tailwind-sass", outputs: ["dist"] },
   { dir: "next-app-tailwind", outputs: [".next"] },
