@@ -4,13 +4,19 @@ Local web dashboard for viewing, comparing, and updating dependency versions in 
 
 This folder is designed to be **copied into other repositories** with small, explicit adaptations. It has no framework UI (vanilla HTML + Pico CSS) and no extra npm dependencies beyond what the host repo already uses for Node/TypeScript.
 
+It is synced with the Zealakit Overlay monitor (same architecture, check + auto-upgrade
+prompts, multi-section lockfile parsing). css-doctor-specific adaptations: the repository name,
+package names, and stack notes in the AI prompt templates; Cargo/`crates/**` kept out of scope;
+`catalog:` specs treated as local; and the post-write lockfile refresh uses
+`pnpm install --lockfile-only --ignore-scripts` so the native `prepare` build does not run.
+
 ## What it does
 
 - Scans **root** `package.json` and every **`packages/*/package.json`**
 - Shows declared ranges, lockfile-resolved versions (when available), and npm registry latest/patch/minor/major
 - Groups dependencies into **one card per manifest** (Root, then each package)
 - Lets you pick a target version per row and update individually or in bulk
-- Generates an **AI upgrade prompt** (copy/paste into an external coding agent) — never calls an AI API itself
+- Generates an **AI check prompt** and an **AI auto-upgrade prompt** (copy/paste into an external coding agent) — never calls an AI API itself
 
 ## What it never does
 
@@ -35,13 +41,14 @@ Optional companion (repo-level):
 
 ```text
 package.json        # script: "monitor": "tsx monitor/server.ts"
+.gitignore          # optionally ignore generated reports if you add them later
 ```
 
 ## Requirements
 
-- Node.js 18+ (css-doctor runs the server via `tsx`; `node --strip-types` also works on Node 22+)
+- Node.js 18+ (css-doctor runs the server via `tsx`; `node --strip-types` also works on Node 22.18+)
 - pnpm workspace (this implementation refreshes the lockfile with `pnpm install --lockfile-only --ignore-scripts`)
-- Root `package.json` + `packages/*`
+- Root `package.json` + `packages/*` (or adapt discovery — see [Porting](#porting-to-another-project))
 
 ## Start
 
@@ -175,7 +182,8 @@ Update flow:
 | Action | Behavior |
 | --- | --- |
 | **Refresh Data** | `POST /api/refresh` |
-| **Get AI Prompt** | Builds a copyable prompt from selected outdated rows, or outdated rows in the **current filter view** if none selected. Includes each row’s selected target version. Does not modify packages. |
+| **Get AI Check Prompt** | Builds a copyable check prompt from selected outdated rows, or outdated rows in the **current filter view** if none selected. Includes each row’s selected target version. Does not modify packages. |
+| **Get AI Upgrade Prompt** | Builds a copyable prompt that tells the agent to **apply** upgrades to the latest stable versions (majors included), then verify with build/typecheck/test/lint (plus cargo tests when the binding changes). Same row scope. The monitor still does not write files. |
 | **Update All Outdated** | Opens a **review dialog** (not an immediate upgrade). Targets default to conservative patch/minor. User can change/remove rows, then confirm. |
 
 ### Cards / filters
@@ -194,37 +202,94 @@ Update flow:
 
 ## AI prompt feature
 
-The prompt is generated **client-side** from current monitor data. It asks an external agent to:
+Both prompts are generated **client-side** from current monitor data. The monitor never calls
+an AI API itself, and it writes nothing until an external agent acts on the pasted text.
+
+### Check prompt (`Get AI Check Prompt`)
+
+It asks an external agent to:
 
 1. Inspect the real repository (do not assume the prompt already did)
-2. Check breaking changes, peers, workspace impact, tooling compatibility (NAPI-RS, Next/Vite peers, lightningcss)
+2. Check breaking changes, peers, workspace impact, tooling compatibility (NAPI-RS, Next/Vite/Rsbuild peers, lightningcss, tsup outputs)
 3. Return structured recommendations: safe / safe with changes / needs investigation / not recommended
 
-Scope rules:
+It must **not** auto-apply upgrades.
+
+### Auto-upgrade prompt (`Get AI Upgrade Prompt`)
+
+The opt-in counterpart: same inventory, but the agent is explicitly told to apply the upgrades
+instead of only reviewing them.
+
+1. Target the **Latest** stable version of every row, majors included, instead of the conservative proposed target
+2. Edit only the monitored manifests (root `package.json`, `packages/*/package.json`), then run `pnpm install`
+3. Iterate `pnpm build`, `pnpm typecheck`, `pnpm test`, and `pnpm lint` until green (plus `pnpm test:cargo` and a binding rebuild when `@zealakit/css-doctor-binding` or NAPI-RS tooling changes)
+4. Revert only the dependency that cannot stay green, keeping the rest at their latest versions
+5. Report every row as upgraded / kept / blocked with the reason
+
+Hard guardrails baked into the prompt: no `examples/**` or `Cargo.toml`/`crates/**` edits, no
+hand-edited generated artifacts, dependency direction core → binding → CLI/adapters, NAPI-RS 2.x,
+peer ranges that are broader than pinned devDependencies stay broad, no commit/push/publish, pnpm only.
+
+### Scope rules (both modes)
 
 - If checkboxes are selected → selected outdated rows only
 - Else → outdated rows matching the current filters (not necessarily the entire repo)
-- Inventory includes a **Proposed target** column from each row’s target `<select>` (falls back to the conservative default)
+- Check prompt’s **Proposed target** column comes from each row’s target `<select>` (falls back to the conservative default)
+- Upgrade prompt’s **Proposed target** column is each row’s **Latest** stable version
 
-Package names in the prompt header are taken from `/api/packages` when available.
+Package names in the prompt header are taken from `/api/packages` when available (so adding a new `packages/css-doctor-*` adapter stays current).
 
-It must **not** auto-apply upgrades. Copy via the dialog’s **Copy Prompt** button.
+When porting, edit the prompt template in `index.html` (`buildPrompt` / `publishedPackageList`) so repository name, package names, and stack notes match the target project. The `mode` option (`"check"` / `"upgrade"`) switches the directive and constraint sections.
 
-When porting, edit the prompt template in `index.html` (`buildPrompt` / `publishedPackageList`) so repository name, package names, and stack notes match the target project.
+### Template anatomy (for ports)
+
+Everything the agent reads comes from `buildPrompt()`. This table maps each block to what a port must change.
+
+| Block in `buildPrompt()` | css-doctor value | Change when porting |
+| --- | --- | --- |
+| Opening line | “senior monorepo dependency-upgrade engineer working on the css-doctor repository” | New repo name and role |
+| Repository + architecture bullets | Rust core → NAPI binding → CLI/adapters; NAPI-RS 2.x; `css-doctor-shared` bundled and private | The dependency-direction rules the agent must preserve |
+| `publishedPackageList()` | names from `/api/packages`, fallback list of the seven published `@zealakit/css-doctor-*` packages | Replace the fallback array with the port’s package set |
+| Tooling stack bullet | TypeScript, Biome, Turborepo, tsx/tsup, Vite/Next/Rsbuild/Remix/Nuxt, lightningcss, NAPI-RS | Host framework, build tool, type checker, formatter, test runner |
+| Session mode line | derived from `mode` (`advisory only` vs `auto-upgrade`) | Keep as-is; it is what distinguishes the two prompts |
+| Inventory table | 14 columns from server rows | Keep unless you change the row shape in `server.ts` |
+| Required investigation | 9 checks tuned to bundler peers, the native binding, and tsup outputs | Replace framework/CDN specifics with the port’s real risks |
+| Execution directive (upgrade) | latest stable, majors allowed, edit manifests, `pnpm install`, verify loop, per-dependency fallback, final report | New commands, manifest scope, and registry policy |
+| Recommendation format (check) | 4 outcome buckets | Keep unless the project wants different buckets |
+| Constraints (both) | no `examples/**` / Cargo edits, no generated-artifact edits, dependency direction, broad peers, no publish | The port’s hard boundaries and excluded trees |
+| Final report (upgrade) | upgraded / kept / blocked table + commands run | Keep; extend only for project-specific evidence |
+
+Practical constraints of the template:
+
+- The verification chain (`pnpm build` → `pnpm typecheck` → `pnpm test` → `pnpm lint`) is hardcoded in the execution directive, the constraints, and the final report. Replace all occurrences with the host repo’s real commands and keep the same order: build, typecheck, test, lint.
+- The `examples/**` guardrail is project-specific too. Swap it for the port’s excluded tree (for example `fixtures/**`, `docs/**`, `templates/**`).
+- Prompts are written in English so any coding agent reads them consistently. Translating the static text is fine; keep the directive explicit — one target, one write path, one verification loop, one fallback rule.
+- Only `mode: "upgrade"` may tell the agent to write files. Never add write permissions to the check section.
+
+Find leftover project-specific strings before shipping a port:
+
+```bash
+grep -n "overlay\|vanilla\|examples/\|pnpm build\|pnpm typecheck\|pnpm test\|pnpm lint" monitor/index.html
+```
+
+Every hit should be a deliberate part of the new project’s template.
 
 ## Security model
 
 - Bind `127.0.0.1` only
 - Reject non-local `Host` headers
 - Resolve packages only via discovered manifest ids (no client-supplied absolute paths)
-- `execFile` with fixed argv (`pnpm install --lockfile-only --ignore-scripts`) — no user-controlled shell strings
+- `execFile` with fixed argv (`pnpm install`) — no user-controlled shell strings
 - Registry failures surface as `registry-check-failed`, never as “up to date”
 
 ## Porting to another project
 
-Copy the `monitor/` folder, then adjust these touch points:
+The monitor is one server file, one UI file, and this README. A port is a copy plus a fixed set
+of edits. Work in this order so each failure stays local and testable.
 
-### 1. Root script
+### 1. Copy and wire the root script
+
+Copy `monitor/` into the target repository, then add the script:
 
 ```json
 {
@@ -236,9 +301,9 @@ Copy the `monitor/` folder, then adjust these touch points:
 
 If the host repo prefers `node --strip-types`, `ts-node`, or a compiled binary, change only this script — keep `server.ts` / `index.html` logic.
 
-### 2. Discovery (`server.ts` → `discoverManifests`)
+### 2. Define scope and discovery (`server.ts` → `discoverManifests`)
 
-Today:
+Default behavior:
 
 - Always include root `package.json`
 - Include each immediate child of `packages/` that has a `package.json`
@@ -252,7 +317,7 @@ For other layouts, change **only** this function (and the matching allowlist in 
 
 Keep the rule: **UI/API never invents paths**; they only reference discovered ids.
 
-### 3. Package manager
+### 3. Adapt the write path (package manager + lockfile)
 
 Replace the post-write command if the host is not pnpm:
 
@@ -268,20 +333,41 @@ Examples: `npm install`, `yarn install`. Prefer install-from-manifests over blin
 
 If the lockfile format differs, adapt or disable `readResolvedFromLockfile()` (resolved column becomes `null`).
 
-### 4. Port / branding
+### 4. Rewrite the AI prompt template
+
+This is the step that changes the most per project, because the prompt encodes the host repo's
+rules. Edit these blocks in `buildPrompt()` and `publishedPackageList()` in `index.html` (see
+[Template anatomy](#template-anatomy-for-ports) for the full map):
+
+- **Identity** — opening line, repository/architecture bullet, tooling-stack bullet.
+- **Package inventory** — `publishedPackageList()` fallback array.
+- **Execution directive (upgrade mode)** — registry policy (latest stable? majors allowed?), which manifests the agent may write, the install command, the verification chain, the per-dependency fallback rule, and the final report format.
+- **Constraints (both modes)** — excluded trees, architecture boundaries, peer-range policy, and the no-commit/no-publish rule.
+- **Check mode** — outcome buckets and the explicit “do not apply” instruction.
+
+Then generate both prompts against at least one outdated row and verify:
+
+| Check | Expected |
+| --- | --- |
+| Check prompt | Has a recommendation section, forbids applying upgrades, and its **Proposed target** follows the row’s selected/conservative version |
+| Upgrade prompt | Has the execution directive, targets the **Latest** column, and names the host repo’s real install and verification commands |
+| Guardrails | Lists the port’s excluded trees and architecture rules, with no leftover css-doctor strings |
+| Leftovers | `grep -n "overlay\|vanilla\|examples/\|pnpm build\|pnpm typecheck\|pnpm test\|pnpm lint" monitor/index.html` returns only deliberate template hits |
+
+### 5. Branding and port
 
 | Knob | Where |
 | --- | --- |
 | Port `4177` | `PREFERRED_PORT` in `server.ts` |
 | Page title / header copy | `index.html` |
-| AI prompt repo name & stack | `buildPrompt()` in `index.html` |
+| AI prompt repo name, stack & upgrade rules | `buildPrompt()` in `index.html` (`mode: "check"` / `"upgrade"`) |
 | Ecosystem list | `ecosystem: "node"` on rows + `summary.ecosystems` — extend if you add Cargo/etc. |
 
-### 5. TypeScript project
+### 6. TypeScript project
 
 `monitor/tsconfig.json` is standalone (`noEmit`, Node types). If the host has a base config, you may `extends` it instead.
 
-### 6. Smoke checklist after porting
+### 7. Acceptance checklist after porting
 
 1. `pnpm monitor` serves the UI on localhost
 2. Root + expected packages appear; excluded trees do not
@@ -290,7 +376,11 @@ If the lockfile format differs, adapt or disable `readResolvedFromLockfile()` (r
 5. Real update (optional) changes only the chosen declaration and refreshes the lockfile
 6. Failed `pnpm install` restores the previous manifest
 7. Non-local `Host` → 403
-8. Get AI Prompt copies text and does not mutate files
+8. Both prompt modes copy text and do not mutate files
+9. The upgrade prompt’s verification commands and guardrails match the target repo, not this one
+
+Hand this section plus [Template anatomy](#template-anatomy-for-ports) to the agent or engineer
+doing the port; together they cover every file and knob.
 
 ## Design principles (keep when extending)
 

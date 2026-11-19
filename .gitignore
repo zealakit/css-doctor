@@ -129,3 +129,5 @@ packages/binding/index.d.cts
 .nuxt/
 .output/
 .svelte-kit/
+
+/plans

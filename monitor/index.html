@@ -229,6 +229,12 @@
         text-align: right;
       }
 
+      .row-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+      }
+
       .monitor-table td:last-child .row-actions {
         justify-content: flex-end;
       }
@@ -282,12 +288,6 @@
         font-weight: 700;
         letter-spacing: 0.04em;
         text-transform: uppercase;
-      }
-
-      .row-actions {
-        display: flex;
-        align-items: center;
-        gap: 0.4rem;
       }
 
       .row-actions select {
@@ -403,7 +403,10 @@
         </div>
         <div class="monitor-actions">
           <button id="refresh-btn" type="button">Refresh Data</button>
-          <button id="prompt-btn" class="contrast" type="button">Get AI Prompt</button>
+          <button id="prompt-btn" class="contrast" type="button">Get AI Check Prompt</button>
+          <button id="upgrade-prompt-btn" class="contrast" type="button">
+            Get AI Upgrade Prompt
+          </button>
           <button id="update-all-btn" class="secondary" type="button">
             Update All Outdated
           </button>
@@ -502,8 +505,8 @@
 
     <dialog id="prompt-dialog">
       <article>
-        <header><h3 style="margin:0">AI Upgrade Prompt</h3></header>
-        <p style="margin-top:0;color:var(--muted);font-size:0.84rem">
+        <header><h3 id="prompt-title" style="margin:0">AI Check Prompt</h3></header>
+        <p id="prompt-note" style="margin-top:0;color:var(--muted);font-size:0.84rem">
           Copy into your AI coding assistant. This does not update packages.
           Scope: selected outdated rows, otherwise outdated rows in the current
           filter view (includes each row’s selected target version).
@@ -538,6 +541,7 @@
         outdated: document.getElementById("filter-outdated"),
         refresh: document.getElementById("refresh-btn"),
         prompt: document.getElementById("prompt-btn"),
+        upgradePrompt: document.getElementById("upgrade-prompt-btn"),
         updateAll: document.getElementById("update-all-btn"),
         confirmDialog: document.getElementById("confirm-dialog"),
         confirmTitle: document.getElementById("confirm-title"),
@@ -549,6 +553,8 @@
         batchCancel: document.getElementById("batch-cancel"),
         batchConfirm: document.getElementById("batch-confirm"),
         promptDialog: document.getElementById("prompt-dialog"),
+        promptTitle: document.getElementById("prompt-title"),
+        promptNote: document.getElementById("prompt-note"),
         promptText: document.getElementById("prompt-text"),
         promptCopy: document.getElementById("prompt-copy"),
         promptClose: document.getElementById("prompt-close"),
@@ -878,7 +884,7 @@
         els.confirmTitle.textContent =
           updates.length === 1 ? "Confirm update" : `Confirm ${updates.length} updates`;
         els.confirmBody.innerHTML = `
-          <p style="font-size:0.86rem">Updates write package manifests and run <code>pnpm install</code> for the lockfile.</p>
+          <p style="font-size:0.86rem">Updates write package manifests and run <code>pnpm install --lockfile-only --ignore-scripts</code> for the lockfile.</p>
           <ul style="font-size:0.84rem">
             ${updates
               .map((item) => {
@@ -1003,27 +1009,80 @@
       }
 
       function buildPrompt(rows, options = {}) {
+        const autoUpgrade = options.mode === "upgrade";
         const generatedAt = state.summary?.lastRegistryCheckAt || new Date().toISOString();
         const scopeNote = options.scopeNote || "outdated dependencies in monitor scope";
         const summary = state.summary || {};
         const inventory = rows
           .map((row) => {
-            const proposed =
-              selectedTarget(row.id) || conservativeTarget(row) || row.registry.latest || "—";
+            const proposed = autoUpgrade
+              ? row.registry.latest || conservativeTarget(row) || "—"
+              : selectedTarget(row.id) || conservativeTarget(row) || row.registry.latest || "—";
             return `| ${promptCell(row.ecosystem)} | ${promptCell(locationLabel(row.manifestId))} | ${promptCell(row.packageName)} | ${promptCell(row.dependency)} | ${promptCell(row.depType)} | ${promptCell(row.declared)} | ${promptCell(row.resolved)} | ${promptCell(proposed)} | ${promptCell(row.registry.latestPatch)} | ${promptCell(row.registry.latestMinor)} | ${promptCell(row.registry.latestMajor)} | ${promptCell(row.registry.latest)} | ${promptCell(row.registry.classification)} | ${row.local ? "yes" : "no"} |`;
           })
           .join("\n");
 
+        const investigationIntro = autoUpgrade
+          ? "Before changing anything, inspect the actual repository and determine:"
+          : "Before recommending any upgrade, inspect the actual repository and determine:";
+
+        const recommendationSection = autoUpgrade
+          ? `## Execution directive — apply upgrades now
+Auto-upgrade mode is enabled. The user explicitly asked you to upgrade the listed dependencies to the newest stable versions the workspace can support. Do not stop to ask for approval before starting, and do not return a recommendation-only report.
+
+1. Work through every inventory row. Treat the **Latest** column (not "Proposed target") as the target: upgrade to the newest stable version published on the registry. If a Latest cell is \`—\`, treat it as a registry error, verify the version yourself, and report the row as blocked rather than guessing.
+2. Prefer the newest stable release of every dependency, **including major versions**, as long as the repository still builds, typechecks, tests, and lints (and Rust tests still pass when the binding is affected).
+3. Apply upgrades by editing only the monitored manifests (root \`package.json\` and \`packages/*/package.json\`), then run \`pnpm install\` from the repository root so \`pnpm-lock.yaml\` is refreshed.
+4. After each batch of upgrades, run \`pnpm build\`, \`pnpm typecheck\`, \`pnpm test\`, and \`pnpm lint\` (plus \`pnpm test:cargo\` when \`@zealakit/css-doctor-binding\` or NAPI-RS tooling changed). Keep iterating until all of them pass. Rebuild the binding (\`pnpm --filter @zealakit/css-doctor-binding build\`) before TypeScript tests if it changed.
+5. If an upgrade cannot be made green with a reasonable, in-scope change, revert **that single dependency** to the highest version that passes verification and record it as "kept", with the failing signal and reason. Never leave the workspace red.
+6. Fix breakages where they actually live: source code, types, config, and package exports. Never hand-edit generated artifacts (\`packages/binding/index.*\`, \`*.node\`, \`dist/\`, \`.next/\`, \`target/\`); regenerate them. If a fix would require touching \`examples/**\`, pin that dependency to a working version instead.
+7. Skip no row silently: every row ends as upgraded to latest, upgraded to a lower latest-compatible version, kept, or blocked with a concrete reason.
+
+## Final report format
+Return one table covering every inventory row: dependency · location · from → to (or kept at) · outcome (upgraded / kept / blocked) · reason when not on the latest version. Then list the exact commands you ran with their result, and call out anything the user must know: lockfile churn, peer-range decisions, deprecated packages, or follow-up work.`
+          : `## Recommendation format
+For each dependency, return exactly one of:
+- Safe to upgrade
+- Safe with code/configuration changes
+- Needs further investigation
+- Not recommended
+
+Explain the reason and identify relevant files or compatibility constraints where possible.
+If proposing a different target than the "Proposed target" column, say why.`;
+
+        const constraintsSection = autoUpgrade
+          ? `## Constraints
+- Never modify \`examples/**\` — not source, manifests, or lockfile entries.
+- Never modify \`Cargo.toml\`, \`Cargo.lock\`, or \`crates/**\` through this prompt; Rust dependencies are out of scope.
+- Keep the dependency direction crates/core → packages/binding → CLI/adapters. Adapters must not depend on each other or on the CLI; \`@zealakit/css-doctor-shared\` stays a bundled, private \`devDependency\`.
+- Keep NAPI-RS on a 2.x-compatible line unless the user asks for a migration (\`f64\` at the JS boundary).
+- Do not hand-edit generated artifacts (\`packages/binding/index.*\`, \`*.node\`, \`dist/\`, \`.next/\`, \`target/\`).
+- Preserve intentional peerDependency ranges that are broader than pinned devDependencies; upgrade the pinned devDependencies first and widen peers only when a real compatibility change requires it.
+- Do not commit, push, tag, or publish anything.
+- Do not change the \`packageManager\` field unless the user asks.
+- Do not add, remove, or reclassify dependencies unless an upgrade genuinely requires it; state the reason when it does.
+- Use pnpm only; keep \`pnpm-lock.yaml\` consistent and never introduce a second package manager.
+- If a package is deprecated, stay on its newest published version unless a documented successor exists, and flag the deprecation in the final report.
+- Report honestly: do not claim a dependency was upgraded unless \`pnpm install\` and the verification chain actually succeeded.`
+          : `## Constraints
+- Never modify examples/**
+- Prefer patch/minor over major unless the user explicitly wants a major bump
+- Preserve intentional peerDependency ranges that are broader than pinned fixture/devDependencies
+- Do not edit generated artifacts (packages/binding/index.*, *.node, dist/, .next/, target/)
+- Keep Cargo.toml / crates/** out of scope unless the user explicitly expands it
+- Do not automatically apply upgrades or execute commands unless the user explicitly asks after reviewing your recommendation`;
+
         return `You are a senior monorepo dependency-upgrade engineer working on the css-doctor repository.
 
 ## Context
-- Repository: css-doctor — Rust core + NAPI binding + pnpm TypeScript packages (CLI/Vite/Next/Rsbuild/Remix/Nuxt).
+- Repository: css-doctor — Rust core + NAPI binding + pnpm TypeScript packages (CLI/Vite/Next/Rsbuild/Remix/Nuxt), orchestrated by Turborepo.
 - Published packages: ${publishedPackageList()}.
-- Architecture: crates/core → packages/binding → adapters/CLI. Native binding must stay compatible with NAPI-RS 2.x (\`f64\` at the JS boundary).
-- Tooling stack to consider: TypeScript, Biome, Turborepo, tsx/tsup, Vite, Next.js 15, React 19, lightningcss, NAPI-RS 2.x, and example fixtures under examples/** (do not modify those for upgrades).
+- Architecture: crates/core → packages/binding → adapters/CLI. Native binding must stay compatible with NAPI-RS 2.x (\`f64\` at the JS boundary). \`@zealakit/css-doctor-shared\` is internal and bundled into publishable packages.
+- Tooling stack to consider: TypeScript, Biome, Turborepo, tsx/tsup, Vite, Next.js 15, Rsbuild/Rspack, Remix 3, Nuxt 4, React 19, lightningcss, NAPI-RS 2.x, and example fixtures under examples/** (do not modify those for upgrades).
 - Scan time: ${generatedAt}
 - Monitor summary (unique deps): total ${summary.total ?? "—"}, outdated ${summary.outdated ?? "—"}, up to date ${summary.upToDate ?? "—"}, registry errors ${summary.errors ?? "—"}.
 - Prompt scope: ${scopeNote} (${rows.length} row(s)).
+- Session mode: ${autoUpgrade ? "auto-upgrade — apply the upgrades yourself, majors allowed when the verification chain stays green" : "advisory only — inspect and recommend, do not write files"}.
 - Monitoring covers root package.json and packages/* only. examples/** and Cargo.toml/crates must never be modified via this prompt unless the user explicitly expands scope.
 - This prompt was generated by the local Dependency Monitor. It does NOT mean source code was already inspected.
 
@@ -1033,33 +1092,21 @@
 ${inventory || "| — | — | — | — | — | — | — | — | — | — | — | — | — | — |"}
 
 ## Required investigation
-Before recommending any upgrade, inspect the actual repository and determine:
+${investigationIntro}
 
 1. Whether the project currently uses APIs affected by the proposed upgrade.
 2. Whether breaking changes exist between the declared/resolved version and the proposed target.
-3. Whether peer dependency constraints remain compatible (especially vite/next/react peers vs pinned fixture versions).
-4. Whether the upgrade affects other packages in the workspace (binding / cli / adapters / root).
-5. Whether framework and build-tool versions remain compatible (Next 15, React 19, Vite, NAPI-RS 2.x, TypeScript, Biome, Turborepo, lightningcss).
+3. Whether peer dependency constraints remain compatible (especially vite/next/rsbuild/react peers vs pinned fixture versions).
+4. Whether the upgrade affects other packages in the workspace (binding / cli / adapters / gui / root).
+5. Whether framework and build-tool versions remain compatible (Next 15, React 19, Vite, Rsbuild, Remix, Nuxt, NAPI-RS 2.x, TypeScript, Biome, Turborepo, lightningcss).
 6. For \`@zealakit/css-doctor-binding\`: whether the native addon still builds and whether generated \`index.js\` / \`index.d.ts\` / \`*.node\` stay out of hand edits.
-7. Whether configuration, tests, skills, or README changes are required.
-8. Whether the upgrade should be performed now, postponed, or avoided.
+7. For adapters and CLI: whether tsup ESM/CJS/DTS output, \`package.json\` exports, and the bundled \`css-doctor-shared\` still resolve.
+8. Whether configuration, tests, skills, or README changes are required.
+9. ${autoUpgrade ? "What the concrete migration work is, and whether it can be completed in this session." : "Whether the upgrade should be performed now, postponed, or avoided."}
 
-## Recommendation format
-For each dependency, return exactly one of:
-- Safe to upgrade
-- Safe with code/configuration changes
-- Needs further investigation
-- Not recommended
+${recommendationSection}
 
-Explain the reason and identify relevant files or compatibility constraints where possible.
-If proposing a different target than the "Proposed target" column, say why.
-
-## Constraints
-- Never modify examples/**
-- Prefer patch/minor over major unless the user explicitly wants a major bump
-- Preserve intentional peerDependency ranges that are broader than pinned fixture/devDependencies
-- Do not edit generated artifacts (packages/binding/index.*, *.node, dist/, .next/, target/)
-- Do not automatically apply upgrades or execute commands unless the user explicitly asks after reviewing your recommendation
+${constraintsSection}
 `;
       }
 
@@ -1199,7 +1246,8 @@ If proposing a different target than the "Proposed target" column, say why.
         }
       });
 
-      els.prompt.addEventListener("click", () => {
+      function openPromptDialog(mode) {
+        const autoUpgrade = mode === "upgrade";
         const selected = selectedIds().map(rowById).filter(Boolean);
         const usingSelection = selected.length > 0;
         const rows = usingSelection
@@ -1214,14 +1262,22 @@ If proposing a different target than the "Proposed target" column, say why.
           );
           return;
         }
+        els.promptTitle.textContent = autoUpgrade ? "AI Auto-Upgrade Prompt" : "AI Check Prompt";
+        els.promptNote.textContent = autoUpgrade
+          ? "Copy into your AI coding assistant. It asks the agent to upgrade every listed dependency to the latest stable version (majors included), edit the manifests, run pnpm install, then verify with build/typecheck/test/lint (and cargo tests when the binding changes). The agent writes files; the monitor itself still does not."
+          : "Copy into your AI coding assistant. This does not update packages. Scope: selected outdated rows, otherwise outdated rows in the current filter view (includes each row’s selected target version).";
         els.promptText.value = buildPrompt(rows, {
+          mode: autoUpgrade ? "upgrade" : "check",
           scopeNote: usingSelection
             ? "selected outdated rows"
             : "outdated rows matching current filters",
         });
         els.promptDialog.showModal();
         els.promptText.focus();
-      });
+      }
+
+      els.prompt.addEventListener("click", () => openPromptDialog("check"));
+      els.upgradePrompt.addEventListener("click", () => openPromptDialog("upgrade"));
 
       els.promptCopy.addEventListener("click", async () => {
         try {
