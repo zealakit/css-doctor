@@ -75,6 +75,12 @@ export type CssDoctorNextOptions = {
   /** @deprecated Use `pageCoverage.forceCommon`. */
   forceCommonSelectors?: string[];
   /**
+   * Track CSS Modules usage (`styles.foo`) from the compilation's css-loader
+   * exports and split module CSS by page instead of skipping it. Modules whose
+   * exports cannot be read stay skipped. Set `false` to always skip. @default true
+   */
+  cssModules?: boolean;
+  /**
    * Function names resolved as class helpers when scanning source
    * (`cn("a", { b: on })`). Defaults to clsx, cn, cx, classnames, classNames,
    * twMerge, twJoin, cva, tv. `[]` disables helper resolution.

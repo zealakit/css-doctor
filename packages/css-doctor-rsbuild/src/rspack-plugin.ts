@@ -13,7 +13,9 @@ import {
   DEFAULT_MIN_PAGE_RATIO,
   clampMaxChunkSize,
   clampMinPageRatio,
+  CssModuleRegistry,
   describeError,
+  extractCssModuleLocals,
   matchesPatterns,
   scanClasses,
   setActiveClassHelpers,
@@ -68,6 +70,7 @@ type ResolvedOptions = {
   sizeBudget: Required<SizeBudgetOptions>;
   pageUsage?: Record<string, string[]>;
   classHelpers?: string[];
+  cssModules?: boolean;
   minify: boolean;
   report: boolean;
   include: Array<string | RegExp>;
@@ -116,6 +119,7 @@ export class CssDoctorRspackPlugin {
       },
       pageUsage: options.pageUsage,
       classHelpers: options.classHelpers,
+      cssModules: options.cssModules,
       minify: options.minify ?? true,
       report: options.report ?? true,
       include: options.include ?? [],
@@ -171,6 +175,10 @@ export class CssDoctorRspackPlugin {
     for (const warning of this.configurationWarnings) {
       logger.warn(`[css-doctor] ${warning}`);
     }
+    activeCssModules =
+      this.options.cssModules === false
+        ? null
+        : registerCssModules(compilation);
     const pagesResult = await collectPages(compilation, this.options.pageUsage);
     const pageNames = pagesResult.pages.map((page) => page.name);
     const allPages = new Set(pageNames);
@@ -287,7 +295,10 @@ export class CssDoctorRspackPlugin {
           pageCoverage: {
             enabled: pageCoverageApplied,
             minPageRatio: this.options.pageCoverage.minPageRatio,
-            forceCommon: this.options.pageCoverage.forceCommon,
+            forceCommon: [
+              ...this.options.pageCoverage.forceCommon,
+              ...(activeCssModules?.unseenClasses() ?? []),
+            ],
             matching: this.options.pageCoverage.matching,
             removeUnusedMinConfidence:
               this.options.pageCoverage.removeUnusedMinConfidence,
@@ -454,6 +465,14 @@ export class CssDoctorRspackPlugin {
   }
 
   private shouldSkipAsset(assetName: string, source: string): boolean {
+    // CSS Modules whose css-loader exports were read are analysed per usage;
+    // anything not fully covered by those exports stays skipped.
+    if (
+      activeCssModules?.coversAsset(source, RSBUILD_SCOPED_CLASS, isScopedClass)
+    ) {
+      return this.matchesFilters(assetName);
+    }
+
     if (/\.module\.(css|scss|sass|less|styl|stylus)$/i.test(assetName)) {
       return true;
     }
@@ -470,6 +489,10 @@ export class CssDoctorRspackPlugin {
       return true;
     }
 
+    return this.matchesFilters(assetName);
+  }
+
+  private matchesFilters(assetName: string): boolean {
     if (this.options.include.length > 0) {
       if (!matchesPatterns(assetName, this.options.include)) {
         return true;
@@ -829,6 +852,7 @@ async function scanModule(
 
   if (source) {
     scanClasses(source, classes);
+    activeCssModules?.addUsedClasses(source, classes);
     return;
   }
 
@@ -853,6 +877,7 @@ async function scanModule(
 
   if (fresh) {
     scanClasses(fresh, classes);
+    activeCssModules?.addUsedClasses(fresh, classes);
   }
 }
 
@@ -923,6 +948,41 @@ function normalizePageName(name: string): string {
 
 function isStyleFile(filePath: string): boolean {
   return /\.(css|scss|sass|less|styl|stylus)(\?|$)/i.test(filePath);
+}
+
+/** `_local__hash` (css-loader default) or Rsbuild's `<local>-<6-char-hash>`. */
+const RSBUILD_SCOPED_CLASS =
+  /\.([A-Za-z_][A-Za-z0-9_-]*(?:__[A-Za-z0-9_-]+|-[A-Za-z0-9]{6}))(?=[\s,{:.#>+~[])/g;
+
+function isScopedClass(className: string): boolean {
+  return className.includes("__") || isRsbuildCssModuleClass(className);
+}
+
+/** Registry of `*.module.*` local -> emitted maps for the current build. */
+let activeCssModules: CssModuleRegistry | null = null;
+
+function registerCssModules(compilation: Compilation): CssModuleRegistry {
+  const registry = new CssModuleRegistry();
+
+  for (const module of compilation.modules as Iterable<RspackModuleLike>) {
+    const resource = module.resource;
+
+    if (
+      !resource ||
+      !/\.module\.(css|scss|sass|less|styl|stylus)(\?|$)/i.test(resource)
+    ) {
+      continue;
+    }
+
+    const source = readModuleSource(module);
+    const locals = source ? extractCssModuleLocals(source) : null;
+
+    if (locals) {
+      registry.register(resource, locals);
+    }
+  }
+
+  return registry;
 }
 
 function hasRsbuildCssModuleClass(css: string): boolean {

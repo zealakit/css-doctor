@@ -340,8 +340,10 @@ unchanged unless a caller attaches the section.
   to add your own) are resolved when their arguments are literals; identifiers
   and interpolated names are reported as unknown evidence. Supply `pageUsage` /
   `forceCommon` for those.
-- CSS Modules are split by usage in Vite (`cssModules: false` opts out); Next
-  and Rsbuild still skip `*.module.css`.
+- CSS Modules are split by usage in Vite, Next and Rsbuild when the bundler
+  exposes the local -> emitted class map (`cssModules: false` opts out).
+  Assets whose scoped classes cannot all be mapped (for example Rspack native
+  CSS Modules) are still skipped.
 - Next path aliases come from `tsconfig`/`jsconfig` `paths` and workspace
   `exports`; other custom aliases need explicit `pageUsage`.
 - `pageCoverage.removeUnusedMinConfidence: "high"` removes only selectors that

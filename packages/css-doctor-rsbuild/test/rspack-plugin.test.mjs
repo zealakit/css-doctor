@@ -236,3 +236,75 @@ test("clamps invalid size budget during plugin registration", () => {
     captureRspackPlugin({ sizeBudget: { maxChunkSize: 0 } }),
   );
 });
+
+test("splits CSS Modules by usage from css-loader exports", async () => {
+  const moduleRoot = join(packageRoot, "test/fixtures/css-modules");
+  const css = [
+    ".card_hero__h4sh { color: red; }",
+    ".card_is-open__h4sh { color: blue; }",
+    ".card_unused__h4sh { color: green; }",
+    ".other_a__h4sh { color: black; }",
+    ".other_b__h4sh { color: gray; }",
+  ].join("\n");
+
+  const run = async (extra) => {
+    const outputPath = await mkdtemp(join(tmpdir(), "cssd-rsbuild-cm-"));
+    /** @type {import("../dist/index.js").CssDoctorRsbuildDiagnostics[]} */
+    const captured = [];
+    const { plugin } = captureRspackPlugin({
+      report: false,
+      minify: false,
+      sizeBudget: { enabled: false },
+      ...extra,
+      onDiagnostics: (diagnostics) => {
+        captured.push(diagnostics);
+      },
+    });
+    const stats = await new Promise((resolve, reject) => {
+      const compiler = rspack({
+        mode: "production",
+        entry: { index: join(moduleRoot, "entry.js") },
+        output: { path: outputPath, filename: "[name].js", clean: true },
+        optimization: { minimize: false },
+        module: {
+          rules: [
+            {
+              test: /\.module\.css$/,
+              use: join(moduleRoot, "fake-css-loader.cjs"),
+              type: "javascript/auto",
+            },
+          ],
+        },
+        plugins: [new CssFixturePlugin(css), plugin],
+      });
+      compiler.run((error, result) => {
+        compiler.close(() => undefined);
+        if (error || !result) {
+          reject(error ?? new Error("no stats"));
+        } else {
+          resolve(result);
+        }
+      });
+    });
+    assert.equal(stats.hasErrors(), false, stats.toString());
+    const diagnostics = captured[0];
+    assert.ok(diagnostics);
+    const { readFile } = await import("node:fs/promises");
+    return {
+      diagnostics,
+      css: await readFile(join(outputPath, "static/css/app.css"), "utf8"),
+    };
+  };
+
+  const split = await run({});
+  assert.equal(split.diagnostics.skippedCssAssets, 0);
+  assert.match(split.css, /card_hero__h4sh/);
+  assert.match(split.css, /card_is-open__h4sh/);
+  assert.doesNotMatch(split.css, /card_unused__h4sh/);
+  assert.match(split.css, /other_a__h4sh/);
+  assert.match(split.css, /other_b__h4sh/);
+
+  const skipped = await run({ cssModules: false });
+  assert.equal(skipped.diagnostics.skippedCssAssets, 1);
+  assert.match(skipped.css, /card_unused__h4sh/);
+});

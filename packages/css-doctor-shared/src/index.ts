@@ -85,3 +85,8 @@ export type {
 } from "./resolve-module";
 export { isCssModuleSpecifier, scanCssModuleUsage } from "./scan-css-modules";
 export type { CssModuleUsage } from "./scan-css-modules";
+export {
+  CssModuleRegistry,
+  extractCssModuleLocals,
+} from "./css-module-registry";
+export type { CssModuleLocals } from "./css-module-registry";

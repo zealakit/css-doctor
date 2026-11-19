@@ -223,10 +223,13 @@ Do not merge CLI and adapter config loaders into one discovery path — lifecycl
   evaluation; use `pageUsage` / `forceCommonSelectors` for the unknown rest.
 - CSS Modules: the CLI maps `styles.foo` / `styles["foo"]` / destructuring to
   local classes and reports dynamic access as unknown evidence. Vite captures
-  `css.modules.getJSON` (user hook still runs), maps used locals to emitted
-  classes, keeps whole modules on dynamic access, and keeps unreferenced
-  modules common; opt out with `cssModules: false`. Next (webpack) and Rsbuild
-  still **skip** `*.module.css` assets (no css-loader export mapping yet).
+  `css.modules.getJSON` (user hook still runs); Next (webpack) and Rsbuild read
+  css-loader `locals` exports from the compilation (`CssModuleRegistry`,
+  `extractCssModuleLocals`). Used locals map to emitted classes, dynamic access
+  keeps the whole module, modules no scanned chunk imports stay common, and an
+  asset is analysed only when every scoped class in it is a registered export
+  (otherwise it is still skipped). Opt out with `cssModules: false`. Rspack
+  native CSS Modules (no css-loader JS exports) are still skipped.
 - Path aliases: Next uses `createModuleResolver` (tsconfig/jsconfig `paths`,
   `extends`, workspace `exports`). Vite/Rsbuild scan the bundler's own module
   graph, so aliases are already resolved there; the shared resolver is the

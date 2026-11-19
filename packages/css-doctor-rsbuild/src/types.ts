@@ -61,6 +61,13 @@ export type CssDoctorRsbuildOptions = {
    * twMerge, twJoin, cva, tv. `[]` disables helper resolution.
    */
   classHelpers?: string[];
+  /**
+   * Track CSS Modules usage (`styles.foo`) from css-loader exports in the
+   * compilation and split module CSS by page instead of skipping it. Modules
+   * whose exports cannot be read stay skipped. Set `false` to always skip.
+   * @default true
+   */
+  cssModules?: boolean;
   /** Only process CSS assets whose name matches these patterns. */
   include?: Array<string | RegExp>;
   /** Skip CSS assets whose name matches these patterns. */

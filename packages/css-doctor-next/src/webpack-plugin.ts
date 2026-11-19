@@ -16,7 +16,9 @@ import {
   clampMaxChunkSize,
   clampMinPageRatio,
   createModuleResolver,
+  CssModuleRegistry,
   describeError,
+  extractCssModuleLocals,
   matchesPatterns,
   scanClasses,
   setActiveClassHelpers,
@@ -147,6 +149,10 @@ export class CssDoctorWebpackPlugin {
   ): Promise<void> {
     const startedAt = performance.now();
     const logger = compilation.getLogger(PLUGIN_NAME);
+    activeCssModules =
+      this.options.cssModules === false
+        ? null
+        : registerCssModules(compilation);
     const pagesResult = await collectPages(compilation, this.options.pageUsage);
     const pageNames = pagesResult.pages.map((page) => page.name);
     const pageByName = new Map(
@@ -277,7 +283,10 @@ export class CssDoctorWebpackPlugin {
           pageCoverage: {
             enabled: pageCoverageApplied,
             minPageRatio: this.pageCoverage.minPageRatio,
-            forceCommon: this.pageCoverage.forceCommon,
+            forceCommon: [
+              ...this.pageCoverage.forceCommon,
+              ...(activeCssModules?.unseenClasses() ?? []),
+            ],
             matching: this.pageCoverage.matching,
             removeUnusedMinConfidence:
               this.pageCoverage.removeUnusedMinConfidence,
@@ -467,7 +476,10 @@ export class CssDoctorWebpackPlugin {
     assetName: string,
     source: string,
   ): boolean {
-    if (isCssModuleAsset(compilation, assetName, source)) {
+    if (
+      isCssModuleAsset(compilation, assetName, source) &&
+      !activeCssModules?.coversAsset(source, NEXT_SCOPED_CLASS)
+    ) {
       return true;
     }
 
@@ -515,6 +527,37 @@ function injectPageJsLoaders(
       compilation.updateAsset(jsFile, new RawSource(snippet + source));
     }
   }
+}
+
+/** Next's default CSS Modules identifier: `<file>_<local>__<hash>`. */
+const NEXT_SCOPED_CLASS = /\.([A-Za-z0-9_-]+_[A-Za-z0-9_-]+__[A-Za-z0-9_-]+)/g;
+
+/** Registry of `.module.css` local -> emitted maps for the current build. */
+let activeCssModules: CssModuleRegistry | null = null;
+
+/** Reads css-loader generated exports of every `*.module.*` module. */
+function registerCssModules(compilation: Compilation): CssModuleRegistry {
+  const registry = new CssModuleRegistry();
+
+  for (const module of compilation.modules) {
+    const resource = (module as Module & { resource?: unknown }).resource;
+
+    if (
+      typeof resource !== "string" ||
+      !/\.module\.(css|scss|sass|less|styl|stylus)(\?|$)/i.test(resource)
+    ) {
+      continue;
+    }
+
+    const source = readModuleSource(module);
+    const locals = source ? extractCssModuleLocals(source) : null;
+
+    if (locals) {
+      registry.register(resource, locals);
+    }
+  }
+
+  return registry;
 }
 
 function isCssModuleAsset(
@@ -985,6 +1028,7 @@ async function scanSourceFile(
   }
 
   scanClasses(source, classes);
+  activeCssModules?.addUsedClasses(source, classes);
 
   for (const specifier of extractImportSpecifiers(source)) {
     const resolved = resolveImportSpecifier(
@@ -1142,6 +1186,7 @@ async function scanModule(
 
   if (source) {
     scanClasses(source, classes);
+    activeCssModules?.addUsedClasses(source, classes);
     return;
   }
 
@@ -1166,6 +1211,7 @@ async function scanModule(
 
   if (fresh) {
     scanClasses(fresh, classes);
+    activeCssModules?.addUsedClasses(fresh, classes);
   }
 }
 
