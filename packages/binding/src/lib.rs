@@ -628,6 +628,12 @@ pub struct JsChunkConfig {
     pub minify: Option<bool>,
     /// `"conservative"` (default, any class) or `"precise"` (all required classes).
     pub matching: Option<String>,
+    /// Minimum confidence for dead-code removal: `"low"`, `"medium"` (default) or `"high"`.
+    pub remove_unused_min_confidence: Option<String>,
+    /// Selectors a browser run matched; never removed.
+    pub runtime_used: Option<Vec<String>>,
+    /// Selectors covered routes never matched; makes "unused" high confidence.
+    pub runtime_unused: Option<Vec<String>>,
 }
 
 /// Parses a `matching` option; `None` means the conservative default.
@@ -638,6 +644,14 @@ fn parse_matching_mode(value: Option<&str>) -> Result<core::MatchingMode, napi::
         Some(other) => Err(napi::Error::from_reason(format!(
             "invalid matching mode '{other}': expected 'conservative' or 'precise'"
         ))),
+    }
+}
+
+/// Parses `removeUnusedMinConfidence`; `None` means `medium` (today's behavior).
+fn parse_min_confidence(value: Option<&str>) -> Result<core::ConfidenceLevel, napi::Error> {
+    match value {
+        None => Ok(core::ConfidenceLevel::Medium),
+        Some(level) => core::ConfidenceLevel::parse(level).map_err(napi::Error::from_reason),
     }
 }
 
@@ -706,6 +720,11 @@ pub fn split_css_by_pages(input: JsSplitInput) -> Result<JsSplitOutput, napi::Er
             force_common_selectors: input.config.force_common_selectors,
             minify: input.config.minify.unwrap_or(true),
             matching: parse_matching_mode(input.config.matching.as_deref())?,
+            remove_unused_min_confidence: parse_min_confidence(
+                input.config.remove_unused_min_confidence.as_deref(),
+            )?,
+            runtime_used: input.config.runtime_used.unwrap_or_default(),
+            runtime_unused: input.config.runtime_unused.unwrap_or_default(),
         },
     };
 
@@ -727,6 +746,12 @@ pub struct JsPageCoverageConfig {
     pub force_common: Option<Vec<String>>,
     /// `"conservative"` (default) or `"precise"`; see `JsChunkConfig.matching`.
     pub matching: Option<String>,
+    /// Minimum confidence for dead-code removal: `"low"`, `"medium"` (default) or `"high"`.
+    pub remove_unused_min_confidence: Option<String>,
+    /// Selectors a browser run matched; never removed.
+    pub runtime_used: Option<Vec<String>>,
+    /// Selectors covered routes never matched; makes "unused" high confidence.
+    pub runtime_unused: Option<Vec<String>>,
 }
 
 /// Configuration for the physical size-budget tier.
@@ -964,6 +989,19 @@ fn build_pipeline_input(input: JsPipelineInput) -> Result<core::PipelineInput, n
                     .as_ref()
                     .and_then(|config| config.matching.as_deref()),
             )?,
+            remove_unused_min_confidence: parse_min_confidence(
+                page_coverage
+                    .as_ref()
+                    .and_then(|config| config.remove_unused_min_confidence.as_deref()),
+            )?,
+            runtime_used: page_coverage
+                .as_ref()
+                .and_then(|config| config.runtime_used.clone())
+                .unwrap_or_default(),
+            runtime_unused: page_coverage
+                .as_ref()
+                .and_then(|config| config.runtime_unused.clone())
+                .unwrap_or_default(),
             force_common: page_coverage
                 .and_then(|config| config.force_common)
                 .unwrap_or_default(),
@@ -1812,6 +1850,9 @@ mod tests {
                 min_page_ratio: 0.5,
                 force_common_selectors: Vec::new(),
                 matching: None,
+                remove_unused_min_confidence: None,
+                runtime_used: None,
+                runtime_unused: None,
                 minify: None,
             },
         };
@@ -1843,6 +1884,9 @@ mod tests {
                 min_page_ratio: 2.0,
                 force_common_selectors: Vec::new(),
                 matching: None,
+                remove_unused_min_confidence: None,
+                runtime_used: None,
+                runtime_unused: None,
                 minify: None,
             },
         };
@@ -1910,6 +1954,9 @@ mod tests {
                     min_page_ratio: Some(0.5),
                     force_common: None,
                     matching: None,
+                    remove_unused_min_confidence: None,
+                    runtime_used: None,
+                    runtime_unused: None,
                 }),
                 size_budget: Some(JsSizeBudgetConfig {
                     enabled: Some(false),
@@ -1938,6 +1985,9 @@ mod tests {
                     min_page_ratio: Some(0.5),
                     force_common: None,
                 matching: None,
+                remove_unused_min_confidence: None,
+                runtime_used: None,
+                runtime_unused: None,
                 }),
                 size_budget: Some(JsSizeBudgetConfig {
                     enabled: Some(true),
@@ -2046,6 +2096,9 @@ mod tests {
                 min_page_ratio: None,
                 force_common: None,
                 matching: None,
+                remove_unused_min_confidence: None,
+                runtime_used: None,
+                runtime_unused: None,
             }),
             size_budget: Some(JsSizeBudgetConfig {
                 enabled: Some(true),

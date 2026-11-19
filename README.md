@@ -344,6 +344,9 @@ unchanged unless a caller attaches the section.
   and Rsbuild still skip `*.module.css`.
 - Next path aliases come from `tsconfig`/`jsconfig` `paths` and workspace
   `exports`; other custom aliases need explicit `pageUsage`.
+- `pageCoverage.removeUnusedMinConfidence: "high"` removes only selectors that
+  runtime coverage (`runtimeUnused`) confirmed unused; the default `"medium"`
+  keeps today's static-only removal.
 - `pageCoverage.matching: "precise"` removes compound selectors (`.btn.primary`)
   on pages where any required class is missing. Default is `"conservative"`.
 - Content-hashed CSS asset rewrites may leave the original filename hash stale

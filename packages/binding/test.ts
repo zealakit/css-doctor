@@ -366,6 +366,45 @@ async function main(): Promise<void> {
     /invalid matching mode/,
   );
 
+  const gateInput = {
+    cssContent: ".live { color: red; } .ghost { color: blue; }",
+    pageUsage: { home: ["live"], about: ["live"] },
+    sizeBudget: { enabled: false },
+    minify: true,
+  };
+  const removeByDefault = binding.optimizeCss({
+    ...gateInput,
+    pageCoverage: { enabled: true, minPageRatio: 0.5 },
+  });
+  const keepStaticOnly = binding.optimizeCss({
+    ...gateInput,
+    pageCoverage: {
+      enabled: true,
+      minPageRatio: 0.5,
+      removeUnusedMinConfidence: "high",
+    },
+  });
+  const removeRuntimeConfirmed = binding.optimizeCss({
+    ...gateInput,
+    pageCoverage: {
+      enabled: true,
+      minPageRatio: 0.5,
+      removeUnusedMinConfidence: "high",
+      runtimeUnused: [".ghost"],
+    },
+  });
+  assert.equal(removeByDefault.deadCodeCount, 1);
+  assert.equal(keepStaticOnly.deadCodeCount, 0);
+  assert.equal(removeRuntimeConfirmed.deadCodeCount, 1);
+  assert.throws(
+    () =>
+      binding.optimizeCss({
+        ...gateInput,
+        pageCoverage: { enabled: true, removeUnusedMinConfidence: "max" },
+      }),
+    /invalid confidence level/,
+  );
+
   console.log("\n✅ css-doctor NAPI binding OK");
   console.log(
     `   ${result.stats.ruleCount} rules, ${result.stats.selectorCount} selectors, ` +

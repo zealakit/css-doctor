@@ -104,6 +104,10 @@ export class CssDoctorRspackPlugin {
         minPageRatio: clampedRatio.value,
         forceCommon: options.pageCoverage?.forceCommon ?? [],
         matching: options.pageCoverage?.matching ?? "conservative",
+        removeUnusedMinConfidence:
+          options.pageCoverage?.removeUnusedMinConfidence ?? "medium",
+        runtimeUsed: options.pageCoverage?.runtimeUsed ?? [],
+        runtimeUnused: options.pageCoverage?.runtimeUnused ?? [],
       },
       sizeBudget: {
         enabled: options.sizeBudget?.enabled ?? true,
@@ -285,6 +289,10 @@ export class CssDoctorRspackPlugin {
             minPageRatio: this.options.pageCoverage.minPageRatio,
             forceCommon: this.options.pageCoverage.forceCommon,
             matching: this.options.pageCoverage.matching,
+            removeUnusedMinConfidence:
+              this.options.pageCoverage.removeUnusedMinConfidence,
+            runtimeUsed: this.options.pageCoverage.runtimeUsed,
+            runtimeUnused: this.options.pageCoverage.runtimeUnused,
           },
           sizeBudget: {
             enabled: this.options.sizeBudget.enabled,

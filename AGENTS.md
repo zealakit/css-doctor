@@ -233,6 +233,11 @@ Do not merge CLI and adapter config loaders into one discovery path — lifecycl
   fallback for CLI-style scans.
 - `classHelpers` is applied per build via `setActiveClassHelpers` (process-wide
   setting; concurrent builds with different lists in one process would race).
+- `pageCoverage.removeUnusedMinConfidence` (`low|medium|high`, default `medium`)
+  gates dead-code removal in `split_css_by_pages`: static-only "unused" is
+  `medium`, runtime-covered (`runtimeUnused`) is `high`, and `runtimeUsed`
+  selectors are never removed. Adapters take these as explicit option arrays;
+  they do not read `.css-doctor/coverage.json` themselves.
 - A selector with multiple classes is matched conservatively by any class by
   default. `pageCoverage.matching: "precise"` (Vite/Next/Rsbuild/`optimizeCss`)
   requires every strictly required class (compound + combinator chain, outside

@@ -16,6 +16,9 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
+use crate::confidence::{ConfidenceLevel, RuntimeEvidence, derive_verdict, meets_min_confidence};
+use crate::markup_match::{MatchConfidence, SelectorUsageStatus};
+
 use lightningcss::declaration::DeclarationBlock;
 use lightningcss::rules::CssRule;
 use lightningcss::rules::CssRuleList;
@@ -59,6 +62,21 @@ pub struct ChunkConfig {
     /// Class matching strictness. Defaults to [`MatchingMode::Conservative`].
     #[serde(default)]
     pub matching: MatchingMode,
+    /// Dead-code removal only acts on `unused` verdicts at or above this level.
+    /// Static-only "unused" is `medium`; runtime-covered "unused" is `high`.
+    /// Defaults to `medium`, which keeps the pre-confidence behavior.
+    #[serde(default = "default_min_confidence")]
+    pub remove_unused_min_confidence: ConfidenceLevel,
+    /// Selectors a browser run matched. Never removed.
+    #[serde(default)]
+    pub runtime_used: Vec<String>,
+    /// Selectors that covered routes never matched (upgrades "unused" to `high`).
+    #[serde(default)]
+    pub runtime_unused: Vec<String>,
+}
+
+const fn default_min_confidence() -> ConfidenceLevel {
+    ConfidenceLevel::Medium
 }
 
 impl Default for ChunkConfig {
@@ -68,6 +86,9 @@ impl Default for ChunkConfig {
             force_common_selectors: Vec::new(),
             minify: true,
             matching: MatchingMode::Conservative,
+            remove_unused_min_confidence: ConfidenceLevel::Medium,
+            runtime_used: Vec::new(),
+            runtime_unused: Vec::new(),
         }
     }
 }
@@ -239,6 +260,9 @@ struct SplitContext {
     min_page_ratio: f32,
     force_common_selectors: Vec<String>,
     matching: MatchingMode,
+    min_confidence: ConfidenceLevel,
+    runtime_used: BTreeSet<String>,
+    runtime_unused: BTreeSet<String>,
     stats: BTreeMap<String, SelectorStat>,
     dead_code_count: usize,
 }
@@ -270,6 +294,19 @@ impl SplitContext {
             min_page_ratio: input.config.min_page_ratio,
             force_common_selectors,
             matching: input.config.matching,
+            min_confidence: input.config.remove_unused_min_confidence,
+            runtime_used: input
+                .config
+                .runtime_used
+                .iter()
+                .map(|selector| selector_key(selector))
+                .collect(),
+            runtime_unused: input
+                .config
+                .runtime_unused
+                .iter()
+                .map(|selector| selector_key(selector))
+                .collect(),
             stats: BTreeMap::new(),
             dead_code_count: 0,
         }
@@ -335,6 +372,32 @@ impl SplitContext {
             (pages, total_occurrences, ratio, classification)
         };
 
+        // Confidence gate: only remove selectors whose "unused" verdict is
+        // trusted enough; a runtime hit always keeps the selector.
+        let classification = if matches!(classification, Classification::Dead) {
+            let key = selector_key(&selector_text);
+            let runtime = if self.runtime_used.contains(&key) {
+                RuntimeEvidence::Hit
+            } else if self.runtime_unused.contains(&key) {
+                RuntimeEvidence::CoveredUnused
+            } else {
+                RuntimeEvidence::NotCollected
+            };
+            let verdict = derive_verdict(
+                MatchConfidence::None,
+                SelectorUsageStatus::Unused,
+                runtime,
+                false,
+            );
+            if meets_min_confidence(&verdict, self.min_confidence) {
+                classification
+            } else {
+                Classification::Common
+            }
+        } else {
+            classification
+        };
+
         let page_count = pages.len();
         let coverage = round_ratio(coverage);
         let target_chunk = target_chunk_name(&classification);
@@ -367,6 +430,29 @@ impl SplitContext {
                     .any(|class| class == forced.trim_start_matches('.'))
         })
     }
+}
+
+/// Comparison key: lowercase, collapsed whitespace, no spaces around combinators.
+fn selector_key(selector: &str) -> String {
+    let collapsed = selector
+        .to_lowercase()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let mut key = String::with_capacity(collapsed.len());
+    let chars: Vec<char> = collapsed.chars().collect();
+    for (index, &ch) in chars.iter().enumerate() {
+        if ch == ' ' {
+            let prev = index.checked_sub(1).and_then(|i| chars.get(i)).copied();
+            let next = chars.get(index + 1).copied();
+            let combinator = |c: Option<char>| matches!(c, Some('>' | '+' | '~'));
+            if combinator(prev) || combinator(next) {
+                continue;
+            }
+        }
+        key.push(ch);
+    }
+    key
 }
 
 fn target_chunk_name(classification: &Classification) -> String {
@@ -743,7 +829,7 @@ mod tests {
                 min_page_ratio: 0.5,
                 force_common_selectors: Vec::new(),
                 minify: false,
-                matching: Default::default(),
+                ..Default::default()
             },
         })
         .expect("split succeeds")
@@ -907,7 +993,7 @@ mod tests {
                 min_page_ratio: 0.5,
                 force_common_selectors: vec![".legacy-popup".to_string()],
                 minify: false,
-                matching: Default::default(),
+                ..Default::default()
             },
         })
         .expect("split succeeds");
@@ -1064,7 +1150,7 @@ mod tests {
                 min_page_ratio: 1.5,
                 force_common_selectors: Vec::new(),
                 minify: false,
-                matching: Default::default(),
+                ..Default::default()
             },
         })
         .expect_err("invalid config should fail");
@@ -1080,7 +1166,7 @@ mod tests {
                 min_page_ratio: 0.75,
                 force_common_selectors: Vec::new(),
                 minify: true,
-                matching: Default::default(),
+                ..Default::default()
             },
         })
         .expect("split succeeds");
@@ -1103,6 +1189,7 @@ mod tests {
                 force_common_selectors: Vec::new(),
                 minify: false,
                 matching,
+                ..Default::default()
             },
         })
         .expect("split succeeds")
@@ -1151,5 +1238,68 @@ mod tests {
         assert_eq!(precise.dead_code_count, 0);
         assert!(precise.common_css.contains(".a"));
         assert!(precise.common_css.contains(".c"));
+    }
+
+    fn split_gated(css: &str, min: ConfidenceLevel, used: &[&str], unused: &[&str]) -> SplitOutput {
+        split_css_by_pages(&SplitInput {
+            css_content: css.to_string(),
+            page_usage: pages(&[("home", &["live"]), ("about", &["live"])]),
+            config: ChunkConfig {
+                min_page_ratio: 0.5,
+                minify: false,
+                remove_unused_min_confidence: min,
+                runtime_used: used.iter().map(|s| (*s).to_string()).collect(),
+                runtime_unused: unused.iter().map(|s| (*s).to_string()).collect(),
+                ..Default::default()
+            },
+        })
+        .expect("split succeeds")
+    }
+
+    #[test]
+    fn default_min_confidence_keeps_todays_removal() {
+        let out = split_gated(
+            ".live { a: b } .ghost { a: b }",
+            ConfidenceLevel::Medium,
+            &[],
+            &[],
+        );
+        assert_eq!(out.dead_code_count, 1);
+        assert!(!out.common_css.contains(".ghost"));
+    }
+
+    #[test]
+    fn high_min_confidence_keeps_static_only_unused_selectors() {
+        let css = ".live { a: b } .ghost { a: b }";
+        let out = split_gated(css, ConfidenceLevel::High, &[], &[]);
+        assert_eq!(out.dead_code_count, 0);
+        assert!(out.common_css.contains(".ghost"));
+    }
+
+    #[test]
+    fn high_min_confidence_removes_runtime_covered_unused_selectors() {
+        let css = ".live { a: b } .ghost { a: b } .other { a: b }";
+        let out = split_gated(css, ConfidenceLevel::High, &[], &[".ghost"]);
+        assert_eq!(out.dead_code_count, 1);
+        assert!(!out.common_css.contains(".ghost"));
+        assert!(out.common_css.contains(".other"));
+    }
+
+    #[test]
+    fn runtime_hit_always_keeps_a_selector() {
+        let out = split_gated(
+            ".live { a: b } .ghost { a: b }",
+            ConfidenceLevel::Medium,
+            &[".GHOST"],
+            &[],
+        );
+        assert_eq!(out.dead_code_count, 0);
+        assert!(out.common_css.contains(".ghost"));
+    }
+
+    #[test]
+    fn selector_keys_ignore_spacing_around_combinators() {
+        assert_eq!(selector_key(".A  >  .b"), ".a>.b");
+        assert_eq!(selector_key(".a .b"), ".a .b");
     }
 }

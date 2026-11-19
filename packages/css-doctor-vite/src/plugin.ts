@@ -213,6 +213,10 @@ export function cssDoctor(options: CssDoctorViteOptions = {}): Plugin {
     forceCommon:
       options.pageCoverage?.forceCommon ?? options.forceCommonSelectors ?? [],
     matching: options.pageCoverage?.matching ?? "conservative",
+    removeUnusedMinConfidence:
+      options.pageCoverage?.removeUnusedMinConfidence ?? "medium",
+    runtimeUsed: options.pageCoverage?.runtimeUsed ?? [],
+    runtimeUnused: options.pageCoverage?.runtimeUnused ?? [],
   };
   const sizeBudget: SizeBudgetOptions = {
     enabled: options.sizeBudget?.enabled ?? true,
@@ -323,6 +327,10 @@ export function cssDoctor(options: CssDoctorViteOptions = {}): Plugin {
               minPageRatio,
               forceCommon: pageCoverage.forceCommon ?? [],
               matching: pageCoverage.matching ?? "conservative",
+              removeUnusedMinConfidence:
+                pageCoverage.removeUnusedMinConfidence ?? "medium",
+              runtimeUsed: pageCoverage.runtimeUsed ?? [],
+              runtimeUnused: pageCoverage.runtimeUnused ?? [],
             },
             sizeBudget: {
               enabled: sizeBudget.enabled ?? true,
@@ -503,6 +511,10 @@ async function analyzeAndSplit(
           enabled: splitApplied,
           minPageRatio: options.pageCoverage.minPageRatio,
           matching: options.pageCoverage.matching,
+          removeUnusedMinConfidence:
+            options.pageCoverage.removeUnusedMinConfidence,
+          runtimeUsed: options.pageCoverage.runtimeUsed,
+          runtimeUnused: options.pageCoverage.runtimeUnused,
           forceCommon: [
             ...options.pageCoverage.forceCommon,
             ...unseenCssModuleClasses(),

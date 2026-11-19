@@ -26,6 +26,17 @@ export type PageCoverageOptions = {
    *   wrongly; use `forceCommon` / `pageUsage` for those.
    */
   matching?: "conservative" | "precise";
+  /**
+   * Dead-code removal only acts on selectors whose "unused" verdict has at
+   * least this confidence. Static-only evidence is `"medium"` (default, the
+   * long-standing behavior); `"high"` also requires runtime coverage evidence
+   * via `runtimeUnused`.
+   */
+  removeUnusedMinConfidence?: "low" | "medium" | "high";
+  /** Selectors a browser run matched (from `css-doctor coverage`); never removed. */
+  runtimeUsed?: string[];
+  /** Selectors covered browser runs never matched; makes "unused" high confidence. */
+  runtimeUnused?: string[];
 };
 
 /** Tier 2: physical size-budget splitting. */
