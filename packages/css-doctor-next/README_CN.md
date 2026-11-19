@@ -59,6 +59,7 @@ export default withCssDoctor(
 
 - 保留现有 webpack callback，仅作用于生产客户端构建。
 - 自动跳过 CSS Modules；公共 chunk 通过 @import wrapper 保持链接。
+- 尚不支持 Turbopack：`withCssDoctor` 只挂到 webpack 生产客户端编译；使用 `--turbopack` 时不会执行 CSS splitting。
 - peer 范围 next >=13 有意保持宽泛。
 
 ## 完整文档

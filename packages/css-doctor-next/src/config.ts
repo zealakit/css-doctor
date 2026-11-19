@@ -107,7 +107,66 @@ function normalizeConfig(value: unknown): CssDoctorNextOptions {
     candidate = candidate.cssDoctor;
   }
 
-  return isRecord(candidate) ? (candidate as CssDoctorNextOptions) : {};
+  if (!isRecord(candidate)) {
+    return {};
+  }
+
+  // Soft shape checks only — invalid nested values are dropped so a broken
+  // cssd.config cannot crash Next startup. Callers that need hard-fail should
+  // use the CLI `.css-doctor/config.json` path instead.
+  const options: CssDoctorNextOptions = {};
+
+  if (isRecord(candidate.pageCoverage)) {
+    options.pageCoverage =
+      candidate.pageCoverage as CssDoctorNextOptions["pageCoverage"];
+  }
+
+  if (isRecord(candidate.sizeBudget)) {
+    options.sizeBudget =
+      candidate.sizeBudget as CssDoctorNextOptions["sizeBudget"];
+  }
+
+  if (isRecord(candidate.pageUsage)) {
+    const pageUsage: Record<string, string[]> = {};
+    for (const [page, classes] of Object.entries(candidate.pageUsage)) {
+      if (
+        Array.isArray(classes) &&
+        classes.every((item) => typeof item === "string")
+      ) {
+        pageUsage[page] = classes;
+      }
+    }
+    options.pageUsage = pageUsage;
+  }
+
+  if (typeof candidate.minify === "boolean") {
+    options.minify = candidate.minify;
+  }
+  if (typeof candidate.report === "boolean") {
+    options.report = candidate.report;
+  }
+  if (Array.isArray(candidate.include)) {
+    options.include = candidate.include as CssDoctorNextOptions["include"];
+  }
+  if (Array.isArray(candidate.exclude)) {
+    options.exclude = candidate.exclude as CssDoctorNextOptions["exclude"];
+  }
+  if (typeof candidate.minPageRatio === "number") {
+    options.minPageRatio = candidate.minPageRatio;
+  }
+  if (
+    Array.isArray(candidate.classHelpers) &&
+    candidate.classHelpers.every(
+      (name) => typeof name === "string" && /^[A-Za-z_$][\w$]*$/.test(name),
+    )
+  ) {
+    options.classHelpers = candidate.classHelpers as string[];
+  }
+  if (Array.isArray(candidate.forceCommonSelectors)) {
+    options.forceCommonSelectors = candidate.forceCommonSelectors as string[];
+  }
+
+  return options;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -59,6 +59,7 @@ export default withCssDoctor(
 
 - Giữ nguyên webpack callback cũ và chỉ áp dụng cho production client build.
 - CSS Modules được tự động bỏ qua; common chunk vẫn được link qua @import wrapper.
+- Chưa hỗ trợ Turbopack: `withCssDoctor` chỉ gắn vào webpack production client; build `--turbopack` sẽ không chạy CSS splitting.
 - Peer range next >=13 được giữ rộng có chủ đích.
 
 ## Tài liệu đầy đủ

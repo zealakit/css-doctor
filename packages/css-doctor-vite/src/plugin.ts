@@ -1,13 +1,24 @@
 import { readFile } from "node:fs/promises";
-import { basename, extname } from "node:path";
+import { basename, dirname, extname, posix, relative } from "node:path";
 import { performance } from "node:perf_hooks";
 
 import { createFilter } from "@rollup/pluginutils";
-import { analyzeCss, optimizeCss } from "@zealakit/css-doctor-binding";
+import { analyzeCss, optimizeCssAsync } from "@zealakit/css-doctor-binding";
 import type {
   JsCssAnalysisResult,
   JsSelectorStat,
 } from "@zealakit/css-doctor-binding";
+import {
+  DEFAULT_MAX_CHUNK_SIZE,
+  DEFAULT_MIN_PAGE_RATIO,
+  clampMaxChunkSize,
+  clampMinPageRatio,
+  describeError,
+  isCssModuleSpecifier,
+  scanClasses,
+  scanCssModuleUsage,
+  setActiveClassHelpers,
+} from "@zealakit/css-doctor-shared";
 import type { Plugin } from "vite";
 
 import { printDiagnostics } from "./reporter";
@@ -22,8 +33,6 @@ import type {
   SizeBudgetOptions,
 } from "./types";
 
-const DEFAULT_MIN_PAGE_RATIO = 0.5;
-const DEFAULT_MAX_CHUNK_SIZE = 60 * 1_024;
 const LARGE_CSS_ASSET_BYTES = 500 * 1_024;
 
 type CssAssetLike = {
@@ -62,10 +71,128 @@ type EmitAsset = {
 };
 
 type AnalysisEnvironment = {
-  getModuleInfo: (id: string) => { code?: string | null } | null;
+  getModuleInfo: (
+    id: string,
+  ) => { code?: string | null; importedIds?: readonly string[] } | null;
   emitFile: (asset: EmitAsset) => string;
   getFileName: (referenceId: string) => string;
 };
+
+/** CSS Modules class maps captured through `css.modules.getJSON`. */
+type CssModuleState = {
+  /** module file (no query) -> local name -> emitted (hashed) class */
+  maps: Map<string, Record<string, string>>;
+  /** module files referenced by a scanned JS module. */
+  seen: Set<string>;
+};
+
+let cssModuleState: CssModuleState | null = null;
+
+function stripQuery(id: string): string {
+  const index = id.indexOf("?");
+  return index < 0 ? id : id.slice(0, index);
+}
+
+/**
+ * Adds the emitted class names of CSS Modules a JS module reads. Dynamic
+ * access (`styles[x]`) keeps every class of that module.
+ */
+function addCssModuleClasses(
+  code: string,
+  importedIds: readonly string[],
+  classes: Set<string>,
+): void {
+  const state = cssModuleState;
+
+  if (!state || state.maps.size === 0 || !/\.module\./.test(code)) {
+    return;
+  }
+
+  const candidates = importedIds
+    .map(stripQuery)
+    .filter((id) => state.maps.has(id) || isCssModuleSpecifier(id));
+
+  for (const usage of scanCssModuleUsage(code)) {
+    const name = basename(stripQuery(usage.specifier));
+    const files = candidates.filter((id) => basename(id) === name);
+
+    for (const file of files) {
+      const map = state.maps.get(file);
+
+      if (!map) {
+        continue;
+      }
+
+      state.seen.add(file);
+
+      const locals = usage.dynamic ? Object.keys(map) : usage.locals;
+
+      for (const local of locals) {
+        const emitted = map[local];
+
+        if (emitted) {
+          for (const token of emitted.split(/\s+/)) {
+            if (token) {
+              classes.add(token.toLowerCase());
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Emitted classes of CSS Modules no scanned chunk imports. They cannot be
+ * attributed to a page, so they stay common instead of being removed.
+ */
+function unseenCssModuleClasses(): string[] {
+  const state = cssModuleState;
+  const out: string[] = [];
+
+  if (!state) {
+    return out;
+  }
+
+  for (const [file, map] of state.maps) {
+    if (!state.seen.has(file)) {
+      for (const emitted of Object.values(map)) {
+        out.push(...emitted.split(/\s+/).filter(Boolean));
+      }
+    }
+  }
+
+  return out;
+}
+
+/** True when every scoped-looking class in `css` is a captured module class. */
+function isCoveredCssModuleAsset(css: string): boolean {
+  const state = cssModuleState;
+
+  if (!state || state.maps.size === 0) {
+    return false;
+  }
+
+  const known = new Set<string>();
+
+  for (const map of state.maps.values()) {
+    for (const emitted of Object.values(map)) {
+      for (const token of emitted.split(/\s+/)) {
+        known.add(token);
+      }
+    }
+  }
+
+  for (const match of css.matchAll(
+    /\.([A-Za-z0-9_-]+_[A-Za-z0-9]{5,}_[0-9]+)/g,
+  )) {
+    if (match[1] && !known.has(match[1])) {
+      return false;
+    }
+  }
+
+  return true;
+}
 
 /**
  * Creates a Vite plugin that splits emitted CSS by page coverage and removes
@@ -85,6 +212,11 @@ export function cssDoctor(options: CssDoctorViteOptions = {}): Plugin {
       DEFAULT_MIN_PAGE_RATIO,
     forceCommon:
       options.pageCoverage?.forceCommon ?? options.forceCommonSelectors ?? [],
+    matching: options.pageCoverage?.matching ?? "conservative",
+    removeUnusedMinConfidence:
+      options.pageCoverage?.removeUnusedMinConfidence ?? "medium",
+    runtimeUsed: options.pageCoverage?.runtimeUsed ?? [],
+    runtimeUnused: options.pageCoverage?.runtimeUnused ?? [],
   };
   const sizeBudget: SizeBudgetOptions = {
     enabled: options.sizeBudget?.enabled ?? true,
@@ -92,36 +224,24 @@ export function cssDoctor(options: CssDoctorViteOptions = {}): Plugin {
     isolateVariables: options.sizeBudget?.isolateVariables ?? true,
   };
   const report = options.report ?? true;
-  const configuredMinPageRatio =
-    pageCoverage.minPageRatio ?? DEFAULT_MIN_PAGE_RATIO;
-  const configuredMaxChunkSize =
-    sizeBudget.maxChunkSize ?? DEFAULT_MAX_CHUNK_SIZE;
   const configurationWarnings: string[] = [];
-  const minPageRatio =
-    Number.isFinite(configuredMinPageRatio) &&
-    configuredMinPageRatio >= 0 &&
-    configuredMinPageRatio <= 1
-      ? configuredMinPageRatio
-      : DEFAULT_MIN_PAGE_RATIO;
-  const maxChunkSize =
-    Number.isFinite(configuredMaxChunkSize) &&
-    Number.isInteger(configuredMaxChunkSize) &&
-    configuredMaxChunkSize > 0
-      ? configuredMaxChunkSize
-      : DEFAULT_MAX_CHUNK_SIZE;
+  const clampedRatio = clampMinPageRatio(
+    pageCoverage.minPageRatio ?? DEFAULT_MIN_PAGE_RATIO,
+  );
+  const clampedSize = clampMaxChunkSize(
+    sizeBudget.maxChunkSize ?? DEFAULT_MAX_CHUNK_SIZE,
+  );
+  const minPageRatio = clampedRatio.value;
+  const maxChunkSize = clampedSize.value;
   let base = "/";
   let minify = options.minify ?? true;
+  let isLibBuild = false;
 
-  if (minPageRatio !== configuredMinPageRatio) {
-    configurationWarnings.push(
-      "minPageRatio must be a number between 0 and 1; using 0.5",
-    );
+  if (clampedRatio.warning) {
+    configurationWarnings.push(clampedRatio.warning);
   }
-
-  if (maxChunkSize !== configuredMaxChunkSize) {
-    configurationWarnings.push(
-      "maxChunkSize must be a positive integer; using 61440",
-    );
+  if (clampedSize.warning) {
+    configurationWarnings.push(clampedSize.warning);
   }
 
   // Keep resolved configs aligned with clamped values so optimizeCss never
@@ -139,6 +259,27 @@ export function cssDoctor(options: CssDoctorViteOptions = {}): Plugin {
     enforce: "post",
 
     config(config) {
+      if (options.cssModules !== false) {
+        const existing = config.css?.modules;
+
+        if (existing !== false) {
+          // Capture local -> emitted class maps; always call the user's hook.
+          const userGetJSON = existing?.getJSON;
+          cssModuleState = { maps: new Map(), seen: new Set() };
+          const state = cssModuleState;
+          config.css ??= {};
+          config.css.modules = {
+            ...existing,
+            getJSON(cssFileName, json, outputFileName) {
+              state.maps.set(stripQuery(cssFileName), { ...json });
+              userGetJSON?.(cssFileName, json, outputFileName);
+            },
+          };
+        }
+      } else {
+        cssModuleState = null;
+      }
+
       if (options.minify === false) {
         config.build ??= {};
         config.build.cssMinify = false;
@@ -150,9 +291,27 @@ export function cssDoctor(options: CssDoctorViteOptions = {}): Plugin {
       minify =
         options.minify ??
         (config.mode === "production" || config.command === "build");
+      // Library builds do not have a reliable HTML/page graph for coverage
+      // splitting — rewriting CSS here can drop styles. Keep original.
+      // Vite sets `build.lib` to `false` (not undefined) for app builds.
+      isLibBuild = Boolean(config.build.lib);
     },
 
     async generateBundle(_outputOptions, bundle) {
+      setActiveClassHelpers(options.classHelpers);
+      cssModuleState?.seen.clear();
+      // Vite 6 may resolve the same plugin for client + SSR environments.
+      // Only skip the server consumer; do not sticky-skip the client build.
+      const environmentConsumer = (
+        this as { environment?: { config?: { consumer?: string } } }
+      ).environment?.config?.consumer;
+      if (isLibBuild || environmentConsumer === "server") {
+        this.warn(
+          "[css-doctor] skipped CSS splitting for library/SSR build to avoid dropping styles",
+        );
+        return;
+      }
+
       try {
         const diagnostics = await analyzeAndSplit(
           bundle,
@@ -167,6 +326,11 @@ export function cssDoctor(options: CssDoctorViteOptions = {}): Plugin {
               enabled: pageCoverage.enabled ?? true,
               minPageRatio,
               forceCommon: pageCoverage.forceCommon ?? [],
+              matching: pageCoverage.matching ?? "conservative",
+              removeUnusedMinConfidence:
+                pageCoverage.removeUnusedMinConfidence ?? "medium",
+              runtimeUsed: pageCoverage.runtimeUsed ?? [],
+              runtimeUnused: pageCoverage.runtimeUnused ?? [],
             },
             sizeBudget: {
               enabled: sizeBudget.enabled ?? true,
@@ -308,7 +472,10 @@ async function analyzeAndSplit(
       continue;
     }
 
-    if (isCssModuleAsset(output.fileName, sourceToCss(output.source))) {
+    if (
+      isCssModuleAsset(output.fileName, sourceToCss(output.source)) &&
+      !isCoveredCssModuleAsset(sourceToCss(output.source))
+    ) {
       diagnostics.skippedCssAssets += 1;
       continue;
     }
@@ -337,13 +504,21 @@ async function analyzeAndSplit(
     const originalContent = sourceToCss(output.source);
 
     try {
-      const pipeline = optimizeCss({
+      const pipeline = await optimizeCssAsync({
         cssContent: originalContent,
         pageUsage,
         pageCoverage: {
           enabled: splitApplied,
           minPageRatio: options.pageCoverage.minPageRatio,
-          forceCommon: options.pageCoverage.forceCommon,
+          matching: options.pageCoverage.matching,
+          removeUnusedMinConfidence:
+            options.pageCoverage.removeUnusedMinConfidence,
+          runtimeUsed: options.pageCoverage.runtimeUsed,
+          runtimeUnused: options.pageCoverage.runtimeUnused,
+          forceCommon: [
+            ...options.pageCoverage.forceCommon,
+            ...unseenCssModuleClasses(),
+          ],
         },
         sizeBudget: {
           enabled: options.sizeBudget.enabled,
@@ -406,7 +581,10 @@ async function analyzeAndSplit(
 
       if (options.wrapCommonImports && commonWasSplit) {
         output.source = commonFileNames
-          .map((fileName) => `@import "./${basename(fileName)}";`)
+          .map((fileName) => {
+            const importPath = cssImportPath(output.fileName, fileName);
+            return `@import "${importPath}";`;
+          })
           .join("\n");
       }
 
@@ -537,9 +715,9 @@ function injectPageChunkStyles(
     const chunkFile = chunkByPage.get(page);
     const hrefs = fileNames.map((fileName) => `${normalizedBase}${fileName}`);
     const htmlOutput = findPageHtmlAsset(bundle, page);
-    const output = htmlOutput ?? (chunkFile ? bundle[chunkFile] : undefined);
+    const chunkOutput = chunkFile ? bundle[chunkFile] : undefined;
 
-    if (isHtmlAsset(output)) {
+    if (isHtmlAsset(htmlOutput)) {
       const tags = hrefs
         .map(
           (href) =>
@@ -547,19 +725,28 @@ function injectPageChunkStyles(
         )
         .join("\n");
 
-      if (!output.source.includes(tags) && output.source.includes("</head>")) {
-        output.source = output.source.replace("</head>", `${tags}\n  </head>`);
+      if (htmlOutput.source.includes(tags)) {
+        continue;
       }
-      continue;
+
+      // Prefer structured HTML injection; otherwise fall through to the JS
+      // loader so page CSS is not lost on headless/incomplete documents.
+      const injected = injectHtmlTags(htmlOutput.source, tags, {
+        allowAppend: false,
+      });
+      if (injected !== null) {
+        htmlOutput.source = injected;
+        continue;
+      }
     }
 
-    if (!isChunk(output)) {
+    if (!isChunk(chunkOutput)) {
       continue;
     }
 
     const snippet = `(()=>{const __cssDoctorPageStyles=${JSON.stringify(hrefs)};if(typeof document!=="undefined"){for(const __cssDoctorPageHref of __cssDoctorPageStyles){if(!Array.from(document.querySelectorAll("link[data-css-doctor-page]")).some((link)=>link.dataset.cssDoctorPage===__cssDoctorPageHref)){const __cssDoctorPageLink=document.createElement("link");__cssDoctorPageLink.rel="stylesheet";__cssDoctorPageLink.href=__cssDoctorPageHref;__cssDoctorPageLink.dataset.cssDoctorPage=__cssDoctorPageHref;document.head.append(__cssDoctorPageLink);}}}})();\n`;
 
-    output.code = snippet + output.code;
+    chunkOutput.code = snippet + chunkOutput.code;
   }
 }
 
@@ -581,10 +768,38 @@ function injectStylesheetLinks(
       continue;
     }
 
-    if (output.source.includes("</head>")) {
-      output.source = output.source.replace("</head>", `${tags}\n  </head>`);
+    const injected = injectHtmlTags(output.source, tags, { allowAppend: true });
+    if (injected !== null) {
+      output.source = injected;
     }
   }
+}
+
+/**
+ * Inserts stylesheet tags before `</head>`, else `</body>`, else `</html>`.
+ * When `allowAppend` is true, falls back to appending at the end.
+ */
+function injectHtmlTags(
+  html: string,
+  tags: string,
+  options: { allowAppend: boolean },
+): string | null {
+  if (html.length === 0) {
+    return null;
+  }
+  if (html.includes("</head>")) {
+    return html.replace("</head>", `${tags}\n  </head>`);
+  }
+  if (html.includes("</body>")) {
+    return html.replace("</body>", `${tags}\n  </body>`);
+  }
+  if (html.includes("</html>")) {
+    return html.replace("</html>", `${tags}\n</html>`);
+  }
+  if (options.allowAppend) {
+    return `${html}\n${tags}\n`;
+  }
+  return null;
 }
 
 function findPageHtmlAsset(
@@ -864,6 +1079,11 @@ function collectChunkContent(
 
       if (moduleInfo?.code) {
         scanClasses(moduleInfo.code, classes);
+        addCssModuleClasses(
+          moduleInfo.code,
+          moduleInfo.importedIds ?? [],
+          classes,
+        );
       }
     }
 
@@ -879,44 +1099,6 @@ function collectChunkContent(
   }
 
   return { classes, cssFiles };
-}
-
-function scanClasses(source: string, classes: Set<string>): void {
-  const patterns = [
-    /(?:class|className)\s*=\s*(?:"([^"]*)"|'([^']*)'|`([^`]*)`)/g,
-    /(?:^|[,{;\s])(?:class|className)\s*:\s*(?:"([^"]*)"|'([^']*)'|`([^`]*)`)/g,
-    /classList\.(?:add|remove|toggle|contains)\(\s*(?:"([^"]*)"|'([^']*)'|`([^`]*)`)/g,
-  ];
-
-  for (const pattern of patterns) {
-    for (const match of source.matchAll(pattern)) {
-      const value = match[1] ?? match[2] ?? match[3];
-
-      if (!value) {
-        continue;
-      }
-
-      for (const token of value.split(/\s+/)) {
-        if (isClassToken(token)) {
-          classes.add(token.toLowerCase());
-        }
-      }
-    }
-  }
-}
-
-/** Accept Tailwind-style tokens (`md:flex`, `w-1/2`, `w-[10px]`, `!p-2`). */
-function isClassToken(token: string): boolean {
-  if (!token || token.length > 256) {
-    return false;
-  }
-
-  // Reject template/expression leftovers while allowing arbitrary-value brackets.
-  if (/[`${}]/.test(token)) {
-    return false;
-  }
-
-  return /[A-Za-z_]/.test(token);
 }
 
 function isInternalPageEntry(chunk: ViteChunkLike): boolean {
@@ -1083,6 +1265,14 @@ function roundMs(value: number): number {
   return Math.round(value * 1_000) / 1_000;
 }
 
-function describeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+function cssImportPath(fromFileName: string, toFileName: string): string {
+  const fromDir = dirname(fromFileName.replace(/\\/g, "/"));
+  const relativePath = relative(fromDir, toFileName).replace(/\\/g, "/");
+  const normalized = posix.normalize(relativePath);
+
+  if (normalized.startsWith("../") || normalized.startsWith("./")) {
+    return normalized;
+  }
+
+  return `./${normalized}`;
 }

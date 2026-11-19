@@ -1,6 +1,6 @@
 {
   "name": "@zealakit/css-doctor-binding",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Native Node.js bindings for the css-doctor CSS analysis engine",
   "keywords": [
     "css",
@@ -62,7 +62,7 @@
     "@napi-rs/cli": "^2.18.4",
     "@types/node": "^22.20.5",
     "tsx": "^4.23.15",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.3"
   },
   "engines": {
     "node": ">=18"

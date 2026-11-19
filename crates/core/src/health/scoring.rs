@@ -1,6 +1,6 @@
 //! Scoring math and report aggregation for CSS Health Score.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::time::Instant;
 
 use crate::analyze_css;
@@ -9,7 +9,7 @@ use crate::model::CssAnalysisResult;
 use super::config::HealthScoreConfig;
 use super::dimensions::{
     AnalysisContext, analyze_dead_css, analyze_duplicate_rules, analyze_selector_complexity,
-    analyze_size_efficiency, analyze_variable_consistency,
+    analyze_size_efficiency, analyze_variable_consistency, size_diagnostics_for_bytes,
 };
 use super::model::{
     DimensionId, DimensionScore, HealthDiagnostic, HealthGrade, HealthReport, HealthScoreSummary,
@@ -24,6 +24,8 @@ pub struct HealthEvaluationInput<'a> {
     pub size_bytes: Option<usize>,
     pub analysis: Option<&'a CssAnalysisResult>,
     pub config: &'a HealthScoreConfig,
+    /// Optional page → class usage for unused-selector detection.
+    pub page_usage: Option<&'a HashMap<String, HashSet<String>>>,
 }
 
 /// Grades a numeric score using configured bands.
@@ -61,6 +63,34 @@ pub fn evaluate_css_health(
         size_bytes,
         analysis: Some(&analysis),
         config,
+        page_usage: None,
+    })?;
+    report.summary.analysis_ms = started.elapsed().as_secs_f64() * 1_000.0;
+    Ok(report)
+}
+
+/// Like [`evaluate_css_health`] but accepts page usage for unused-selector detection.
+///
+/// # Errors
+///
+/// Returns an error when configuration is invalid or CSS cannot be parsed.
+pub fn evaluate_css_health_with_usage(
+    css_content: &str,
+    file_path: Option<&str>,
+    size_bytes: Option<usize>,
+    page_usage: &HashMap<String, HashSet<String>>,
+    config: &HealthScoreConfig,
+) -> Result<HealthReport, String> {
+    config.validate()?;
+    let started = Instant::now();
+    let analysis = analyze_css(css_content)?;
+    let mut report = evaluate_health_report(&HealthEvaluationInput {
+        css_content,
+        file_path,
+        size_bytes,
+        analysis: Some(&analysis),
+        config,
+        page_usage: Some(page_usage),
     })?;
     report.summary.analysis_ms = started.elapsed().as_secs_f64() * 1_000.0;
     Ok(report)
@@ -91,6 +121,7 @@ pub fn evaluate_health_report(input: &HealthEvaluationInput<'_>) -> Result<Healt
         size_bytes,
         file_path: input.file_path,
         thresholds: &input.config.thresholds,
+        page_usage: input.page_usage,
     };
 
     let mut by_dimension: BTreeMap<DimensionId, Vec<HealthDiagnostic>> = BTreeMap::new();
@@ -137,7 +168,12 @@ pub fn evaluate_health_report(input: &HealthEvaluationInput<'_>) -> Result<Healt
         let weight = weight_for(id);
         let evaluated = dimension_can_evaluate(id, &ctx);
         let (score, note) = if evaluated {
-            (Some(score_dimension(&diagnostics, input.config)), None)
+            let mut note = None;
+            if id == DimensionId::DeadCss && input.page_usage.is_none() {
+                note =
+                    Some("Unused-selector detection skipped (no page usage provided).".to_string());
+            }
+            (Some(score_dimension(&diagnostics, input.config)), note)
         } else {
             (
                 None,
@@ -193,7 +229,16 @@ pub fn evaluate_health_report(input: &HealthEvaluationInput<'_>) -> Result<Healt
         0
     };
 
-    let (grade, status) = grade_for_score(overall, input.config);
+    let evaluated_count = dimensions
+        .iter()
+        .filter(|dimension| dimension.evaluated)
+        .count();
+    let (grade, mut status) = grade_for_score(overall, input.config);
+    // Empty / near-empty sheets often only evaluate size + variables — that is
+    // not enough evidence for a trusted overall grade.
+    if evaluated_count < 3 || weight_sum == 0.0 || analysis.stats.rule_count == 0 {
+        status = HealthStatus::InsufficientData;
+    }
 
     all_diagnostics.sort_by(|left, right| {
         severity_rank(left.severity)
@@ -206,7 +251,18 @@ pub fn evaluate_health_report(input: &HealthEvaluationInput<'_>) -> Result<Healt
             })
     });
 
-    let recommendations = unique_remediations(&all_diagnostics, 5);
+    let mut recommendations = unique_remediations(&all_diagnostics, 5);
+    if input.page_usage.is_none()
+        && dimensions
+            .iter()
+            .any(|dimension| dimension.id == DimensionId::DeadCss && dimension.evaluated)
+        && recommendations.len() < 5
+    {
+        recommendations.push(
+            "Provide pageUsage to evaluate unused selectors; empty rules alone are confirmed without it."
+                .into(),
+        );
+    }
 
     let declarations =
         analysis.stats.declaration_count + analysis.stats.important_declaration_count;
@@ -237,16 +293,19 @@ pub fn evaluate_health_report(input: &HealthEvaluationInput<'_>) -> Result<Healt
 #[must_use]
 pub fn merge_health_reports(reports: &[HealthReport], config: &HealthScoreConfig) -> HealthReport {
     if reports.is_empty() {
-        let (grade, status) = grade_for_score(100, config);
+        // No inputs means "not evaluated" — never invent a perfect 100/A score.
+        let (grade, status) = grade_for_score(0, config);
         return HealthReport {
             schema_version: 1,
-            overall: 100,
+            overall: 0,
             grade,
             status,
-            dimensions: default_perfect_dimensions(config),
+            dimensions: default_unevaluated_dimensions(config),
             summary: HealthScoreSummary::default(),
             diagnostics: Vec::new(),
-            recommendations: Vec::new(),
+            recommendations: vec![
+                "No CSS files were evaluated; provide at least one stylesheet before trusting the Health Score.".into(),
+            ],
         };
     }
 
@@ -256,6 +315,8 @@ pub fn merge_health_reports(reports: &[HealthReport], config: &HealthScoreConfig
 
     let mut diagnostics = Vec::new();
     let mut summary = HealthScoreSummary::default();
+    let mut any_unused_selector = false;
+    let mut any_dead_evaluated = false;
 
     for report in reports {
         diagnostics.extend(report.diagnostics.iter().cloned());
@@ -265,7 +326,42 @@ pub fn merge_health_reports(reports: &[HealthReport], config: &HealthScoreConfig
         summary.declarations += report.summary.declarations;
         summary.size_bytes += report.summary.size_bytes;
         summary.analysis_ms += report.summary.analysis_ms;
+        any_unused_selector |= report
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "dead.unused-selector");
+        any_dead_evaluated |= report
+            .dimensions
+            .iter()
+            .any(|dimension| dimension.id == DimensionId::DeadCss && dimension.evaluated);
     }
+
+    // Drop exact duplicates that can appear when the same finding is reported twice.
+    {
+        let mut seen = std::collections::BTreeSet::new();
+        diagnostics.retain(|diagnostic| {
+            seen.insert((
+                diagnostic.code.clone(),
+                diagnostic.file_path.clone(),
+                diagnostic.selector.clone(),
+                diagnostic
+                    .location
+                    .map(|location| (location.line, location.column)),
+                diagnostic.message.clone(),
+            ))
+        });
+    }
+
+    // Re-evaluate size against the *aggregated* stylesheet footprint so many
+    // small files that jointly exceed the threshold are not scored as "fine".
+    diagnostics.retain(|diagnostic| {
+        diagnostic.code != "size.large-stylesheet" && diagnostic.code != "size.critical-stylesheet"
+    });
+    diagnostics.extend(size_diagnostics_for_bytes(
+        summary.size_bytes,
+        &config.thresholds,
+        Some("<merged>"),
+    ));
 
     diagnostics.sort_by(|left, right| {
         severity_rank(left.severity)
@@ -273,7 +369,6 @@ pub fn merge_health_reports(reports: &[HealthReport], config: &HealthScoreConfig
             .then_with(|| left.code.cmp(&right.code))
     });
 
-    // Re-score dimensions from merged diagnostics so multi-file runs stay consistent.
     let mut by_dimension: BTreeMap<DimensionId, Vec<HealthDiagnostic>> = BTreeMap::new();
     for diagnostic in &diagnostics {
         by_dimension
@@ -305,9 +400,42 @@ pub fn merge_health_reports(reports: &[HealthReport], config: &HealthScoreConfig
     ] {
         let dimension_diagnostics = by_dimension.remove(&id).unwrap_or_default();
         let weight = weight_for(id);
-        let score = score_dimension(&dimension_diagnostics, config);
-        weighted_total += f64::from(score) * weight;
-        weight_sum += weight;
+        let evaluated = match id {
+            DimensionId::CssSizeEfficiency | DimensionId::VariableConsistency => true,
+            DimensionId::SelectorComplexity | DimensionId::DuplicateRules => {
+                summary.rules > 0 || summary.selectors > 0
+            }
+            DimensionId::DeadCss => {
+                any_dead_evaluated
+                    || summary.rules > 0
+                    || dimension_diagnostics.iter().any(|diagnostic| {
+                        diagnostic.code == "dead.empty-rule"
+                            || diagnostic.code == "dead.unused-selector"
+                            || diagnostic.code == "parser.syntax-warning"
+                    })
+            }
+        };
+
+        let (score, note) = if evaluated {
+            let mut note = None;
+            if id == DimensionId::DeadCss && !any_unused_selector {
+                note = Some(
+                    "Unused-selector coverage was not fully confirmed for every file (page usage missing or empty)."
+                        .into(),
+                );
+            }
+            (Some(score_dimension(&dimension_diagnostics, config)), note)
+        } else {
+            (
+                None,
+                Some("Insufficient data to evaluate this dimension reliably.".into()),
+            )
+        };
+
+        if let Some(score_value) = score {
+            weighted_total += f64::from(score_value) * weight;
+            weight_sum += weight;
+        }
 
         let error_count = count_severity(&dimension_diagnostics, HealthSeverity::Error);
         let warning_count = count_severity(&dimension_diagnostics, HealthSeverity::Warning);
@@ -315,10 +443,10 @@ pub fn merge_health_reports(reports: &[HealthReport], config: &HealthScoreConfig
 
         dimensions.push(DimensionScore {
             id,
-            score: Some(score),
+            score,
             weight,
             effective_weight: 0.0,
-            evaluated: true,
+            evaluated,
             issue_count: error_count + warning_count + info_count,
             error_count,
             warning_count,
@@ -328,13 +456,15 @@ pub fn merge_health_reports(reports: &[HealthReport], config: &HealthScoreConfig
                 .map(|diagnostic| diagnostic.code.clone())
                 .collect(),
             recommendations: unique_remediations(&dimension_diagnostics, 3),
-            note: None,
+            note,
         });
     }
 
     if weight_sum > 0.0 {
         for dimension in &mut dimensions {
-            dimension.effective_weight = dimension.weight / weight_sum;
+            if dimension.evaluated {
+                dimension.effective_weight = dimension.weight / weight_sum;
+            }
         }
     }
 
@@ -343,7 +473,14 @@ pub fn merge_health_reports(reports: &[HealthReport], config: &HealthScoreConfig
     } else {
         0
     };
-    let (grade, status) = grade_for_score(overall, config);
+    let evaluated_count = dimensions
+        .iter()
+        .filter(|dimension| dimension.evaluated)
+        .count();
+    let (grade, mut status) = grade_for_score(overall, config);
+    if evaluated_count < 2 || weight_sum == 0.0 {
+        status = HealthStatus::InsufficientData;
+    }
 
     summary.errors = count_severity(&diagnostics, HealthSeverity::Error);
     summary.warnings = count_severity(&diagnostics, HealthSeverity::Warning);
@@ -361,7 +498,7 @@ pub fn merge_health_reports(reports: &[HealthReport], config: &HealthScoreConfig
     }
 }
 
-fn default_perfect_dimensions(config: &HealthScoreConfig) -> Vec<DimensionScore> {
+fn default_unevaluated_dimensions(config: &HealthScoreConfig) -> Vec<DimensionScore> {
     let ids = [
         (
             DimensionId::SelectorComplexity,
@@ -384,31 +521,38 @@ fn default_perfect_dimensions(config: &HealthScoreConfig) -> Vec<DimensionScore>
     ids.into_iter()
         .map(|(id, weight)| DimensionScore {
             id,
-            score: Some(100),
+            score: None,
             weight,
             effective_weight: if weight_sum > 0.0 {
                 weight / weight_sum
             } else {
                 0.0
             },
-            evaluated: true,
+            evaluated: false,
             issue_count: 0,
             error_count: 0,
             warning_count: 0,
             info_count: 0,
             diagnostic_codes: Vec::new(),
             recommendations: Vec::new(),
-            note: None,
+            note: Some("Not evaluated: no CSS inputs were provided.".into()),
         })
         .collect()
 }
 
 fn dimension_can_evaluate(id: DimensionId, ctx: &AnalysisContext<'_>) -> bool {
+    let has_rules = !ctx.analysis.rules.is_empty();
+    let has_selectors = !ctx.analysis.selectors.is_empty();
     match id {
-        DimensionId::CssSizeEfficiency => ctx.size_bytes > 0 || !ctx.analysis.rules.is_empty(),
+        // Empty sheets are still size-evaluable (tiny / zero footprint).
+        DimensionId::CssSizeEfficiency => true,
         DimensionId::VariableConsistency => true,
-        DimensionId::SelectorComplexity | DimensionId::DuplicateRules | DimensionId::DeadCss => {
-            true
+        DimensionId::SelectorComplexity | DimensionId::DuplicateRules => has_rules || has_selectors,
+        DimensionId::DeadCss => {
+            // Confirmed empty-rule / parser findings need stylesheet content.
+            // Unused-selector detection additionally needs page_usage, but we
+            // still evaluate empty-rule signals without it.
+            has_rules || !ctx.analysis.warnings.is_empty()
         }
     }
 }
@@ -636,6 +780,119 @@ mod tests {
         let merged = merge_health_reports(&[first, second], &config);
         assert_eq!(merged.summary.files, 2);
         assert!(merged.overall < 100);
+    }
+
+    #[test]
+    fn merge_empty_reports_is_not_perfect() {
+        let config = HealthScoreConfig::default();
+        let merged = merge_health_reports(&[], &config);
+        assert_eq!(merged.overall, 0);
+        assert!(
+            merged
+                .dimensions
+                .iter()
+                .all(|dimension| !dimension.evaluated)
+        );
+        assert!(
+            merged
+                .dimensions
+                .iter()
+                .all(|dimension| dimension.score.is_none())
+        );
+        assert!(!merged.recommendations.is_empty());
+    }
+
+    #[test]
+    fn empty_stylesheet_is_not_perfect_a() {
+        let config = HealthScoreConfig::default();
+        let report = evaluate_css_health("", Some("empty.css"), Some(0), &config).unwrap();
+        assert_eq!(report.status, HealthStatus::InsufficientData);
+        let complexity = report
+            .dimensions
+            .iter()
+            .find(|dimension| dimension.id == DimensionId::SelectorComplexity)
+            .unwrap();
+        assert!(!complexity.evaluated);
+        assert!(complexity.score.is_none());
+    }
+
+    #[test]
+    fn merge_rechecks_aggregated_size_threshold() {
+        let mut config = HealthScoreConfig::default();
+        config.thresholds.large_stylesheet_bytes = 50;
+        config.thresholds.critical_stylesheet_bytes = 10_000;
+        let first = evaluate_css_health(".a{color:red}", Some("a.css"), Some(30), &config).unwrap();
+        let second =
+            evaluate_css_health(".b{color:blue}", Some("b.css"), Some(30), &config).unwrap();
+        assert!(
+            first
+                .diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.code != "size.large-stylesheet")
+        );
+        let merged = merge_health_reports(&[first, second], &config);
+        assert!(merged.summary.size_bytes >= 50);
+        assert!(
+            merged
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == "size.large-stylesheet")
+        );
+        let size = merged
+            .dimensions
+            .iter()
+            .find(|dimension| dimension.id == DimensionId::CssSizeEfficiency)
+            .unwrap();
+        assert!(size.score.unwrap() < 100);
+    }
+
+    #[test]
+    fn page_usage_reports_unused_selectors() {
+        let config = HealthScoreConfig::default();
+        let usage = HashMap::from([("home".into(), HashSet::from(["used".into()]))]);
+        let report = evaluate_css_health_with_usage(
+            ".used{color:red}.unused{color:blue}",
+            Some("app.css"),
+            None,
+            &usage,
+            &config,
+        )
+        .unwrap();
+        let unused: Vec<_> = report
+            .diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.code == "dead.unused-selector")
+            .collect();
+        assert_eq!(unused.len(), 1);
+        assert!(
+            unused[0]
+                .selector
+                .as_deref()
+                .is_some_and(|selector| selector.contains("unused"))
+        );
+    }
+
+    #[test]
+    fn missing_page_usage_does_not_invent_unused_selectors() {
+        let config = HealthScoreConfig::default();
+        let report =
+            evaluate_css_health(".orphan{color:red}", Some("app.css"), None, &config).unwrap();
+        assert!(
+            report
+                .diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.code != "dead.unused-selector")
+        );
+        let dead = report
+            .dimensions
+            .iter()
+            .find(|dimension| dimension.id == DimensionId::DeadCss)
+            .unwrap();
+        assert!(
+            dead.note
+                .as_deref()
+                .is_some_and(|note| note.contains("page usage"))
+        );
     }
 
     #[test]

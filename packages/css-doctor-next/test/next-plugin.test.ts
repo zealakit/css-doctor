@@ -454,3 +454,82 @@ test("webpack build survives invalid CSS and a throwing callback", async () => {
 
   assert.equal(stats.hasErrors(), false);
 });
+
+test("splits CSS Modules by usage from css-loader exports", async () => {
+  const moduleRoot = join(packageRoot, "test/fixtures/css-modules");
+  const outputPath = await mkdtemp(join(tmpdir(), "cssd-next-mod-"));
+  const captured: CssDoctorNextDiagnostics[] = [];
+  const css = [
+    ".card_hero__h4sh { color: red; }",
+    ".card_is-open__h4sh { color: blue; }",
+    ".card_unused__h4sh { color: green; }",
+    ".other_a__h4sh { color: black; }",
+    ".other_b__h4sh { color: gray; }",
+  ].join("\n");
+
+  const run = async (cssModules: boolean | undefined) => {
+    captured.length = 0;
+    const config: Configuration = {
+      mode: "development",
+      entry: { "pages/index": join(moduleRoot, "entry.js") },
+      output: { path: outputPath, filename: "[name].js", clean: true },
+      optimization: { minimize: false },
+      module: {
+        rules: [
+          {
+            test: /\.module\.css$/,
+            use: join(moduleRoot, "fake-css-loader.cjs"),
+          },
+        ],
+      },
+      plugins: [
+        new CssFixturePlugin(css),
+        new CssDoctorWebpackPlugin({
+          report: false,
+          minify: false,
+          sizeBudget: { enabled: false },
+          ...(cssModules === undefined ? {} : { cssModules }),
+          onDiagnostics: (diagnostics) => {
+            captured.push(diagnostics);
+          },
+        }),
+      ],
+      stats: "errors-warnings",
+    };
+    const compiler = webpack(config);
+    const stats = await new Promise<Stats>((resolve, reject) => {
+      compiler.run((error, result) => {
+        compiler.close(() => undefined);
+        if (error || !result) {
+          reject(error ?? new Error("no stats"));
+        } else {
+          resolve(result);
+        }
+      });
+    });
+    assert.equal(stats.hasErrors(), false, stats.toString());
+    const diagnostics = captured[0];
+    assert.ok(diagnostics);
+    return {
+      diagnostics,
+      css: await readFile(join(outputPath, "static/css/app.css"), "utf8"),
+    };
+  };
+
+  try {
+    const split = await run(undefined);
+    assert.equal(split.diagnostics.skippedCssAssets, 0);
+    assert.match(split.css, /card_hero__h4sh/);
+    assert.match(split.css, /card_is-open__h4sh/);
+    assert.doesNotMatch(split.css, /card_unused__h4sh/);
+    // `other[window.key]` is dynamic: every class of that module is kept.
+    assert.match(split.css, /other_a__h4sh/);
+    assert.match(split.css, /other_b__h4sh/);
+
+    const skipped = await run(false);
+    assert.equal(skipped.diagnostics.skippedCssAssets, 1);
+    assert.match(skipped.css, /card_unused__h4sh/);
+  } finally {
+    await rm(outputPath, { recursive: true, force: true });
+  }
+});

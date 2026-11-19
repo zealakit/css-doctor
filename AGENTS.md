@@ -14,12 +14,14 @@ Turborepo.
 | --- | --- |
 | `crates/core` | Rust engine: parse, selector extraction, usage matrix, page-coverage splitter, CSS Health Score |
 | `packages/binding` | NAPI-RS bridge exposing `analyzeCss`, `splitCssByPages`, `optimizeCss`, and JS types |
-| `packages/cli` | `css-doctor` terminal CLI (`check`, `health`, `baseline`, `diff`, `optimize`, `split`, `fix`; Commander + tsup, ESM) |
+| `packages/cli` | `css-doctor` terminal CLI (`check`, `health`, `baseline`, `diff`, `optimize`, `split`, `fix`, `coverage import`; Commander + tsup, ESM) |
+| `packages/css-doctor-shared` | Internal-only pure helpers (class scan, clamps, patterns); built in-repo and bundled into publishable packages — never published to npm |
 | `packages/css-doctor-vite` | Vite/Rollup plugin (ESM + CJS + DTS) |
 | `packages/css-doctor-next` | Next.js config wrapper + Webpack plugin (ESM + CJS + DTS) |
 | `packages/css-doctor-rsbuild` | Rsbuild/Rspack plugin (ESM + DTS) |
 | `packages/css-doctor-remix` | Remix 3 asset-server middleware (ESM + DTS) |
 | `packages/css-doctor-nuxt` | Nuxt 4 module wrapping the Vite plugin (ESM + DTS) |
+| `packages/css-doctor-gui` | Local report viewer package `@zealakit/css-doctor-gui` (Web + optional Tauri) |
 | `examples/vite-react-tailwind` | React 19 + Tailwind v4 SPA build-graph demo for Vite |
 | `examples/next-app-tailwind` | Next 15 App Router + Tailwind v4 CSS Modules safety fixture |
 | `examples/rsbuild-react-tailwind` | Rsbuild 2 + React 19 + Tailwind v4 fixture |
@@ -27,7 +29,7 @@ Turborepo.
 | `examples/remix-tailwind-sass` | Remix 3 asset-server + Tailwind v4 + Sass fixture |
 | `examples/nuxt-tailwind-sass` | Nuxt 4 + Tailwind v4 + Sass + Vue scoped fixture |
 | `examples/vite-react-3rd-ui` | Vite + React 3rd-party UI (Antd/MUI/Chakra) fixture |
-| `monitor/` | Local Node/Rust dependency dashboard (`pnpm monitor`) |
+| `monitor/` | Local Node dependency dashboard for root + `packages/*` (`pnpm monitor`) |
 | `turbo.json` | Turborepo task graph, input hashing, native addon outputs |
 | `.agents/skills` | Vendor-neutral agent skills (canonical) |
 | `.claude/skills` | Single Claude router skill pointing at the canonical workflows |
@@ -45,6 +47,11 @@ Turborepo.
    exceptions.
 3. Public API changes must be propagated through:
    `crates/core` → `packages/binding` → consumers (CLI/Vite/Next) → tests/docs.
+   Adapter-only pure helpers live in `packages/css-doctor-shared` (no Core/Node
+   reverse deps; adapters must not depend on each other or on the CLI).
+   `css-doctor-shared` is private/internal: keep it as a workspace
+   `devDependency` of publishable packages and bundle it (`tsup` `noExternal`);
+   never publish it or leave it as a runtime npm dependency.
 4. Build the native binding before running TypeScript integration tests:
    `pnpm --filter @zealakit/css-doctor-binding build`.
 5. NAPI-RS 2.x does not support `f32`. Use `f64` at the JS boundary and cast
@@ -65,7 +72,7 @@ Turborepo.
 | --- | --- | --- |
 | Rust parser, selector extraction, splitter, AST | `crates/core/src/analyzer.rs`, `model.rs`, `splitter.rs` | `css-doctor-core` |
 | NAPI types/function, JS ↔ Rust mapping | `packages/binding/src/lib.rs`, `crates/core/src/` changed API | `css-doctor-binding` |
-| CLI output/flags, Vite plugin, Next wrapper | package `src/` and tests | `css-doctor-integrations` |
+| CLI output/flags, Vite/Next/GUI runtime | package `src/` and tests | `css-doctor-integrations` |
 | Full verification / release readiness | all package test commands | `css-doctor-verify` |
 
 ## Canonical commands
@@ -83,10 +90,12 @@ pnpm format                 # turbo format (Biome format --write)
 pnpm format:check           # turbo format:check (no writes)
 pnpm check                  # turbo check (Biome lint + format)
 pnpm dev                    # turbo dev (persistent, uncached)
-pnpm monitor                # dependency dashboard at http://127.0.0.1:3000
+pnpm snapshot:examples      # rebuild examples/* and compare emitted CSS to examples/css-snapshots.json (--update to accept)
+pnpm monitor                # dependency dashboard at http://127.0.0.1:4177
 
 # Rust
 pnpm test:cargo             # cargo test --workspace
+cargo bench -p css_doctor_core    # criterion: analyze, size split, pipeline, health (300 KiB generated input)
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
 
@@ -152,10 +161,22 @@ target directory is involved.
   (no CSS source). The CLI owns baseline persistence
   (`.css-doctor/baseline.json` + optional `.css-doctor/config.json`); framework
   adapters reuse the shared scoring engine and do not need to persist baselines.
+  Gitignore only `**/.css-doctor/reports/` (and temp/backup leftovers)—keep
+  baseline/config commit-able; never ignore the whole `.css-doctor/` tree.
 - Optimization intelligence lives in `crates/core/src/optimization`: explanations
   and reports are derived from `optimize_css_pipeline` metadata; Safe autofixes
   use LightningCSS AST rewrites. Do not count split redistribution as byte
   savings. Never silently apply Review/Unsafe fixes.
+
+### Configuration surfaces
+
+| Surface | Used by | Notes |
+| --- | --- | --- |
+| `.css-doctor/config.json` | CLI only | Regression/quality-gate defaults. Precedence: CLI flags > file > built-ins. Missing file is OK. |
+| `cssd.config.ts\|mts\|js\|mjs` | Next (`withCssDoctor`) | Plugin options via jiti. Soft shape validation; broken file must not crash Next. |
+| Inline plugin/module options | Vite / Next / Rsbuild / Remix / Nuxt | Highest precedence for that adapter. Explicit `false` must win over defaults. |
+
+Do not merge CLI and adapter config loaders into one discovery path — lifecycles differ.
 
 ### Integration semantics
 
@@ -192,13 +213,50 @@ target directory is involved.
 
 ### Known limitations
 
-- CSS Modules (`styles.foo`) and helper-built class strings (`cn`/`clsx`) are
-  not fully resolved by static source scanning. Literal Tailwind tokens in
-  `class`/`className` strings are accepted. Use `pageUsage` or
-  `forceCommonSelectors` for the rest.
-- Next path aliases beyond `@/` need explicit `pageUsage`.
-- A selector with multiple classes is matched conservatively by any class.
+- Runtime coverage (`css-doctor coverage import`, config `coverage`) feeds the
+  selector matches built for `css-doctor gui` via Core's `derive_verdict`
+  (`deriveUsageVerdict` in the binding). `check`/`health`/`optimize` and the
+  bundler adapters do **not** consume it yet; range→rule mapping uses built CSS
+  text, not source maps.
+- Class helpers (`cn`, `clsx`, `cva`, `tv`, `twMerge`, ... configurable via
+  `classHelpers`) are resolved by a tokenizer in `css-doctor-shared`: literals
+  are confirmed, object keys are possible usage, identifiers/interpolations are
+  reported as unknown evidence (`unknownEvidenceCount`). No expression
+  evaluation; use `pageUsage` / `forceCommonSelectors` for the unknown rest.
+- CSS Modules: the CLI maps `styles.foo` / `styles["foo"]` / destructuring to
+  local classes and reports dynamic access as unknown evidence. Vite captures
+  `css.modules.getJSON` (user hook still runs); Next (webpack) and Rsbuild read
+  css-loader `locals` exports from the compilation (`CssModuleRegistry`,
+  `extractCssModuleLocals`). Used locals map to emitted classes, dynamic access
+  keeps the whole module, modules no scanned chunk imports stay common, and an
+  asset is analysed only when every scoped class in it is a registered export
+  (otherwise it is still skipped). Opt out with `cssModules: false`. Rspack
+  native CSS Modules (no css-loader JS exports) are still skipped.
+- Path aliases: Next uses `createModuleResolver` (tsconfig/jsconfig `paths`,
+  `extends`, workspace `exports`). Vite/Rsbuild scan the bundler's own module
+  graph, so aliases are already resolved there; the shared resolver is the
+  fallback for CLI-style scans.
+- `classHelpers` is applied per build via `setActiveClassHelpers` (process-wide
+  setting; concurrent builds with different lists in one process would race).
+- `pageCoverage.removeUnusedMinConfidence` (`low|medium|high`, default `medium`)
+  gates dead-code removal in `split_css_by_pages`: static-only "unused" is
+  `medium`, runtime-covered (`runtimeUnused`) is `high`, and `runtimeUsed`
+  selectors are never removed. Adapters take these as explicit option arrays;
+  they do not read `.css-doctor/coverage.json` themselves.
+- A selector with multiple classes is matched conservatively by any class by
+  default. `pageCoverage.matching: "precise"` (Vite/Next/Rsbuild/`optimizeCss`)
+  requires every strictly required class (compound + combinator chain, outside
+  `:is`/`:not`/`:has`) to appear on the page; it is still page-level, not
+  same-element. Per-element matching and the "never matches together"
+  diagnostic (`classUsage.compoundNeverMatch`) exist only in the CLI/GUI path.
 - `@keyframes` are always common; animation usage is not tracked per page.
+- **Content hash integrity:** Vite / Next (webpack) / Rsbuild finalize hashed
+  CSS filenames before or during asset optimization. css-doctor rewrites CSS
+  bodies in-place and emits new hashed chunk names for split parts, but it does
+  **not** rename an already-finalized host asset to match its rewritten bytes.
+  Prefer short cache TTLs or `wrapCommonImports` / emitted chunk URLs for split
+  output; do not assume an immutable `[hash]` URL still matches pre-doctor
+  content after rewrite.
 
 
 ## Naming & file layout
@@ -267,6 +325,7 @@ and update imports/configs in the same change.
 - No generated artifacts or local tool state staged for commit.
 - Known limitations documented instead of silently ignored.
 - Update skills if architecture, commands, or invariants changed.
+- For a publishable release, complete [`docs/release-checklist.md`](./docs/release-checklist.md).
 
 ## Tool entrypoints
 

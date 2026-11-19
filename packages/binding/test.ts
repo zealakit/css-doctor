@@ -76,6 +76,136 @@ async function main(): Promise<void> {
 
   assert.deepEqual(binding.analyzeCss("").selectors, []);
 
+  const partialOnly = binding.matchSelectorsAgainstMarkup([".card.active"], {
+    elements: [
+      {
+        tag: "div",
+        classes: ["card"],
+        dynamicClasses: [],
+        attributes: {},
+        dynamicAttributes: [],
+        depth: 0,
+      },
+    ],
+    files: [],
+  });
+  assert.equal(partialOnly[0]?.confidence, "partial");
+  assert.equal(partialOnly[0]?.status, "partial");
+  assert.equal(partialOnly[0]?.matchCount, 0);
+
+  const markupMatches = binding.matchSelectorsAgainstMarkup(
+    [".card.active", "button.primary", ".btn:hover"],
+    {
+      elements: [],
+      files: [
+        {
+          path: "app.tsx",
+          elements: [
+            {
+              tag: "div",
+              classes: ["card", "active"],
+              dynamicClasses: [],
+              attributes: {},
+              dynamicAttributes: [],
+              depth: 0,
+            },
+            {
+              tag: "button",
+              classes: ["primary"],
+              dynamicClasses: [],
+              attributes: {},
+              dynamicAttributes: [],
+              depth: 0,
+            },
+            {
+              tag: "button",
+              classes: ["btn"],
+              dynamicClasses: [],
+              attributes: {},
+              dynamicAttributes: [],
+              depth: 0,
+            },
+          ],
+        },
+      ],
+    },
+  );
+  assert.equal(markupMatches[0]?.confidence, "confirmed");
+  assert.equal(markupMatches[0]?.status, "used");
+  assert.equal(markupMatches[1]?.confidence, "confirmed");
+  assert.equal(markupMatches[2]?.confidence, "partial");
+  assert.equal(markupMatches[2]?.hasUnprovenRuntimeState, true);
+  assert.equal(markupMatches[2]?.usageFiles, 1);
+  assert.deepEqual(markupMatches[0]?.usageByFile, [
+    { file: "app.tsx", count: 1 },
+  ]);
+
+  const attrOps = binding.matchSelectorsAgainstMarkup(
+    ['[href^="/docs"]', '[href*="guide"]', '[href^="/api"]'],
+    {
+      elements: [
+        {
+          tag: "a",
+          classes: [],
+          dynamicClasses: [],
+          attributes: { href: ["/docs/guide"] },
+          dynamicAttributes: [],
+          depth: 0,
+        },
+      ],
+      files: [],
+    },
+  );
+  assert.equal(attrOps[0]?.confidence, "confirmed");
+  assert.equal(attrOps[1]?.confidence, "confirmed");
+  assert.equal(attrOps[2]?.confidence, "none");
+
+  const multiFile = binding.matchSelectorsAgainstMarkup([".card"], {
+    elements: [],
+    files: [
+      {
+        path: "a.tsx",
+        elements: [
+          {
+            tag: "div",
+            classes: ["card"],
+            dynamicClasses: [],
+            attributes: {},
+            dynamicAttributes: [],
+            depth: 0,
+          },
+        ],
+      },
+      {
+        path: "b.tsx",
+        elements: [
+          {
+            tag: "div",
+            classes: ["card"],
+            dynamicClasses: [],
+            attributes: {},
+            dynamicAttributes: [],
+            depth: 0,
+          },
+          {
+            tag: "span",
+            classes: ["card"],
+            dynamicClasses: [],
+            attributes: {},
+            dynamicAttributes: [],
+            depth: 0,
+          },
+        ],
+      },
+    ],
+  });
+  assert.equal(multiFile[0]?.usageFiles, 2);
+  assert.equal(multiFile[0]?.matchedElements, 3);
+  assert.deepEqual(multiFile[0]?.usageByFile, [
+    { file: "b.tsx", count: 2 },
+    { file: "a.tsx", count: 1 },
+  ]);
+
   const split = binding.splitCssByPages({
     cssContent:
       ".shared { color: red; } .about { color: blue; } .dead { display: none; }",
@@ -189,6 +319,141 @@ async function main(): Promise<void> {
   ) as { status: string; schemaVersion: number };
   assert.equal(regression.schemaVersion, 1);
   assert.equal(regression.status, "healthy");
+
+  const [confirmed, unused] = binding.matchSelectorsAgainstMarkup(
+    [".a", ".zzz"],
+    {
+      elements: [
+        {
+          classes: ["a"],
+          dynamicClasses: [],
+          attributes: {},
+          dynamicAttributes: [],
+          depth: 0,
+        },
+      ],
+      files: [],
+    },
+  );
+  assert.equal(confirmed?.level, "high");
+  assert.deepEqual(confirmed?.sources, ["static"]);
+  assert.equal(unused?.status, "unused");
+  assert.equal(unused?.level, "medium");
+
+  const compoundCss = ".btn.primary { color: red; } .btn { color: blue; }";
+  const compoundInput = {
+    cssContent: compoundCss,
+    pageUsage: { home: ["btn"], about: ["btn"] },
+    sizeBudget: { enabled: false },
+    minify: true,
+  };
+  const conservative = binding.optimizeCss({
+    ...compoundInput,
+    pageCoverage: { enabled: true, minPageRatio: 0.5 },
+  });
+  const precise = binding.optimizeCss({
+    ...compoundInput,
+    pageCoverage: { enabled: true, minPageRatio: 0.5, matching: "precise" },
+  });
+  assert.equal(conservative.deadCodeCount, 0);
+  assert.equal(precise.deadCodeCount, 1);
+  assert.throws(
+    () =>
+      binding.optimizeCss({
+        ...compoundInput,
+        pageCoverage: { enabled: true, matching: "strict" },
+      }),
+    /invalid matching mode/,
+  );
+
+  const gateInput = {
+    cssContent: ".live { color: red; } .ghost { color: blue; }",
+    pageUsage: { home: ["live"], about: ["live"] },
+    sizeBudget: { enabled: false },
+    minify: true,
+  };
+  const removeByDefault = binding.optimizeCss({
+    ...gateInput,
+    pageCoverage: { enabled: true, minPageRatio: 0.5 },
+  });
+  const keepStaticOnly = binding.optimizeCss({
+    ...gateInput,
+    pageCoverage: {
+      enabled: true,
+      minPageRatio: 0.5,
+      removeUnusedMinConfidence: "high",
+    },
+  });
+  const removeRuntimeConfirmed = binding.optimizeCss({
+    ...gateInput,
+    pageCoverage: {
+      enabled: true,
+      minPageRatio: 0.5,
+      removeUnusedMinConfidence: "high",
+      runtimeUnused: [".ghost"],
+    },
+  });
+  assert.equal(removeByDefault.deadCodeCount, 1);
+  assert.equal(keepStaticOnly.deadCodeCount, 0);
+  assert.equal(removeRuntimeConfirmed.deadCodeCount, 1);
+  assert.throws(
+    () =>
+      binding.optimizeCss({
+        ...gateInput,
+        pageCoverage: { enabled: true, removeUnusedMinConfidence: "max" },
+      }),
+    /invalid confidence level/,
+  );
+
+  // Async variants run on the thread pool and must match the sync results.
+  const asyncPipelineInput = {
+    cssContent: ".a { color: red; } .b { color: blue; }",
+    pageUsage: { home: ["a"], about: ["a", "b"] },
+    sizeBudget: { enabled: false },
+    minify: true,
+  };
+  const asyncPipeline = binding.optimizeCssAsync(asyncPipelineInput);
+  assert.ok(asyncPipeline instanceof Promise);
+  assert.deepEqual(
+    await asyncPipeline,
+    binding.optimizeCss(asyncPipelineInput),
+  );
+  await assert.rejects(
+    binding.optimizeCssAsync({
+      ...asyncPipelineInput,
+      pageCoverage: { enabled: true, minPageRatio: 3 },
+    }),
+  );
+
+  const healthInput = {
+    cssContent: ".a { color: red; } .a { color: red; }",
+    filePath: "a.css",
+  };
+  const asyncHealth = await binding.evaluateCssHealthAsync(healthInput);
+  const syncHealth = binding.evaluateCssHealth(healthInput);
+  assert.equal(asyncHealth.summary.score, syncHealth.summary.score);
+  assert.equal(asyncHealth.diagnostics.length, syncHealth.diagnostics.length);
+
+  const markup = {
+    elements: [
+      {
+        classes: ["a"],
+        dynamicClasses: [],
+        attributes: {},
+        dynamicAttributes: [],
+        depth: 0,
+      },
+    ],
+    files: [],
+  };
+  const asyncMatches = await binding.matchSelectorsAgainstMarkupAsync(
+    [".a", ".z"],
+    markup,
+  );
+  assert.deepEqual(
+    asyncMatches,
+    binding.matchSelectorsAgainstMarkup([".a", ".z"], markup),
+  );
 
   console.log("\n✅ css-doctor NAPI binding OK");
   console.log(

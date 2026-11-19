@@ -4,8 +4,8 @@ import { resolve } from "node:path";
 import { InvalidArgumentError, type Command } from "commander";
 import type { JsHealthReport } from "@zealakit/css-doctor-binding";
 
-import { formatJsonReport } from "../formatters/json";
 import { formatHealthTerminalReport } from "../formatters/health-terminal";
+import { emitCliReport } from "../utils/emit-report";
 import {
   describeError,
   isDirectory,
@@ -55,6 +55,8 @@ export type HealthCliReport = {
 
 type HealthCliOptions = {
   json?: boolean;
+  out?: string;
+  save?: boolean;
   threshold?: number;
   failUnder?: number;
 };
@@ -69,6 +71,14 @@ export function registerHealthCommand(program: Command): void {
       "CSS files or glob patterns (quote globs to let css-doctor expand them)",
     )
     .option("-j, --json", "Output raw JSON for piping and CI/CD")
+    .option(
+      "--out <path>",
+      "Atomically write the JSON envelope to <path> (success or failure)",
+    )
+    .option(
+      "--save",
+      "On success, atomically write .css-doctor/reports/health-latest.json",
+    )
     .option(
       "--threshold <number>",
       "Warn in size/complexity checks when a file has more than <number> selectors",
@@ -85,20 +95,30 @@ export function registerHealthCommand(program: Command): void {
         failUnder: options.failUnder,
       });
 
-      if (options.json === true) {
-        process.stdout.write(`${formatJsonReport(report)}\n`);
-      } else if (report.health) {
-        process.stdout.write(`${formatHealthTerminalReport(report.health)}\n`);
-        if (report.errors.length > 0) {
-          process.stderr.write(
-            `css-doctor: ${report.errors.join("\ncss-doctor: ")}\n`,
+      await emitCliReport(
+        report,
+        {
+          json: options.json,
+          out: options.out,
+          save: options.save,
+        },
+        () => {
+          if (report.health) {
+            process.stdout.write(
+              `${formatHealthTerminalReport(report.health)}\n`,
+            );
+            if (report.errors.length > 0) {
+              process.stderr.write(
+                `css-doctor: ${report.errors.join("\ncss-doctor: ")}\n`,
+              );
+            }
+            return;
+          }
+          process.stdout.write(
+            `css-doctor health failed:\n${report.errors.map((error) => `  - ${error}`).join("\n")}\n`,
           );
-        }
-      } else {
-        process.stdout.write(
-          `css-doctor health failed:\n${report.errors.map((error) => `  - ${error}`).join("\n")}\n`,
-        );
-      }
+        },
+      );
 
       process.exitCode = healthExitCode(report);
     });

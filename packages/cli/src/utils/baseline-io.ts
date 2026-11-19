@@ -1,7 +1,7 @@
-import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { readFile, unlink } from "node:fs/promises";
 
 import packageJson from "../../package.json";
+import { atomicWriteFile } from "./atomic-write";
 import { loadBinding } from "./binding";
 import {
   describeError,
@@ -110,13 +110,22 @@ export async function createBaselineSnapshot(
       });
     }
 
+    // Partial reads must fail the whole create — a baseline that silently
+    // omits unreadable files is not trustworthy for regression compare.
+    if (errors.length > 0) {
+      return {
+        ok: false,
+        errors: [
+          "Baseline create aborted because one or more CSS files could not be read:",
+          ...errors,
+        ],
+      };
+    }
+
     if (batchFiles.length === 0) {
       return {
         ok: false,
-        errors:
-          errors.length > 0
-            ? errors
-            : ["No CSS files could be read for baseline creation."],
+        errors: ["No CSS files could be read for baseline creation."],
       };
     }
 
@@ -178,16 +187,14 @@ export async function writeBaselineFile(
   absolutePath: string,
   json: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  try {
-    await mkdir(dirname(absolutePath), { recursive: true });
-    await writeFile(absolutePath, `${json.trimEnd()}\n`, "utf8");
-    return { ok: true };
-  } catch (error) {
+  const written = await atomicWriteFile(absolutePath, `${json.trimEnd()}\n`);
+  if (!written.ok) {
     return {
       ok: false,
-      error: `Failed to write baseline ${absolutePath}: ${describeError(error)}`,
+      error: `Failed to write baseline ${absolutePath}: ${written.error.replace(/^Failed to write [^:]+: /, "")}`,
     };
   }
+  return { ok: true };
 }
 
 export async function removeBaselineFile(

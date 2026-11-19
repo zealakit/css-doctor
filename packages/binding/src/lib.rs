@@ -211,6 +211,43 @@ pub fn analyze_css_json(css_content: String) -> Result<String, napi::Error> {
     })
 }
 
+/// Runs a synchronous binding function on the libuv thread pool.
+///
+/// Used by the `*Async` variants of the heavy exports so adapters (Vite
+/// `generateBundle`, webpack `processAssets`, the Remix request path) never
+/// block the event loop on large stylesheets. The wrapped closure is the exact
+/// sync implementation, so sync and async results are identical.
+pub struct BlockingTask<T> {
+    work: Option<Box<dyn FnOnce() -> Result<T, napi::Error> + Send>>,
+}
+
+impl<T> BlockingTask<T> {
+    fn new(work: impl FnOnce() -> Result<T, napi::Error> + Send + 'static) -> Self {
+        Self {
+            work: Some(Box::new(work)),
+        }
+    }
+}
+
+impl<T> Task for BlockingTask<T>
+where
+    T: napi::bindgen_prelude::ToNapiValue + napi::bindgen_prelude::TypeName + Send + 'static,
+{
+    type Output = T;
+    type JsValue = T;
+
+    fn compute(&mut self) -> Result<Self::Output, napi::Error> {
+        match self.work.take() {
+            Some(work) => work(),
+            None => Err(napi::Error::from_reason("async task already consumed")),
+        }
+    }
+
+    fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue, napi::Error> {
+        Ok(output)
+    }
+}
+
 /// Background task used by [`analyze_css_async`].
 pub struct AnalyzeCssTask {
     css_content: String,
@@ -232,6 +269,303 @@ impl Task for AnalyzeCssTask {
 fn analyze_core(css_content: &str) -> Result<JsCssAnalysisResult, napi::Error> {
     core::analyze_css(css_content)
         .map(JsCssAnalysisResult::from)
+        .map_err(napi::Error::from_reason)
+}
+
+/// Confidence of a static selector ↔ markup match.
+#[napi(string_enum = "camelCase")]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum JsMatchConfidence {
+    /// All statically verifiable structural requirements matched.
+    Confirmed,
+    /// Incomplete compound/combinator evidence, or runtime/positional unproven.
+    Partial,
+    /// Only unresolved dynamic evidence was available.
+    Unresolved,
+    /// Runtime-only / pseudo-element; cannot confirm statically.
+    Unsupported,
+    /// No evidence.
+    None,
+}
+
+impl From<core::MatchConfidence> for JsMatchConfidence {
+    fn from(value: core::MatchConfidence) -> Self {
+        match value {
+            core::MatchConfidence::Confirmed => Self::Confirmed,
+            core::MatchConfidence::Partial => Self::Partial,
+            core::MatchConfidence::Unresolved => Self::Unresolved,
+            core::MatchConfidence::Unsupported => Self::Unsupported,
+            core::MatchConfidence::None => Self::None,
+        }
+    }
+}
+
+/// Unused / usage classification for a selector.
+#[napi(string_enum = "camelCase")]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum JsSelectorUsageStatus {
+    Used,
+    Unused,
+    Partial,
+    Unknown,
+}
+
+impl From<core::SelectorUsageStatus> for JsSelectorUsageStatus {
+    fn from(value: core::SelectorUsageStatus) -> Self {
+        match value {
+            core::SelectorUsageStatus::Used => Self::Used,
+            core::SelectorUsageStatus::Unused => Self::Unused,
+            core::SelectorUsageStatus::Partial => Self::Partial,
+            core::SelectorUsageStatus::Unknown => Self::Unknown,
+        }
+    }
+}
+
+/// One markup element used as static usage evidence.
+#[napi(object)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsMarkupElement {
+    pub tag: Option<String>,
+    pub id: Option<String>,
+    #[serde(default)]
+    pub classes: Vec<String>,
+    #[serde(default)]
+    pub dynamic_classes: Vec<String>,
+    /// Attribute name → literal values (empty = presence only).
+    #[serde(default)]
+    pub attributes: HashMap<String, Vec<String>>,
+    #[serde(default)]
+    pub dynamic_attributes: Vec<String>,
+    pub parent_index: Option<u32>,
+    #[serde(default)]
+    pub depth: u32,
+}
+
+/// Markup from a single source file (combinators stay inside this tree).
+#[napi(object)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsMarkupFileEvidence {
+    #[serde(default)]
+    pub path: String,
+    pub elements: Vec<JsMarkupElement>,
+}
+
+/// Markup evidence payload for selector matching.
+#[napi(object)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsMarkupEvidence {
+    /// Legacy flat list (treated as one anonymous file when `files` is empty).
+    #[serde(default)]
+    pub elements: Vec<JsMarkupElement>,
+    /// Preferred per-file trees. Combinators never cross files.
+    #[serde(default)]
+    pub files: Vec<JsMarkupFileEvidence>,
+}
+
+/// Per-file confirmed usage hit.
+#[napi(object)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsSelectorFileUsageHit {
+    pub file: String,
+    pub count: u32,
+}
+
+/// Result of matching one selector against markup evidence.
+#[napi(object)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsSelectorUsageMatch {
+    pub selector: String,
+    pub confidence: JsMatchConfidence,
+    pub status: JsSelectorUsageStatus,
+    pub match_count: u32,
+    pub matched_elements: u32,
+    pub usage_occurrences: u32,
+    pub usage_files: u32,
+    #[serde(default)]
+    pub usage_by_file: Vec<JsSelectorFileUsageHit>,
+    pub partial_elements: u32,
+    pub unresolved_elements: u32,
+    pub has_unproven_runtime_state: bool,
+    pub has_unproven_positional: bool,
+    /// Trust level of the verdict: `"low"`, `"medium"` or `"high"`.
+    pub level: String,
+    /// Evidence sources: any of `"static"`, `"runtime"`, `"config"`.
+    pub sources: Vec<String>,
+    pub notes: Vec<String>,
+}
+
+/// A usage verdict combining static, runtime and config evidence.
+#[napi(object)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsUsageVerdict {
+    /// `"used"`, `"unused"`, `"partial"` or `"unknown"`.
+    pub status: String,
+    /// `"low"`, `"medium"` or `"high"`.
+    pub level: String,
+    /// Any of `"static"`, `"runtime"`, `"config"`.
+    pub sources: Vec<String>,
+}
+
+/// Combines a static match with runtime coverage evidence (Core source of truth).
+///
+/// `runtime` is `"notCollected"`, `"coveredUnused"` or `"hit"`.
+#[napi(js_name = "deriveUsageVerdict")]
+pub fn derive_usage_verdict(
+    confidence: String,
+    status: String,
+    runtime: String,
+    forced_by_config: bool,
+) -> Result<JsUsageVerdict, napi::Error> {
+    let confidence = match confidence.as_str() {
+        "confirmed" => core::MatchConfidence::Confirmed,
+        "partial" => core::MatchConfidence::Partial,
+        "unresolved" => core::MatchConfidence::Unresolved,
+        "unsupported" => core::MatchConfidence::Unsupported,
+        "none" => core::MatchConfidence::None,
+        other => {
+            return Err(napi::Error::from_reason(format!(
+                "invalid match confidence '{other}'"
+            )));
+        }
+    };
+    let status = match status.as_str() {
+        "used" => core::SelectorUsageStatus::Used,
+        "unused" => core::SelectorUsageStatus::Unused,
+        "partial" => core::SelectorUsageStatus::Partial,
+        "unknown" => core::SelectorUsageStatus::Unknown,
+        other => {
+            return Err(napi::Error::from_reason(format!(
+                "invalid usage status '{other}'"
+            )));
+        }
+    };
+    let runtime = match runtime.as_str() {
+        "notCollected" => core::RuntimeEvidence::NotCollected,
+        "coveredUnused" => core::RuntimeEvidence::CoveredUnused,
+        "hit" => core::RuntimeEvidence::Hit,
+        other => {
+            return Err(napi::Error::from_reason(format!(
+                "invalid runtime evidence '{other}'"
+            )));
+        }
+    };
+    let verdict = core::derive_verdict(confidence, status, runtime, forced_by_config);
+    Ok(JsUsageVerdict {
+        status: match verdict.status {
+            core::SelectorUsageStatus::Used => "used",
+            core::SelectorUsageStatus::Unused => "unused",
+            core::SelectorUsageStatus::Partial => "partial",
+            core::SelectorUsageStatus::Unknown => "unknown",
+        }
+        .to_owned(),
+        level: verdict.level.as_str().to_owned(),
+        sources: verdict
+            .sources
+            .iter()
+            .map(|source| source.as_str().to_owned())
+            .collect(),
+    })
+}
+
+fn map_markup_element(element: JsMarkupElement) -> core::MarkupElement {
+    core::MarkupElement {
+        tag: element.tag,
+        id: element.id,
+        classes: element.classes,
+        dynamic_classes: element.dynamic_classes,
+        attributes: element.attributes.into_iter().collect(),
+        dynamic_attributes: element.dynamic_attributes,
+        parent_index: element.parent_index,
+        depth: element.depth,
+    }
+}
+
+/// Matches CSS selectors against static markup evidence (Core source of truth).
+///
+/// Prefer `files` so parent/sibling combinators never cross source files.
+/// Runtime states like `:hover` never produce `confirmed` confidence.
+/// Async variant of [`match_selectors_against_markup`]: runs on the libuv
+/// thread pool.
+#[napi(
+    js_name = "matchSelectorsAgainstMarkupAsync",
+    ts_return_type = "Promise<Array<JsSelectorUsageMatch>>"
+)]
+pub fn match_selectors_against_markup_async(
+    selectors: Vec<String>,
+    evidence: JsMarkupEvidence,
+) -> AsyncTask<BlockingTask<Vec<JsSelectorUsageMatch>>> {
+    AsyncTask::new(BlockingTask::new(move || {
+        match_selectors_against_markup(selectors, evidence)
+    }))
+}
+
+/// Matches CSS selectors against static markup evidence (Core source of truth).
+///
+/// Prefer `files` so parent/sibling combinators never cross source files.
+/// Runtime states like `:hover` never produce `confirmed` confidence.
+#[napi(js_name = "matchSelectorsAgainstMarkup")]
+pub fn match_selectors_against_markup(
+    selectors: Vec<String>,
+    evidence: JsMarkupEvidence,
+) -> Result<Vec<JsSelectorUsageMatch>, napi::Error> {
+    let core_evidence = core::MarkupEvidence {
+        elements: evidence
+            .elements
+            .into_iter()
+            .map(map_markup_element)
+            .collect(),
+        files: evidence
+            .files
+            .into_iter()
+            .map(|file| core::MarkupFileEvidence {
+                path: file.path,
+                elements: file.elements.into_iter().map(map_markup_element).collect(),
+            })
+            .collect(),
+    };
+
+    core::match_selectors_against_markup(&selectors, &core_evidence)
+        .map(|matches| {
+            matches
+                .into_iter()
+                .map(|item| JsSelectorUsageMatch {
+                    selector: item.selector,
+                    confidence: item.confidence.into(),
+                    status: item.status.into(),
+                    match_count: item.match_count,
+                    matched_elements: item.matched_elements,
+                    usage_occurrences: item.usage_occurrences,
+                    usage_files: item.usage_files,
+                    usage_by_file: item
+                        .usage_by_file
+                        .into_iter()
+                        .map(|hit| JsSelectorFileUsageHit {
+                            file: hit.file,
+                            count: hit.count,
+                        })
+                        .collect(),
+                    partial_elements: item.partial_elements,
+                    unresolved_elements: item.unresolved_elements,
+                    has_unproven_runtime_state: item.has_unproven_runtime_state,
+                    has_unproven_positional: item.has_unproven_positional,
+                    level: item.level.as_str().to_owned(),
+                    sources: item
+                        .sources
+                        .iter()
+                        .map(|source| source.as_str().to_owned())
+                        .collect(),
+                    notes: item.notes,
+                })
+                .collect()
+        })
         .map_err(napi::Error::from_reason)
 }
 
@@ -348,6 +682,33 @@ pub struct JsChunkConfig {
     pub force_common_selectors: Vec<String>,
     /// Minify serialized CSS. Defaults to `true`.
     pub minify: Option<bool>,
+    /// `"conservative"` (default, any class) or `"precise"` (all required classes).
+    pub matching: Option<String>,
+    /// Minimum confidence for dead-code removal: `"low"`, `"medium"` (default) or `"high"`.
+    pub remove_unused_min_confidence: Option<String>,
+    /// Selectors a browser run matched; never removed.
+    pub runtime_used: Option<Vec<String>>,
+    /// Selectors covered routes never matched; makes "unused" high confidence.
+    pub runtime_unused: Option<Vec<String>>,
+}
+
+/// Parses a `matching` option; `None` means the conservative default.
+fn parse_matching_mode(value: Option<&str>) -> Result<core::MatchingMode, napi::Error> {
+    match value {
+        None | Some("conservative") => Ok(core::MatchingMode::Conservative),
+        Some("precise") => Ok(core::MatchingMode::Precise),
+        Some(other) => Err(napi::Error::from_reason(format!(
+            "invalid matching mode '{other}': expected 'conservative' or 'precise'"
+        ))),
+    }
+}
+
+/// Parses `removeUnusedMinConfidence`; `None` means `medium` (today's behavior).
+fn parse_min_confidence(value: Option<&str>) -> Result<core::ConfidenceLevel, napi::Error> {
+    match value {
+        None => Ok(core::ConfidenceLevel::Medium),
+        Some(level) => core::ConfidenceLevel::parse(level).map_err(napi::Error::from_reason),
+    }
 }
 
 /// Input for [`split_css_by_pages`].
@@ -414,12 +775,32 @@ pub fn split_css_by_pages(input: JsSplitInput) -> Result<JsSplitOutput, napi::Er
             min_page_ratio: input.config.min_page_ratio as f32,
             force_common_selectors: input.config.force_common_selectors,
             minify: input.config.minify.unwrap_or(true),
+            matching: parse_matching_mode(input.config.matching.as_deref())?,
+            remove_unused_min_confidence: parse_min_confidence(
+                input.config.remove_unused_min_confidence.as_deref(),
+            )?,
+            runtime_used: input.config.runtime_used.unwrap_or_default(),
+            runtime_unused: input.config.runtime_unused.unwrap_or_default(),
         },
     };
 
     core::split_css_by_pages(&core_input)
         .map(JsSplitOutput::from)
         .map_err(napi::Error::from_reason)
+}
+
+/// Async variant of [`optimize_css`]: runs on the libuv thread pool.
+///
+/// # Errors
+///
+/// Rejects like `optimizeCss` when the configuration is invalid or the
+/// stylesheet/AST cannot be processed.
+#[napi(
+    js_name = "optimizeCssAsync",
+    ts_return_type = "Promise<JsPipelineOutput>"
+)]
+pub fn optimize_css_async(input: JsPipelineInput) -> AsyncTask<BlockingTask<JsPipelineOutput>> {
+    AsyncTask::new(BlockingTask::new(move || optimize_css(input)))
 }
 
 /// Configuration for the semantic page-coverage tier.
@@ -433,6 +814,14 @@ pub struct JsPageCoverageConfig {
     pub min_page_ratio: Option<f64>,
     /// Selectors or classes that always stay in the common chunk.
     pub force_common: Option<Vec<String>>,
+    /// `"conservative"` (default) or `"precise"`; see `JsChunkConfig.matching`.
+    pub matching: Option<String>,
+    /// Minimum confidence for dead-code removal: `"low"`, `"medium"` (default) or `"high"`.
+    pub remove_unused_min_confidence: Option<String>,
+    /// Selectors a browser run matched; never removed.
+    pub runtime_used: Option<Vec<String>>,
+    /// Selectors covered routes never matched; makes "unused" high confidence.
+    pub runtime_unused: Option<Vec<String>>,
 }
 
 /// Configuration for the physical size-budget tier.
@@ -534,7 +923,7 @@ pub struct JsPipelineOutput {
 /// stylesheet/AST cannot be processed.
 #[napi]
 pub fn optimize_css(input: JsPipelineInput) -> Result<JsPipelineOutput, napi::Error> {
-    let core_input = build_pipeline_input(input);
+    let core_input = build_pipeline_input(input)?;
     core::optimize_css_pipeline(&core_input)
         .map(JsPipelineOutput::from)
         .map_err(napi::Error::from_reason)
@@ -563,7 +952,7 @@ pub fn optimize_css_explained(
     max_selector_decisions: Option<u32>,
 ) -> Result<JsOptimizeExplained, napi::Error> {
     let started = std::time::Instant::now();
-    let core_input = build_pipeline_input(input);
+    let core_input = build_pipeline_input(input)?;
     let output = core::optimize_css_pipeline(&core_input).map_err(napi::Error::from_reason)?;
     let mut explain = core::ExplainOptions::default();
     if let Some(limit) = max_selector_decisions {
@@ -644,11 +1033,11 @@ pub fn apply_css_fixes(input: JsFixInput) -> Result<String, napi::Error> {
         .map_err(|error| napi::Error::from_reason(error.to_string()))
 }
 
-fn build_pipeline_input(input: JsPipelineInput) -> core::PipelineInput {
+fn build_pipeline_input(input: JsPipelineInput) -> Result<core::PipelineInput, napi::Error> {
     let page_coverage = input.page_coverage;
     let size_budget = input.size_budget;
 
-    core::PipelineInput {
+    Ok(core::PipelineInput {
         css_content: input.css_content,
         page_usage: input
             .page_usage
@@ -665,6 +1054,24 @@ fn build_pipeline_input(input: JsPipelineInput) -> core::PipelineInput {
                 .and_then(|config| config.min_page_ratio)
                 .map(|value| value as f32)
                 .unwrap_or(0.5),
+            matching: parse_matching_mode(
+                page_coverage
+                    .as_ref()
+                    .and_then(|config| config.matching.as_deref()),
+            )?,
+            remove_unused_min_confidence: parse_min_confidence(
+                page_coverage
+                    .as_ref()
+                    .and_then(|config| config.remove_unused_min_confidence.as_deref()),
+            )?,
+            runtime_used: page_coverage
+                .as_ref()
+                .and_then(|config| config.runtime_used.clone())
+                .unwrap_or_default(),
+            runtime_unused: page_coverage
+                .as_ref()
+                .and_then(|config| config.runtime_unused.clone())
+                .unwrap_or_default(),
             force_common: page_coverage
                 .and_then(|config| config.force_common)
                 .unwrap_or_default(),
@@ -684,7 +1091,7 @@ fn build_pipeline_input(input: JsPipelineInput) -> core::PipelineInput {
                 .unwrap_or(true),
         },
         minify: input.minify.unwrap_or(true),
-    }
+    })
 }
 
 impl From<core::PipelineChunkKind> for JsPipelineChunkKind {
@@ -917,6 +1324,34 @@ pub struct JsHealthBatchInput {
     pub files: Vec<JsHealthFileInput>,
     pub weights: Option<JsHealthWeights>,
     pub thresholds: Option<JsHealthThresholds>,
+}
+
+/// Async variant of [`evaluate_css_health`]: runs on the libuv thread pool.
+///
+/// # Errors
+///
+/// Rejects like `evaluateCssHealth`.
+#[napi(
+    js_name = "evaluateCssHealthAsync",
+    ts_return_type = "Promise<JsHealthReport>"
+)]
+pub fn evaluate_css_health_async(input: JsHealthInput) -> AsyncTask<BlockingTask<JsHealthReport>> {
+    AsyncTask::new(BlockingTask::new(move || evaluate_css_health(input)))
+}
+
+/// Async variant of [`evaluate_css_health_batch`]: runs on the libuv thread pool.
+///
+/// # Errors
+///
+/// Rejects like `evaluateCssHealthBatch`.
+#[napi(
+    js_name = "evaluateCssHealthBatchAsync",
+    ts_return_type = "Promise<JsHealthReport>"
+)]
+pub fn evaluate_css_health_batch_async(
+    input: JsHealthBatchInput,
+) -> AsyncTask<BlockingTask<JsHealthReport>> {
+    AsyncTask::new(BlockingTask::new(move || evaluate_css_health_batch(input)))
 }
 
 /// Evaluates and merges CSS Health Score across multiple stylesheets.
@@ -1194,6 +1629,8 @@ pub struct JsQualityGateConfig {
     pub min_dimension_scores: Option<Vec<JsMinDimensionScore>>,
     pub max_css_size: Option<u32>,
     pub max_size_increase_percent: Option<f64>,
+    pub max_selector_increase_percent: Option<f64>,
+    pub max_rule_increase_percent: Option<f64>,
     pub max_new_errors: Option<u32>,
     pub max_new_warnings: Option<u32>,
     pub fail_on_regression: Option<bool>,
@@ -1378,6 +1815,8 @@ fn build_quality_gates(gates: JsQualityGateConfig) -> Result<core::QualityGateCo
         min_dimension_scores,
         max_css_size: gates.max_css_size.map(|value| value as usize),
         max_size_increase_percent: gates.max_size_increase_percent,
+        max_selector_increase_percent: gates.max_selector_increase_percent,
+        max_rule_increase_percent: gates.max_rule_increase_percent,
         max_new_errors: gates.max_new_errors.map(|value| value as usize),
         max_new_warnings: gates.max_new_warnings.map(|value| value as usize),
         fail_on_regression: gates.fail_on_regression.unwrap_or(false),
@@ -1508,6 +1947,10 @@ mod tests {
             config: JsChunkConfig {
                 min_page_ratio: 0.5,
                 force_common_selectors: Vec::new(),
+                matching: None,
+                remove_unused_min_confidence: None,
+                runtime_used: None,
+                runtime_unused: None,
                 minify: None,
             },
         };
@@ -1538,6 +1981,10 @@ mod tests {
             config: JsChunkConfig {
                 min_page_ratio: 2.0,
                 force_common_selectors: Vec::new(),
+                matching: None,
+                remove_unused_min_confidence: None,
+                runtime_used: None,
+                runtime_unused: None,
                 minify: None,
             },
         };
@@ -1604,6 +2051,10 @@ mod tests {
                     enabled: Some(true),
                     min_page_ratio: Some(0.5),
                     force_common: None,
+                    matching: None,
+                    remove_unused_min_confidence: None,
+                    runtime_used: None,
+                    runtime_unused: None,
                 }),
                 size_budget: Some(JsSizeBudgetConfig {
                     enabled: Some(false),
@@ -1631,6 +2082,10 @@ mod tests {
                     enabled: Some(true),
                     min_page_ratio: Some(0.5),
                     force_common: None,
+                matching: None,
+                remove_unused_min_confidence: None,
+                runtime_used: None,
+                runtime_unused: None,
                 }),
                 size_budget: Some(JsSizeBudgetConfig {
                     enabled: Some(true),
@@ -1738,6 +2193,10 @@ mod tests {
                 enabled: Some(false),
                 min_page_ratio: None,
                 force_common: None,
+                matching: None,
+                remove_unused_min_confidence: None,
+                runtime_used: None,
+                runtime_unused: None,
             }),
             size_budget: Some(JsSizeBudgetConfig {
                 enabled: Some(true),

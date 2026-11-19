@@ -4,12 +4,26 @@ import { readFile } from "node:fs/promises";
 import { dirname, extname, posix, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 
-import { analyzeCss, optimizeCss } from "@zealakit/css-doctor-binding";
+import { analyzeCss, optimizeCssAsync } from "@zealakit/css-doctor-binding";
 import type {
   JsChunkOutput,
   JsCssAnalysisResult,
   JsSelectorStat,
 } from "@zealakit/css-doctor-binding";
+import {
+  DEFAULT_MAX_CHUNK_SIZE,
+  DEFAULT_MIN_PAGE_RATIO,
+  clampMaxChunkSize,
+  clampMinPageRatio,
+  createModuleResolver,
+  CssModuleRegistry,
+  describeError,
+  extractCssModuleLocals,
+  matchesPatterns,
+  scanClasses,
+  setActiveClassHelpers,
+} from "@zealakit/css-doctor-shared";
+import type { ModuleResolver } from "@zealakit/css-doctor-shared";
 import type { Compilation, Compiler, Entrypoint, Module } from "webpack";
 
 import { printDiagnostics } from "./reporter";
@@ -24,8 +38,6 @@ import type {
 } from "./types";
 
 const PLUGIN_NAME = "CssDoctorWebpackPlugin";
-const DEFAULT_MIN_PAGE_RATIO = 0.5;
-const DEFAULT_MAX_CHUNK_SIZE = 60 * 1_024;
 const LARGE_CSS_ASSET_BYTES = 500 * 1_024;
 
 type PageInfo = {
@@ -66,45 +78,39 @@ export class CssDoctorWebpackPlugin {
 
   constructor(options: CssDoctorWebpackPluginOptions = {}) {
     this.options = options;
-    const ratio =
+    const clampedRatio = clampMinPageRatio(
       options.pageCoverage?.minPageRatio ??
-      options.minPageRatio ??
-      DEFAULT_MIN_PAGE_RATIO;
-    const maxChunkSize =
-      options.sizeBudget?.maxChunkSize ?? DEFAULT_MAX_CHUNK_SIZE;
+        options.minPageRatio ??
+        DEFAULT_MIN_PAGE_RATIO,
+    );
+    const clampedSize = clampMaxChunkSize(
+      options.sizeBudget?.maxChunkSize ?? DEFAULT_MAX_CHUNK_SIZE,
+    );
 
     this.pageCoverage = {
       enabled: options.pageCoverage?.enabled ?? true,
-      minPageRatio:
-        Number.isFinite(ratio) && ratio >= 0 && ratio <= 1
-          ? ratio
-          : DEFAULT_MIN_PAGE_RATIO,
+      minPageRatio: clampedRatio.value,
       forceCommon:
         options.pageCoverage?.forceCommon ?? options.forceCommonSelectors ?? [],
+      matching: options.pageCoverage?.matching ?? "conservative",
+      removeUnusedMinConfidence:
+        options.pageCoverage?.removeUnusedMinConfidence ?? "medium",
+      runtimeUsed: options.pageCoverage?.runtimeUsed ?? [],
+      runtimeUnused: options.pageCoverage?.runtimeUnused ?? [],
     };
 
-    if (!Number.isFinite(ratio) || ratio < 0 || ratio > 1) {
-      this.configurationErrors.push(
-        "minPageRatio must be a number between 0 and 1; using 0.5",
-      );
+    if (clampedRatio.warning) {
+      this.configurationErrors.push(clampedRatio.warning);
     }
 
     this.sizeBudget = {
       enabled: options.sizeBudget?.enabled ?? true,
-      maxChunkSize:
-        Number.isInteger(maxChunkSize) && maxChunkSize > 0
-          ? maxChunkSize
-          : DEFAULT_MAX_CHUNK_SIZE,
+      maxChunkSize: clampedSize.value,
       isolateVariables: options.sizeBudget?.isolateVariables ?? true,
     };
 
-    if (
-      options.sizeBudget?.enabled !== false &&
-      (!Number.isInteger(maxChunkSize) || maxChunkSize <= 0)
-    ) {
-      this.configurationErrors.push(
-        "maxChunkSize must be a positive integer; using 61440",
-      );
+    if (options.sizeBudget?.enabled !== false && clampedSize.warning) {
+      this.configurationErrors.push(clampedSize.warning);
     }
 
     this.minify = options.minify ?? true;
@@ -121,6 +127,7 @@ export class CssDoctorWebpackPlugin {
         },
         async () => {
           try {
+            setActiveClassHelpers(this.options.classHelpers);
             await this.process(compiler, compilation);
           } catch (error) {
             compilation
@@ -142,6 +149,10 @@ export class CssDoctorWebpackPlugin {
   ): Promise<void> {
     const startedAt = performance.now();
     const logger = compilation.getLogger(PLUGIN_NAME);
+    activeCssModules =
+      this.options.cssModules === false
+        ? null
+        : registerCssModules(compilation);
     const pagesResult = await collectPages(compilation, this.options.pageUsage);
     const pageNames = pagesResult.pages.map((page) => page.name);
     const pageByName = new Map(
@@ -266,13 +277,21 @@ export class CssDoctorWebpackPlugin {
       const originalCss = sourceToString(asset.source.source());
 
       try {
-        const pipeline = optimizeCss({
+        const pipeline = await optimizeCssAsync({
           cssContent: originalCss,
           pageUsage,
           pageCoverage: {
             enabled: pageCoverageApplied,
             minPageRatio: this.pageCoverage.minPageRatio,
-            forceCommon: this.pageCoverage.forceCommon,
+            forceCommon: [
+              ...this.pageCoverage.forceCommon,
+              ...(activeCssModules?.unseenClasses() ?? []),
+            ],
+            matching: this.pageCoverage.matching,
+            removeUnusedMinConfidence:
+              this.pageCoverage.removeUnusedMinConfidence,
+            runtimeUsed: this.pageCoverage.runtimeUsed,
+            runtimeUnused: this.pageCoverage.runtimeUnused,
           },
           sizeBudget: {
             enabled: this.sizeBudget.enabled,
@@ -457,7 +476,10 @@ export class CssDoctorWebpackPlugin {
     assetName: string,
     source: string,
   ): boolean {
-    if (isCssModuleAsset(compilation, assetName, source)) {
+    if (
+      isCssModuleAsset(compilation, assetName, source) &&
+      !activeCssModules?.coversAsset(source, NEXT_SCOPED_CLASS)
+    ) {
       return true;
     }
 
@@ -507,13 +529,35 @@ function injectPageJsLoaders(
   }
 }
 
-function matchesPatterns(
-  value: string,
-  patterns: Array<string | RegExp>,
-): boolean {
-  return patterns.some((pattern) =>
-    typeof pattern === "string" ? value.includes(pattern) : pattern.test(value),
-  );
+/** Next's default CSS Modules identifier: `<file>_<local>__<hash>`. */
+const NEXT_SCOPED_CLASS = /\.([A-Za-z0-9_-]+_[A-Za-z0-9_-]+__[A-Za-z0-9_-]+)/g;
+
+/** Registry of `.module.css` local -> emitted maps for the current build. */
+let activeCssModules: CssModuleRegistry | null = null;
+
+/** Reads css-loader generated exports of every `*.module.*` module. */
+function registerCssModules(compilation: Compilation): CssModuleRegistry {
+  const registry = new CssModuleRegistry();
+
+  for (const module of compilation.modules) {
+    const resource = (module as Module & { resource?: unknown }).resource;
+
+    if (
+      typeof resource !== "string" ||
+      !/\.module\.(css|scss|sass|less|styl|stylus)(\?|$)/i.test(resource)
+    ) {
+      continue;
+    }
+
+    const source = readModuleSource(module);
+    const locals = source ? extractCssModuleLocals(source) : null;
+
+    if (locals) {
+      registry.register(resource, locals);
+    }
+  }
+
+  return registry;
 }
 
 function isCssModuleAsset(
@@ -650,14 +694,71 @@ async function collectPages(
   }
 
   const selectedPages = pageEntries.length > 0 ? pageEntries : fallbackEntries;
-  const direct = directPageUsage
-    ? Object.keys(directPageUsage).length > 0
-    : false;
   const pages = new Map<string, PageInfo>();
   const pagesByCss = new Map<string, Set<string>>();
   const projectRoot = compilation.compiler?.context ?? process.cwd();
+  const sourceCache = new Map<string, Promise<string | undefined>>();
+  moduleResolverFor(projectRoot).clear();
+  const sharedClasses = new Set<string>();
 
-  if (direct && directPageUsage) {
+  for (const entry of sharedEntries) {
+    for (const className of await collectEntryClasses(
+      compilation,
+      entry,
+      sourceCache,
+    )) {
+      sharedClasses.add(className);
+    }
+
+    const name = entryName(entry);
+
+    if (name) {
+      for (const className of await collectNameSourceClasses(
+        name,
+        projectRoot,
+        sourceCache,
+      )) {
+        sharedClasses.add(className);
+      }
+    }
+  }
+
+  for (const { entry, name, sourceName } of selectedPages) {
+    const page = pages.get(name) ?? {
+      name,
+      classes: new Set<string>(),
+      cssFiles: new Set<string>(),
+      jsFiles: collectEntryJsFiles(entry),
+    };
+    for (const jsFile of collectEntryJsFiles(entry)) {
+      page.jsFiles.add(jsFile);
+    }
+
+    for (const className of sharedClasses) {
+      page.classes.add(className);
+    }
+
+    for (const className of await collectEntryClasses(
+      compilation,
+      entry,
+      sourceCache,
+    )) {
+      page.classes.add(className);
+    }
+
+    for (const className of await collectPageSourceClasses(
+      sourceName,
+      projectRoot,
+      sourceCache,
+    )) {
+      page.classes.add(className);
+    }
+
+    pages.set(name, page);
+  }
+
+  // Merge explicit pageUsage into scanned routes instead of replacing them.
+  if (directPageUsage && Object.keys(directPageUsage).length > 0) {
     for (const [rawName, classes] of Object.entries(directPageUsage)) {
       const name = rawName.trim();
 
@@ -665,12 +766,18 @@ async function collectPages(
         continue;
       }
 
-      pages.set(name, {
+      const page = pages.get(name) ?? {
         name,
-        classes: new Set(classes.map((className) => className.toLowerCase())),
-        cssFiles: new Set(),
-        jsFiles: new Set(),
-      });
+        classes: new Set<string>(),
+        cssFiles: new Set<string>(),
+        jsFiles: new Set<string>(),
+      };
+
+      for (const className of classes) {
+        page.classes.add(className.toLowerCase());
+      }
+
+      pages.set(name, page);
     }
 
     attachEntryAssetsToPages(pages, selectedPages);
@@ -679,81 +786,38 @@ async function collectPages(
       (page) => page.jsFiles.size === 0,
     );
 
-    if (orphanPages.length > 0) {
-      const loaderEntries =
-        selectedPages.length > 0 ? selectedPages : loaderFallbackEntries;
-      const fallbackJs = new Set<string>();
+    for (const page of orphanPages) {
+      const matchedEntry = selectedPages.find(
+        (entry) =>
+          entry.name === page.name ||
+          entry.sourceName === page.name ||
+          entry.name.endsWith(`/${page.name}`) ||
+          entry.name.endsWith(`-${page.name}`),
+      );
 
-      for (const { entry } of loaderEntries) {
-        for (const jsFile of collectEntryJsFiles(entry)) {
-          fallbackJs.add(jsFile);
+      if (matchedEntry) {
+        for (const jsFile of collectEntryJsFiles(matchedEntry.entry)) {
+          page.jsFiles.add(jsFile);
         }
+        continue;
       }
 
-      for (const page of orphanPages) {
-        for (const jsFile of fallbackJs) {
+      // Single-entry fixtures (direct pageUsage without route entries) may use
+      // the sole fallback entry. Never attach every entry's loader to orphans.
+      if (selectedPages.length === 1) {
+        for (const jsFile of collectEntryJsFiles(selectedPages[0]!.entry)) {
+          page.jsFiles.add(jsFile);
+        }
+      } else if (
+        selectedPages.length === 0 &&
+        loaderFallbackEntries.length === 1
+      ) {
+        for (const jsFile of collectEntryJsFiles(
+          loaderFallbackEntries[0]!.entry,
+        )) {
           page.jsFiles.add(jsFile);
         }
       }
-    }
-  } else {
-    const sourceCache = new Map<string, Promise<string | undefined>>();
-    const sharedClasses = new Set<string>();
-
-    for (const entry of sharedEntries) {
-      for (const className of await collectEntryClasses(
-        compilation,
-        entry,
-        sourceCache,
-      )) {
-        sharedClasses.add(className);
-      }
-
-      const name = entryName(entry);
-
-      if (name) {
-        for (const className of await collectNameSourceClasses(
-          name,
-          projectRoot,
-          sourceCache,
-        )) {
-          sharedClasses.add(className);
-        }
-      }
-    }
-
-    for (const { entry, name, sourceName } of selectedPages) {
-      const page = pages.get(name) ?? {
-        name,
-        classes: new Set<string>(),
-        cssFiles: new Set<string>(),
-        jsFiles: collectEntryJsFiles(entry),
-      };
-      for (const jsFile of collectEntryJsFiles(entry)) {
-        page.jsFiles.add(jsFile);
-      }
-
-      for (const className of sharedClasses) {
-        page.classes.add(className);
-      }
-
-      for (const className of await collectEntryClasses(
-        compilation,
-        entry,
-        sourceCache,
-      )) {
-        page.classes.add(className);
-      }
-
-      for (const className of await collectPageSourceClasses(
-        sourceName,
-        projectRoot,
-        sourceCache,
-      )) {
-        page.classes.add(className);
-      }
-
-      pages.set(name, page);
     }
   }
 
@@ -964,6 +1028,7 @@ async function scanSourceFile(
   }
 
   scanClasses(source, classes);
+  activeCssModules?.addUsedClasses(source, classes);
 
   for (const specifier of extractImportSpecifiers(source)) {
     const resolved = resolveImportSpecifier(
@@ -1045,42 +1110,31 @@ function extractImportSpecifiers(source: string): string[] {
   return [...specifiers];
 }
 
+const moduleResolvers = new Map<string, ModuleResolver>();
+
+/** One shared resolver per project root: tsconfig `paths`, `exports`, `@/`. */
+function moduleResolverFor(projectRoot: string): ModuleResolver {
+  let resolver = moduleResolvers.get(projectRoot);
+
+  if (!resolver) {
+    resolver = createModuleResolver({
+      fallbackRoots: projectSourceRoots(projectRoot),
+    });
+    moduleResolvers.set(projectRoot, resolver);
+  }
+
+  return resolver;
+}
+
 function resolveImportSpecifier(
   specifier: string,
   fromFile: string,
   projectRoot: string,
 ): string | null {
-  if (specifier.startsWith("@/")) {
-    const relative = specifier.slice(2);
+  const result = moduleResolverFor(projectRoot).resolve(specifier, fromFile);
 
-    for (const root of projectSourceRoots(projectRoot)) {
-      const basePath = resolve(root, relative);
-
-      if (isStyleFile(basePath)) {
-        return null;
-      }
-
-      const found = findSourceFile(basePath);
-
-      if (found) {
-        return found;
-      }
-    }
-
-    return null;
-  }
-
-  if (specifier.startsWith("./") || specifier.startsWith("../")) {
-    const basePath = resolve(dirname(fromFile), specifier);
-
-    if (isStyleFile(basePath)) {
-      return null;
-    }
-
-    return findSourceFile(basePath);
-  }
-
-  return null;
+  // Unresolvable / external / style imports are skipped, never thrown.
+  return result.kind === "file" ? result.path : null;
 }
 
 async function collectEntryClasses(
@@ -1132,6 +1186,7 @@ async function scanModule(
 
   if (source) {
     scanClasses(source, classes);
+    activeCssModules?.addUsedClasses(source, classes);
     return;
   }
 
@@ -1156,6 +1211,7 @@ async function scanModule(
 
   if (fresh) {
     scanClasses(fresh, classes);
+    activeCssModules?.addUsedClasses(fresh, classes);
   }
 }
 
@@ -1314,43 +1370,6 @@ function isScannableSource(resource: string): boolean {
   );
 }
 
-function scanClasses(source: string, classes: Set<string>): void {
-  const patterns = [
-    /(?:class|className)\s*=\s*(?:"([^"]*)"|'([^']*)'|`([^`]*)`)/g,
-    /(?:^|[,{;\s])(?:class|className)\s*:\s*(?:"([^"]*)"|'([^']*)'|`([^`]*)`)/g,
-    /classList\.(?:add|remove|toggle|contains)\(\s*(?:"([^"]*)"|'([^']*)'|`([^`]*)`)/g,
-  ];
-
-  for (const pattern of patterns) {
-    for (const match of source.matchAll(pattern)) {
-      const value = match[1] ?? match[2] ?? match[3];
-
-      if (!value) {
-        continue;
-      }
-
-      for (const token of value.split(/\s+/)) {
-        if (isClassToken(token)) {
-          classes.add(token.toLowerCase());
-        }
-      }
-    }
-  }
-}
-
-/** Accept Tailwind-style tokens (`md:flex`, `w-1/2`, `w-[10px]`, `!p-2`). */
-function isClassToken(token: string): boolean {
-  if (!token || token.length > 256) {
-    return false;
-  }
-
-  if (/[`${}]/.test(token)) {
-    return false;
-  }
-
-  return /[A-Za-z_]/.test(token);
-}
-
 function addCssOwner(
   pagesByCss: Map<string, Set<string>>,
   cssFile: string,
@@ -1396,8 +1415,4 @@ function formatBytes(bytes: number): string {
 
 function roundMs(value: number): number {
   return Math.round(value * 1_000) / 1_000;
-}
-
-function describeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

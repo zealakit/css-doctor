@@ -1,0 +1,151 @@
+{
+  "schemaVersion": 1,
+  "command": "split",
+  "success": true,
+  "dryRun": true,
+  "errors": [],
+  "warnings": [
+    "pageCoverage was enabled without pageUsage; coverage-based DCE did not run."
+  ],
+  "patterns": [
+    "test/fixtures/basic.css"
+  ],
+  "files": [
+    {
+      "path": "test/fixtures/basic.css",
+      "report": {
+        "schemaVersion": 1,
+        "input": {
+          "files": 1,
+          "bytes": 123,
+          "rules": 3,
+          "selectors": 4,
+          "declarations": 3
+        },
+        "output": {
+          "files": 1,
+          "bytes": 123,
+          "rules": 3,
+          "selectors": 4,
+          "declarations": 3
+        },
+        "impact": {
+          "bytesEliminated": 27,
+          "eliminationPercent": 21.951219512195124,
+          "emittedBytesTotal": 123,
+          "redistributedBytes": 27,
+          "rulesRemovedEstimate": 0,
+          "selectorsRemoved": 0,
+          "chunksCreated": 1,
+          "variablesChunks": 0
+        },
+        "operations": {
+          "minified": true,
+          "pageCoverageSplit": false,
+          "sizeBudgetSplit": false,
+          "variablesIsolated": false,
+          "deadCodeEliminated": false
+        },
+        "chunks": [
+          {
+            "name": "common",
+            "kind": "common",
+            "sizeBytes": 123,
+            "oversized": false,
+            "variables": false,
+            "page": null
+          }
+        ],
+        "decisions": [
+          {
+            "id": "minify-001",
+            "category": "minification",
+            "type": "minify",
+            "title": "Minification applied to emitted CSS",
+            "explanation": "Serialized chunks use LightningCSS minify mode.",
+            "reason": "Pipeline option `minify` is enabled.",
+            "source": {
+              "file": null,
+              "selector": null,
+              "line": null,
+              "column": null
+            },
+            "destination": null,
+            "impact": {
+              "bytesBefore": 123,
+              "bytesAfter": 96,
+              "rulesAffected": null,
+              "selectorsAffected": null
+            },
+            "confidence": "high",
+            "changed": true,
+            "relatedDiagnostics": [],
+            "routes": []
+          },
+          {
+            "id": "page-coverage-002",
+            "category": "page-coverage",
+            "type": "skip-incomplete-coverage",
+            "title": "Page-coverage splitting skipped",
+            "explanation": "No page usage map was provided, so selectors cannot be classified by route coverage.",
+            "reason": "pageUsage is empty while pageCoverage.enabled is true.",
+            "source": {
+              "file": null,
+              "selector": null,
+              "line": null,
+              "column": null
+            },
+            "destination": null,
+            "impact": {
+              "bytesBefore": 123,
+              "bytesAfter": null,
+              "rulesAffected": null,
+              "selectorsAffected": null
+            },
+            "confidence": "high",
+            "changed": false,
+            "relatedDiagnostics": [],
+            "routes": []
+          },
+          {
+            "id": "dead-code-003",
+            "category": "dead-code",
+            "type": "retain-uncertain",
+            "title": "Potential dead rules retained",
+            "explanation": "Without reliable pageUsage, unused selectors cannot be confirmed dead and are kept.",
+            "reason": "Conservative dead-code policy when coverage metadata is incomplete.",
+            "source": {
+              "file": null,
+              "selector": null,
+              "line": null,
+              "column": null
+            },
+            "destination": null,
+            "impact": {
+              "bytesBefore": null,
+              "bytesAfter": null,
+              "rulesAffected": null,
+              "selectorsAffected": null
+            },
+            "confidence": "medium",
+            "changed": false,
+            "relatedDiagnostics": [],
+            "routes": []
+          }
+        ],
+        "warnings": [
+          "pageCoverage was enabled without pageUsage; coverage-based DCE did not run."
+        ],
+        "analysisMs": 7.391708
+      },
+      "chunks": [
+        {
+          "name": "common",
+          "css": ":root{--brand:#646cff}#app .card:hover{color:var(--brand)}.card__title,.card__body{padding:1rem}",
+          "sizeBytes": 123
+        }
+      ]
+    }
+  ],
+  "outDir": null
+}

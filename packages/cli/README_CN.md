@@ -135,6 +135,49 @@ css-doctor check [patterns...] [options]
 - 自动忽略 `node_modules` 与 `.git`。
 - 含 glob 字符的真实文件路径（如 `src/[slug].css`）在文件存在时可直接传入。
 
+### Class helper 与 unknown evidence
+
+源码扫描会解析 `clsx`、`cn`、`cx`、`classnames`、`classNames`、`twMerge`、
+`twJoin`、`cva` 与 `tv` 的调用。可在 `.css-doctor/config.json` 中设置
+`classHelpers` 使用自己的函数名：
+
+```json
+{ "classHelpers": ["cn", "tw"] }
+```
+
+字符串字面量、模板的静态部分与数组算作已确认的使用；对象 key
+（`{ "is-active": on }`）算作可能的使用。无法解析的标识符、函数调用与插值名称
+会按文件作为 *unknown evidence*（`classUsage.unknownEvidenceByFile`）报告。
+
+### 运行时覆盖率（`coverage import`）
+
+将浏览器 CSS 覆盖率导入为运行时证据：
+
+```bash
+css-doctor coverage import coverage/*.json \
+  --route-map routes.json --build-id "$GIT_SHA"
+```
+
+支持 Chrome DevTools Coverage 导出、Puppeteer/Playwright 的
+`page.coverage.stopCSSCoverage()` 结果（需要样式表 `text`）、Playwright helper
+生成的文件，以及带 `styleSheets` 的 CDP rule usage。`routes.json` 将 URL 模式映射
+到路由（`*`、`:id`、`[id]` 匹配一段，`**` 匹配其余部分）。
+
+结果按路由与 build id 合并到 `.css-doctor/coverage.json`。任一次运行用到的
+selector 即视为 *used*。build id 不同或样式表已变化的条目会作为 stale 警告，
+不会被应用。在配置中设置 `"coverage": true` 启用；目前 `css-doctor gui` 会使用它，
+`check`、`health`、`optimize` 暂未使用。
+
+在 Playwright 测试中记录覆盖率：
+
+```ts
+import { collectCssCoverage } from "@zealakit/css-doctor-cli/playwright";
+
+await collectCssCoverage(page, async () => {
+  await page.goto("http://localhost:3000/blog/42");
+});
+```
+
 ### 终端输出示例
 
 ```text
@@ -293,7 +336,9 @@ css-doctor diff [patterns...] [options]
 
 - 命令名：`css-doctor`（通过 package `bin` 暴露）。
 - CLI 做 **分析** 与 **评分**。页面覆盖拆分、体积预算、变量隔离属于框架适配器。
-- CSS Modules / 动态 class 不在静态检查范围内。
+- 动态 class 仅在为字面量时才会解析（见上文 `classHelpers`），其余会作为
+  unknown evidence 报告。CSS Modules 会在源码层面按 `styles.foo` 映射；
+  按 bundle 拆分 CSS Modules 由 adapter 负责。
 - 需要对应平台的原生二进制；有预构建包时无需 Rust 工具链。
 
 ## 完整文档

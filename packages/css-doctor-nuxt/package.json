@@ -1,6 +1,6 @@
 {
   "name": "@zealakit/css-doctor-nuxt",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Official Nuxt 4 module for css-doctor",
   "keywords": [
     "css",
@@ -49,6 +49,7 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
+    "test": "pnpm typecheck && pnpm build && node --test test/**/*.test.mjs",
     "lint": "biome lint src",
     "format": "biome format --write src",
     "format:check": "biome format src",
@@ -65,11 +66,12 @@
     "@nuxt/schema": ">=3.0.0"
   },
   "devDependencies": {
-    "@nuxt/kit": "^4.6.2",
-    "nuxt": "^4.6.2",
+    "@nuxt/kit": "^4.6.4",
+    "nuxt": "^4.6.4",
     "tsup": "^8.5.1",
-    "typescript": "^5.9.3",
-    "@nuxt/schema": "^4.6.2"
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "@nuxt/schema": "^4.6.4"
   },
   "publishConfig": {
     "access": "public"

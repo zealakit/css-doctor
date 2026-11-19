@@ -1,0 +1,53 @@
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --cssd-bg: #0b0e14;
+  --cssd-bg-elevated: #12161f;
+  --cssd-bg-muted: #181e2a;
+  --cssd-border: #243044;
+  --cssd-border-strong: #354560;
+  --cssd-text: #e8eef7;
+  --cssd-text-muted: #8b9bb3;
+  --cssd-text-faint: #627288;
+  --cssd-accent: #60a5fa;
+  --cssd-accent-soft: rgba(96, 165, 250, 0.14);
+  --cssd-teal: #2dd4bf;
+  --cssd-teal-soft: rgba(45, 212, 191, 0.14);
+  --cssd-purple: #a78bfa;
+  --cssd-purple-soft: rgba(167, 139, 250, 0.14);
+  --cssd-orange: #fb923c;
+  --cssd-orange-soft: rgba(251, 146, 60, 0.14);
+  --cssd-success: #34d399;
+  --cssd-warning: #fbbf24;
+  --cssd-danger: #f87171;
+  --cssd-radius: 10px;
+  --cssd-font-sans: "IBM Plex Sans", "Segoe UI", sans-serif;
+  --cssd-font-mono: "IBM Plex Mono", "SFMono-Regular", ui-monospace, monospace;
+  --cssd-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --cssd-bg: #f3f6fb;
+  --cssd-bg-elevated: #ffffff;
+  --cssd-bg-muted: #e8eef7;
+  --cssd-border: #d5deea;
+  --cssd-border-strong: #b7c4d6;
+  --cssd-text: #152033;
+  --cssd-text-muted: #4d5d73;
+  --cssd-text-faint: #6f8096;
+  --cssd-accent: #2563eb;
+  --cssd-accent-soft: rgba(37, 99, 235, 0.12);
+  --cssd-teal: #0f9f8a;
+  --cssd-teal-soft: rgba(15, 159, 138, 0.12);
+  --cssd-purple: #7c3aed;
+  --cssd-purple-soft: rgba(124, 58, 237, 0.1);
+  --cssd-orange: #c2410c;
+  --cssd-orange-soft: rgba(194, 65, 12, 0.1);
+  --cssd-success: #0f9f6e;
+  --cssd-warning: #b7791f;
+  --cssd-danger: #c53030;
+  --cssd-shadow: 0 12px 40px rgba(21, 32, 51, 0.08);
+}

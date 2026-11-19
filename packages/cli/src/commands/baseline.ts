@@ -298,15 +298,58 @@ async function readAndReport(
   }
 
   try {
+    const parsed = JSON.parse(read.json) as unknown;
+    if (
+      parsed === null ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed)
+    ) {
+      return {
+        schemaVersion: 1,
+        command: "baseline",
+        action,
+        success: false,
+        errors: [
+          ...errors,
+          `Invalid baseline JSON at ${displayPath}: expected a non-null object.`,
+        ],
+        warnings: [],
+        baselinePath: displayPath,
+        baseline: null,
+      };
+    }
+
+    const validation = validateBaselineJson(read.json);
+    const warnings: string[] = [];
+    if (validation.status === "incompatible") {
+      return {
+        schemaVersion: 1,
+        command: "baseline",
+        action,
+        success: false,
+        errors: [
+          ...errors,
+          validation.message ??
+            `Baseline validation failed (${validation.status}) at ${displayPath}.`,
+        ],
+        warnings: [],
+        baselinePath: displayPath,
+        baseline: null,
+      };
+    }
+    if (validation.status === "softWarning" && validation.message) {
+      warnings.push(validation.message);
+    }
+
     return {
       schemaVersion: 1,
       command: "baseline",
       action,
       success: errors.length === 0,
       errors,
-      warnings: [],
+      warnings,
       baselinePath: displayPath,
-      baseline: JSON.parse(read.json) as BaselineDocumentJson,
+      baseline: parsed as BaselineDocumentJson,
     };
   } catch (error) {
     return {

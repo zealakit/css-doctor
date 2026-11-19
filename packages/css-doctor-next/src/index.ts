@@ -41,6 +41,12 @@ export function withCssDoctor(
   const pluginOptions = resolvePluginOptions(options);
   const originalWebpack = nextConfig.webpack;
 
+  if (isTurbopackConfig(nextConfig) || process.env.TURBOPACK === "1") {
+    console.warn(
+      "[css-doctor:next] Turbopack is not supported yet; css-doctor only hooks the webpack client production build. Use `next build` without `--turbopack`, or set `webpack` builds for production CSS splitting.",
+    );
+  }
+
   const webpack: NonNullable<NextConfig["webpack"]> = (config, context) => {
     const result = originalWebpack ? originalWebpack(config, context) : config;
 
@@ -57,6 +63,19 @@ export function withCssDoctor(
     ...nextConfig,
     webpack,
   };
+}
+
+function isTurbopackConfig(nextConfig: NextConfig): boolean {
+  const record = nextConfig as NextConfig & {
+    turbopack?: unknown;
+    experimental?: { turbo?: unknown; turbopack?: unknown };
+  };
+
+  return (
+    record.turbopack !== undefined ||
+    record.experimental?.turbo !== undefined ||
+    record.experimental?.turbopack !== undefined
+  );
 }
 
 function enableCssDoctor(

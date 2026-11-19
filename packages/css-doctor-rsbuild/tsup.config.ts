@@ -10,6 +10,8 @@ export default defineConfig({
   platform: "node",
   splitting: false,
   outDir: "dist",
+  // Bundle internal shared helpers; keep binding + host bundlers external.
+  noExternal: ["@zealakit/css-doctor-shared"],
   external: [
     "@rsbuild/core",
     "@rspack/core",

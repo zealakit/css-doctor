@@ -1,6 +1,6 @@
 {
   "name": "nuxt-tailwind-sass",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,8 @@
     "postinstall": "nuxt prepare",
     "format": "biome format --write .",
     "format:check": "biome format .",
-    "check": "biome check ."
+    "check": "biome check .",
+    "css:gui": "css-doctor gui --no-open"
   },
   "dependencies": {
     "nuxt": "^4.0.0",
@@ -19,8 +20,10 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",
+    "@zealakit/css-doctor-cli": "workspace:*",
     "@zealakit/css-doctor-nuxt": "workspace:*",
     "@zealakit/css-doctor-vite": "workspace:*",
+    "@zealakit/css-doctor-gui": "workspace:*",
     "sass": "^1.83.0",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.6.0"

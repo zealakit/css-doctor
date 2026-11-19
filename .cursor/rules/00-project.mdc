@@ -14,7 +14,7 @@ Read `AGENTS.md` for the canonical guide and use the skills in
   docs. React component filenames are kebab-case; identifiers stay PascalCase.
 - Use Turborepo for workspace-wide tasks: `pnpm build`, `pnpm test`,
   `pnpm lint`, `pnpm check`, `pnpm format`, `pnpm test:cargo`.
-- Graph: binding → CLI/Vite/Next → examples/vite-react-tailwind.
+- Graph: binding → shared → CLI/Vite/Next/Rsbuild → examples.
 - Inspect order with `pnpm exec turbo build --dry-run`.
 - For focused work: `pnpm --filter <pkg> typecheck|build|test`, but build the
   native binding before TypeScript integration tests.

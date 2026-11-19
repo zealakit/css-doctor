@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { optimizeCss } from "@zealakit/css-doctor-binding";
+import { optimizeCssAsync } from "@zealakit/css-doctor-binding";
 import type { JsChunkOutput } from "@zealakit/css-doctor-binding";
 
 import { CssCacheManager } from "./cache-manager";
@@ -80,12 +80,12 @@ export const withCssDoctorAssets = <T extends RemixAssetServerLike>(
       const cached = resolved.cache.get(cacheKey);
 
       if (cached) {
-        return createResponse(cached, response);
+        return createCachedResponse(request, cached);
       }
     }
 
     try {
-      const pipeline = optimizeCss({
+      const pipeline = await optimizeCssAsync({
         cssContent: originalCss,
         pageUsage: {},
         pageCoverage: {
@@ -100,6 +100,8 @@ export const withCssDoctorAssets = <T extends RemixAssetServerLike>(
         },
         minify: resolved.minify,
       });
+      // Remix middleware cannot emit separate chunk URLs; concatenate for a
+      // single response. This is minify/variable isolation, not network splitting.
       const optimizedCss = pipeline.chunks
         .filter((chunk: JsChunkOutput) => chunk.page === undefined)
         .map((chunk: JsChunkOutput) => chunk.css)
@@ -137,7 +139,7 @@ export const withCssDoctorAssets = <T extends RemixAssetServerLike>(
         resolved.cache.set(cacheKey, entry);
       }
 
-      return createResponse(entry, response);
+      return createCachedResponse(request, entry);
     } catch (error) {
       console.warn(
         `[css-doctor:remix] failed to optimize ${pathname}; serving the original asset: ${describeError(error)}`,
@@ -199,11 +201,33 @@ function shouldSkipPath(
   );
 }
 
-function createResponse(entry: CssCacheEntry, original: Response): Response {
+function createCachedResponse(
+  request: Request,
+  entry: CssCacheEntry,
+): Response {
+  const headers = new Headers(entry.headers);
+  const ifNoneMatch = request.headers.get("if-none-match");
+
+  if (
+    entry.etag &&
+    ifNoneMatch &&
+    ifNoneMatch
+      .split(",")
+      .map((value) => value.trim())
+      .includes(entry.etag)
+  ) {
+    headers.delete("content-length");
+    return new Response(null, {
+      status: 304,
+      statusText: "Not Modified",
+      headers,
+    });
+  }
+
   return new Response(entry.body, {
-    status: original.status,
-    statusText: original.statusText,
-    headers: new Headers(entry.headers),
+    status: 200,
+    statusText: "OK",
+    headers,
   });
 }
 

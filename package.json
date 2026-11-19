@@ -1,6 +1,6 @@
 {
   "name": "@zealakit/css-doctor-workspace",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Smart CSS diagnostics, dead code elimination, and intelligent chunk splitting tool.",
   "author": "nqhed - Huy Edward Nguyen",
   "private": true,
@@ -29,15 +29,17 @@
     "publish:npm": "tsx scripts/publish-npm.ts --all --skip-missing",
     "publish:npm:binding": "tsx scripts/publish-npm.ts --binding --skip-missing",
     "publish:npm:adapters": "tsx scripts/publish-npm.ts --adapters --skip-missing",
-    "publish:npm:dry": "tsx scripts/publish-npm.ts --all --skip-missing --dry-run"
+    "publish:npm:dry": "tsx scripts/publish-npm.ts --all --skip-missing --dry-run",
+    "publish:npm:validate": "tsx scripts/publish-npm.ts --adapters --validate-only --skip-missing",
+    "snapshot:examples": "tsx scripts/example-snapshots.ts"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.6.3",
+    "@biomejs/biome": "^2.6.7",
     "@types/node": "^22.20.5",
     "smol-toml": "^1.9.1",
     "tsx": "^4.23.15",
-    "turbo": "^2.11.10",
-    "typescript": "^5.9.3"
+    "turbo": "^2.11.11",
+    "typescript": "^6.0.3"
   },
   "repository": {
     "type": "git",

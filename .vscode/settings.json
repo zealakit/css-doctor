@@ -17,6 +17,7 @@
     "rustc",
     "hrefs",
     "styl",
-    "cssd"
+    "cssd",
+    "tauri"
   ]
 }

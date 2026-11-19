@@ -2,7 +2,6 @@ import { resolve } from "node:path";
 
 import { InvalidArgumentError, type Command } from "commander";
 
-import { formatJsonReport } from "../formatters/json";
 import { formatRegressionTerminalReport } from "../formatters/regression-terminal";
 import type { RegressionReport } from "../types/regression";
 import {
@@ -17,6 +16,7 @@ import {
   resolveBaselinePath,
   type CssDoctorConfig,
 } from "../utils/config";
+import { emitCliReport } from "../utils/emit-report";
 import { toDisplayPath } from "../utils/file";
 
 export type DiffCliReport = {
@@ -50,6 +50,8 @@ export type DiffRunOptions = {
 type DiffCliOptions = DiffRunOptions & {
   json?: boolean;
   verbose?: boolean;
+  out?: string;
+  save?: boolean;
 };
 
 /** Registers `css-doctor diff`. */
@@ -104,29 +106,45 @@ export function registerDiffCommand(program: Command): void {
     )
     .option("-v, --verbose", "Show detailed file and diagnostic lists")
     .option("-j, --json", "Output raw JSON for piping and CI/CD")
+    .option(
+      "--out <path>",
+      "Atomically write the JSON envelope to <path> (success or failure)",
+    )
+    .option(
+      "--save",
+      "On success, atomically write .css-doctor/reports/diff-latest.json",
+    )
     .action(async (patterns: string[], options: DiffCliOptions) => {
       const report = await runDiff(patterns ?? [], options);
 
-      if (options.json === true) {
-        process.stdout.write(`${formatJsonReport(report)}\n`);
-      } else if (report.regression) {
-        process.stdout.write(
-          `${formatRegressionTerminalReport(report.regression, {
-            verbose: options.verbose === true,
-          })}\n`,
-        );
-        if (report.errors.length > 0) {
-          process.stderr.write(
-            `css-doctor: ${report.errors.join("\ncss-doctor: ")}\n`,
+      await emitCliReport(
+        report,
+        {
+          json: options.json,
+          out: options.out,
+          save: options.save,
+        },
+        () => {
+          if (report.regression) {
+            process.stdout.write(
+              `${formatRegressionTerminalReport(report.regression, {
+                verbose: options.verbose === true,
+              })}\n`,
+            );
+            if (report.errors.length > 0) {
+              process.stderr.write(
+                `css-doctor: ${report.errors.join("\ncss-doctor: ")}\n`,
+              );
+            }
+            return;
+          }
+          process.stdout.write(
+            `css-doctor diff failed:\n${report.errors
+              .map((error) => `  - ${error}`)
+              .join("\n")}\n`,
           );
-        }
-      } else {
-        process.stdout.write(
-          `css-doctor diff failed:\n${report.errors
-            .map((error) => `  - ${error}`)
-            .join("\n")}\n`,
-        );
-      }
+        },
+      );
 
       process.exitCode = report.success ? 0 : 1;
     });
@@ -297,6 +315,8 @@ function buildGateConfig(
 ): {
   minScore?: number;
   maxSizeIncreasePercent?: number;
+  maxSelectorIncreasePercent?: number;
+  maxRuleIncreasePercent?: number;
   maxNewErrors?: number;
   maxNewWarnings?: number;
   failOnRegression?: boolean;
@@ -337,6 +357,8 @@ function buildGateConfig(
   const gates: {
     minScore?: number;
     maxSizeIncreasePercent?: number;
+    maxSelectorIncreasePercent?: number;
+    maxRuleIncreasePercent?: number;
     maxNewErrors?: number;
     maxNewWarnings?: number;
     failOnRegression?: boolean;
@@ -360,6 +382,13 @@ function buildGateConfig(
     ) {
       gates.maxSizeIncreasePercent = maxSizeIncrease ?? undefined;
     }
+  }
+  if (config.qualityGates.maxSelectorIncreasePercent !== null) {
+    gates.maxSelectorIncreasePercent =
+      config.qualityGates.maxSelectorIncreasePercent;
+  }
+  if (config.qualityGates.maxRuleIncreasePercent !== null) {
+    gates.maxRuleIncreasePercent = config.qualityGates.maxRuleIncreasePercent;
   }
   if (maxNewErrors !== null && maxNewErrors !== undefined) {
     gates.maxNewErrors = maxNewErrors;

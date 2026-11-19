@@ -305,6 +305,10 @@ coverage runtime.
 | `sizeBudget.enabled`          | `boolean`              | `true`                   | Bật chia nhỏ theo byte budget.                     |
 | `sizeBudget.maxChunkSize`     | `number`               | `60 * 1024`              | Số byte tối đa mỗi chunk.                          |
 | `sizeBudget.isolateVariables` | `boolean`              | `true`                   | Tách biến `:root` và Tailwind `@theme` trước.      |
+| `pageCoverage.matching`       | `"conservative" \| "precise"` | `"conservative"` | `"precise"` loại bỏ selector ghép thiếu một class bắt buộc. |
+| `pageCoverage.removeUnusedMinConfidence` | `"low" \| "medium" \| "high"` | `"medium"` | Độ tin cậy tối thiểu để xóa dead code (`"high"` cần `runtimeUnused`). |
+| `classHelpers`                | `string[]`             | `cn`, `clsx`, `cva`, …   | Tên hàm được phân giải như class helper.           |
+| `cssModules`                  | `boolean`              | `true`                   | Tách CSS Modules theo mức dùng (Vite, Next, Rsbuild). |
 | `minify`                      | `boolean`              | giá trị production/build | Minify CSS bằng LightningCSS.                      |
 | `report`                      | `boolean`              | `true`                   | In chẩn đoán coverage và split.                    |
 | `exclude`                     | `(string \| RegExp)[]` | Safety rule CSS Modules  | Bỏ qua asset khớp mẫu.                             |

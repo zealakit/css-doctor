@@ -8,8 +8,9 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
+use crate::confidence::ConfidenceLevel;
 use crate::size_splitter::{SizeSplitterConfig, split_css_by_size};
-use crate::splitter::{ChunkConfig, SelectorStat, SplitInput, split_css_by_pages};
+use crate::splitter::{ChunkConfig, MatchingMode, SelectorStat, SplitInput, split_css_by_pages};
 
 /// Configuration for tier 1 (semantic page-coverage splitting).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -24,6 +25,22 @@ pub struct PageCoverageConfig {
     /// Selectors or classes that always stay in the common chunk.
     #[serde(default)]
     pub force_common: Vec<String>,
+    /// Class matching strictness. Defaults to conservative (any class).
+    #[serde(default)]
+    pub matching: MatchingMode,
+    /// Minimum confidence for dead-code removal. Defaults to `medium`.
+    #[serde(default = "default_remove_min_confidence")]
+    pub remove_unused_min_confidence: ConfidenceLevel,
+    /// Selectors a browser run matched; never removed.
+    #[serde(default)]
+    pub runtime_used: Vec<String>,
+    /// Selectors covered routes never matched; makes "unused" high confidence.
+    #[serde(default)]
+    pub runtime_unused: Vec<String>,
+}
+
+const fn default_remove_min_confidence() -> ConfidenceLevel {
+    ConfidenceLevel::Medium
 }
 
 impl Default for PageCoverageConfig {
@@ -32,6 +49,10 @@ impl Default for PageCoverageConfig {
             enabled: true,
             min_page_ratio: default_min_page_ratio(),
             force_common: Vec::new(),
+            matching: MatchingMode::Conservative,
+            remove_unused_min_confidence: ConfidenceLevel::Medium,
+            runtime_used: Vec::new(),
+            runtime_unused: Vec::new(),
         }
     }
 }
@@ -191,6 +212,10 @@ pub fn optimize_css_pipeline(input: &PipelineInput) -> Result<PipelineOutput, St
                 min_page_ratio: input.page_coverage.min_page_ratio,
                 force_common_selectors: input.page_coverage.force_common.clone(),
                 minify: input.minify,
+                matching: input.page_coverage.matching,
+                remove_unused_min_confidence: input.page_coverage.remove_unused_min_confidence,
+                runtime_used: input.page_coverage.runtime_used.clone(),
+                runtime_unused: input.page_coverage.runtime_unused.clone(),
             },
         })?;
 
@@ -419,6 +444,7 @@ mod tests {
                 enabled: true,
                 min_page_ratio: 0.5,
                 force_common: Vec::new(),
+                ..Default::default()
             },
             size_budget: SizeBudgetConfig {
                 enabled: false,
@@ -555,6 +581,7 @@ mod tests {
                 enabled: true,
                 min_page_ratio: 0.5,
                 force_common: Vec::new(),
+                ..Default::default()
             },
             size_budget: SizeBudgetConfig {
                 enabled: true,

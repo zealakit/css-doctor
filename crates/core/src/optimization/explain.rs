@@ -456,6 +456,7 @@ mod tests {
                 enabled: true,
                 min_page_ratio: 0.75,
                 force_common: vec![],
+                ..Default::default()
             },
             size_budget: SizeBudgetConfig {
                 enabled: false,
@@ -492,6 +493,7 @@ mod tests {
                 enabled: true,
                 min_page_ratio: 0.5,
                 force_common: vec![".legacy".into()],
+                ..Default::default()
             },
             size_budget: SizeBudgetConfig {
                 enabled: false,

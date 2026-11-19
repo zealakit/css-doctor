@@ -1,6 +1,6 @@
 {
   "name": "remix-tailwind-sass",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "format": "biome format --write .",
     "format:check": "biome format .",
-    "check": "biome check ."
+    "check": "biome check .",
+    "css:gui": "css-doctor gui --no-open"
   },
   "dependencies": {
     "@zealakit/css-doctor-remix": "workspace:*",
@@ -23,6 +24,8 @@
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
+    "@zealakit/css-doctor-cli": "workspace:*",
+    "@zealakit/css-doctor-gui": "workspace:*",
     "typescript": "^6.0.3"
   }
 }

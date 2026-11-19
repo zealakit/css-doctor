@@ -1,6 +1,6 @@
 {
   "name": "@zealakit/css-doctor-cli",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Command line interface for css-doctor: CSS diagnostics from the terminal",
   "keywords": [
     "css",
@@ -38,23 +38,33 @@
     "README_CN.md"
   ],
   "scripts": {
-    "build": "tsup && node -e \"require('node:fs').chmodSync('dist/index.js', 0o755)\"",
+    "build": "rm -rf dist && tsup && node -e \"require('node:fs').chmodSync('dist/index.js', 0o755)\"",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "test": "pnpm typecheck && pnpm build && tsx --test test/cli.test.ts",
-    "lint": "biome lint src test/cli.test.ts",
-    "format": "biome format --write src test/cli.test.ts",
-    "format:check": "biome format src test/cli.test.ts",
-    "check": "biome check src test/cli.test.ts"
+    "test": "pnpm typecheck && pnpm build && tsx --test test/**/*.test.ts",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "format:check": "biome format src test",
+    "check": "biome check src test"
   },
   "dependencies": {
     "@zealakit/css-doctor-binding": "workspace:*"
   },
+  "peerDependencies": {
+    "@zealakit/css-doctor-gui": "^1.2.0"
+  },
+  "peerDependenciesMeta": {
+    "@zealakit/css-doctor-gui": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@types/node": "^22.20.5",
+    "@zealakit/css-doctor-gui": "workspace:*",
+    "@zealakit/css-doctor-shared": "workspace:*",
     "tsup": "^8.5.1",
     "tsx": "^4.23.15",
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.3",
     "commander": "^12.1.0",
     "fast-glob": "^3.3.3",
     "picocolors": "^1.1.1"
@@ -73,5 +83,13 @@
   "bugs": {
     "url": "https://github.com/zealakit/css-doctor/issues"
   },
-  "homepage": "https://github.com/zealakit/css-doctor#readme"
+  "homepage": "https://github.com/zealakit/css-doctor#readme",
+  "exports": {
+    ".": "./dist/index.js",
+    "./playwright": {
+      "types": "./dist/playwright.d.ts",
+      "import": "./dist/playwright.js"
+    },
+    "./package.json": "./package.json"
+  }
 }

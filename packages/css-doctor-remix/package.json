@@ -1,6 +1,6 @@
 {
   "name": "@zealakit/css-doctor-remix",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Remix 3 asset-server middleware for css-doctor CSS optimization",
   "keywords": [
     "css",
@@ -46,6 +46,7 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/**/*.test.ts",
     "lint": "biome lint src",
     "format": "biome format --write src",
     "format:check": "biome format src",
@@ -57,7 +58,8 @@
   "devDependencies": {
     "@types/node": "^22.20.5",
     "tsup": "^8.5.1",
-    "typescript": "^5.9.3"
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3"
   },
   "publishConfig": {
     "access": "public"

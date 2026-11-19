@@ -42,21 +42,33 @@
 //! ```
 
 mod analyzer;
+mod confidence;
 mod health;
+mod markup_match;
 mod model;
 mod optimization;
 mod pipeline;
+mod property_key;
 mod regression;
 mod size_splitter;
 mod splitter;
 mod usage;
 
 pub use analyzer::analyze_css;
+pub use confidence::{
+    ConfidenceLevel, EvidenceSource, RuntimeEvidence, UsageVerdict, derive_verdict,
+    meets_min_confidence,
+};
 pub use health::{
     DiagnosticCertainty, DimensionId, DimensionScore, HealthDiagnostic, HealthEvaluationInput,
     HealthGrade, HealthReport, HealthScoreConfig, HealthScoreSummary, HealthSeverity, HealthStatus,
-    HealthThresholds, HealthWeights, ScoreBand, evaluate_css_health, evaluate_health_report,
-    grade_for_score, merge_health_reports,
+    HealthThresholds, HealthWeights, ScoreBand, evaluate_css_health,
+    evaluate_css_health_with_usage, evaluate_health_report, grade_for_score, merge_health_reports,
+};
+pub use markup_match::{
+    MarkupElement, MarkupEvidence, MarkupFileEvidence, MatchConfidence, SelectorFileUsageHit,
+    SelectorUsageMatch, SelectorUsageStatus, match_selector_against_markup,
+    match_selectors_against_markup,
 };
 pub use model::{
     AnalysisStats, AnalysisWarning, CssAnalysisResult, SelectorInfo, SelectorKind, SourceLocation,
@@ -84,5 +96,7 @@ pub use regression::{
     validate_baseline_document,
 };
 pub use size_splitter::{SizeSplitOutput, SizeSplitterConfig, split_css_by_size};
-pub use splitter::{ChunkConfig, SelectorStat, SplitInput, SplitOutput, split_css_by_pages};
+pub use splitter::{
+    ChunkConfig, MatchingMode, SelectorStat, SplitInput, SplitOutput, split_css_by_pages,
+};
 pub use usage::UsageMatrix;

@@ -41,8 +41,9 @@ on large stylesheets.
 ### Zero-config CLI
 
 Run `css-doctor` immediately with `npx`, or install it as a development
-dependency. The published CLI bundles its JavaScript dependencies; only the
-native binding remains a dynamic runtime require.
+dependency. The published CLI bundles its JavaScript dependencies (including
+internal `@zealakit/css-doctor-shared` helpers); only the native binding remains
+a dynamic runtime require. `css-doctor-shared` itself is never published to npm.
 
 ### Comprehensive diagnostics + CSS Health Score
 
@@ -119,6 +120,26 @@ Optional `package.json` scripts:
 }
 ```
 
+### Local report viewer (GUI)
+
+```bash
+# Optional package — not required for check/health/optimize/…
+pnpm add -D @zealakit/css-doctor-gui @zealakit/css-doctor-cli
+
+css-doctor check "src/**/*.css" --json --save
+css-doctor gui
+css-doctor gui --port 4173 --no-open --strict-port
+css-doctor gui --report ./report.json
+css-doctor gui --desktop   # optional; requires desktop build
+```
+
+Web mode (default) serves the React report console on `127.0.0.1:4193` (with
+port fallback) and does **not** need Tauri or Rust. Desktop mode launches a
+built Tauri shell only when `--desktop` is passed — see
+[`packages/css-doctor-gui/README.md`](./packages/css-doctor-gui/README.md),
+[`docs/report-contract.md`](./docs/report-contract.md), and
+[`docs/gui-release-checklist.md`](./docs/gui-release-checklist.md).
+
 ### Command cheat sheet
 
 ```bash
@@ -126,6 +147,11 @@ Optional `package.json` scripts:
 css-doctor --help
 css-doctor --version
 css-doctor check --help
+
+# Local GUI (Web report viewer)
+css-doctor gui
+css-doctor gui --port 4200 --no-open
+css-doctor gui --desktop   # requires prior desktop:build
 
 # Single file or multiple paths
 css-doctor check src/styles/app.css
@@ -300,6 +326,41 @@ Remix 3 has no build-time page-to-CSS dependency graph. Its middleware uses
 `sizeBudget`, `isolateVariables`, `minify`, and a response cache instead of
 runtime page coverage.
 
+### Selector analysis (GUI)
+
+`css-doctor gui` runs one check, attaches a versioned `selectorAnalysis` section
+(Core matching), and opens the Selector Explorer. This is **static** analysis —
+see [`docs/selector-analysis.md`](./docs/selector-analysis.md) for category
+coverage, metric definitions, and limitations. Plain `css-doctor check` JSON is
+unchanged unless a caller attaches the section.
+
+### Known limitations
+
+- Class helpers (`cn`, `clsx`, `cva`, `tv`, `twMerge`, ... — set `classHelpers`
+  to add your own) are resolved when their arguments are literals; identifiers
+  and interpolated names are reported as unknown evidence. Supply `pageUsage` /
+  `forceCommon` for those.
+- CSS Modules are split by usage in Vite, Next and Rsbuild when the bundler
+  exposes the local -> emitted class map (`cssModules: false` opts out).
+  Assets whose scoped classes cannot all be mapped (for example Rspack native
+  CSS Modules) are still skipped.
+- Next path aliases come from `tsconfig`/`jsconfig` `paths` and workspace
+  `exports`; other custom aliases need explicit `pageUsage`.
+- `pageCoverage.removeUnusedMinConfidence: "high"` removes only selectors that
+  runtime coverage (`runtimeUnused`) confirmed unused; the default `"medium"`
+  keeps today's static-only removal.
+- `pageCoverage.matching: "precise"` removes compound selectors (`.btn.primary`)
+  on pages where any required class is missing. Default is `"conservative"`.
+- Content-hashed CSS asset rewrites may leave the original filename hash stale
+  after in-place CSS updates (adapters emit additional hashed chunk files for
+  split output).
+- `minify: false` disables LightningCSS minify inside css-doctor; host bundler
+  CSS minimizers (Vite/Next/Rsbuild) may still minify unless also disabled.
+- Prebuilt native bindings are verified for the five published triples listed
+  above; CI currently builds and tests the Ubuntu runner host triple.
+
+Release prep: see [`docs/release-checklist.md`](./docs/release-checklist.md).
+
 ---
 
 ## Configuration reference
@@ -312,6 +373,10 @@ runtime page coverage.
 | `sizeBudget.enabled`          | `boolean`              | `true`                   | Enable byte-budget splitting.                          |
 | `sizeBudget.maxChunkSize`     | `number`               | `60 * 1024`              | Maximum bytes per emitted chunk.                       |
 | `sizeBudget.isolateVariables` | `boolean`              | `true`                   | Extract `:root` and Tailwind `@theme` variables first. |
+| `pageCoverage.matching`       | `"conservative" \| "precise"` | `"conservative"`   | `"precise"` removes compounds missing a required class. |
+| `pageCoverage.removeUnusedMinConfidence` | `"low" \| "medium" \| "high"` | `"medium"` | Minimum confidence for dead-code removal (`"high"` needs `runtimeUnused`). |
+| `classHelpers`                | `string[]`             | `cn`, `clsx`, `cva`, …   | Function names resolved as class helpers.              |
+| `cssModules`                  | `boolean`              | `true`                   | Split CSS Modules by usage (Vite, Next, Rsbuild).      |
 | `minify`                      | `boolean`              | production/build value   | Minify emitted CSS with LightningCSS.                  |
 | `report`                      | `boolean`              | `true`                   | Print coverage and split diagnostics.                  |
 | `exclude`                     | `(string \| RegExp)[]` | CSS Modules safety rules | Skip matching assets.                                  |

@@ -48,7 +48,7 @@ export default defineNuxtConfig({
 | `pageCoverage.minPageRatio` | `0.5` | 进入 common chunk 的最小比例（0.0-1.0）。 |
 | `pageCoverage.forceCommon` | `[]` | 强制保留在 common CSS 中的 selector/class。 |
 | `sizeBudget.enabled` | `true` | 启用按字节预算分割。 |
-| `sizeBudget.maxChunkSize` | `60 * 1024` | 每个 chunk 的最大字节数。 |
+| `sizeBudget.maxChunkSize` | `30 * 1024` | 每个 chunk 的最大字节数。 |
 | `sizeBudget.isolateVariables` | `true` | 先提取 `:root` 与 `@theme` 变量。 |
 | `minify` | production | 使用 LightningCSS 压缩输出 CSS。 |
 | `report` | `true` | 输出覆盖率和 chunk 诊断。 |

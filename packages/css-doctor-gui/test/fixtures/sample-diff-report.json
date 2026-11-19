@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 1,
+  "command": "diff",
+  "success": true,
+  "errors": [],
+  "warnings": [],
+  "baselinePath": ".css-doctor/baseline.json",
+  "regression": {
+    "schemaVersion": 1,
+    "status": "healthy",
+    "baseline": {
+      "score": 98,
+      "grade": "A",
+      "status": "excellent",
+      "timestamp": "2026-11-13T10:26:28.561Z",
+      "toolVersion": "1.1.1",
+      "sizeBytes": 123,
+      "rules": 3,
+      "selectors": 4,
+      "declarations": 3,
+      "files": 1
+    },
+    "current": {
+      "score": 98,
+      "grade": "A",
+      "status": "excellent",
+      "timestamp": "2026-11-13T10:29:53.027Z",
+      "toolVersion": "1.1.1",
+      "sizeBytes": 123,
+      "rules": 3,
+      "selectors": 4,
+      "declarations": 3,
+      "files": 1
+    },
+    "changes": {
+      "score": 0,
+      "cssSize": {
+        "baseline": 123,
+        "current": 123,
+        "changeBytes": 0,
+        "changePercent": 0
+      },
+      "rules": {
+        "baseline": 3,
+        "current": 3,
+        "change": 0,
+        "changePercent": 0
+      },
+      "selectors": {
+        "baseline": 4,
+        "current": 4,
+        "change": 0,
+        "changePercent": 0
+      },
+      "declarations": {
+        "baseline": 3,
+        "current": 3,
+        "change": 0,
+        "changePercent": 0
+      },
+      "dimensions": [
+        {
+          "id": "selectorComplexity",
+          "baseline": 92,
+          "current": 92,
+          "change": 0,
+          "evaluatedBaseline": true,
+          "evaluatedCurrent": true
+        },
+        {
+          "id": "duplicateRules",
+          "baseline": 100,
+          "current": 100,
+          "change": 0,
+          "evaluatedBaseline": true,
+          "evaluatedCurrent": true
+        },
+        {
+          "id": "cssSizeEfficiency",
+          "baseline": 100,
+          "current": 100,
+          "change": 0,
+          "evaluatedBaseline": true,
+          "evaluatedCurrent": true
+        },
+        {
+          "id": "deadCss",
+          "baseline": 100,
+          "current": 100,
+          "change": 0,
+          "evaluatedBaseline": true,
+          "evaluatedCurrent": true
+        },
+        {
+          "id": "variableConsistency",
+          "baseline": 100,
+          "current": 100,
+          "change": 0,
+          "evaluatedBaseline": true,
+          "evaluatedCurrent": true
+        }
+      ]
+    },
+    "diagnostics": {
+      "new": [],
+      "resolved": [],
+      "persistent": [
+        {
+          "fingerprint": "selector.high-specificity|test/fixtures/basic.css|#app .card:hover|warning|5:1",
+          "code": "selector.high-specificity",
+          "severity": "warning",
+          "category": "selectorComplexity",
+          "filePath": "test/fixtures/basic.css",
+          "selector": "#app .card:hover",
+          "message": "High selector specificity (1,2,0) for `#app .card:hover`."
+        }
+      ],
+      "changed": []
+    },
+    "files": {
+      "added": [],
+      "removed": [],
+      "modified": [],
+      "regressed": [],
+      "unchanged": 1
+    },
+    "warnings": [],
+    "qualityGates": {
+      "passed": true,
+      "results": [],
+      "failureSummary": null
+    }
+  }
+}

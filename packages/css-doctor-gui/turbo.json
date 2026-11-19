@@ -1,0 +1,64 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "src/**",
+        "server/**",
+        "shared/**",
+        "public/**",
+        "index.html",
+        "vite.config.ts",
+        "tsup.config.ts",
+        "tsconfig.json",
+        "tsconfig.server.json",
+        "package.json",
+        "!node_modules/**",
+        "!.turbo/**",
+        "!dist/**",
+        "!dist-server/**",
+        "!src-tauri/**",
+        "!test/**"
+      ],
+      "outputs": ["dist/**", "dist-server/**"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "src/**",
+        "server/**",
+        "test/**",
+        "vite.config.ts",
+        "tsconfig.json",
+        "tsconfig.server.json",
+        "package.json",
+        "!node_modules/**",
+        "!.turbo/**",
+        "!dist/**",
+        "!dist-server/**"
+      ],
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": ["build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "src/**",
+        "server/**",
+        "test/**",
+        "package.json",
+        "tsconfig.json",
+        "tsconfig.server.json",
+        "!node_modules/**",
+        "!.turbo/**",
+        "!dist/**",
+        "!dist-server/**"
+      ],
+      "outputs": []
+    }
+  }
+}

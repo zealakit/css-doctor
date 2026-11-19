@@ -51,12 +51,15 @@ const cssDoctorNuxtModule: NuxtModule<ModuleOptions> =
         });
 
         if (!alreadyInstalled) {
+          // Cast across Vite major/patch duplicates (Nuxt may resolve a
+          // different vite copy than @zealakit/css-doctor-vite).
           plugins.push(
             cssDoctor({
-              ...options,
+              // Nuxt-safe defaults first; user module options override them.
               skipVueScopedStyles: true,
               wrapCommonImports: true,
-            }),
+              ...options,
+            }) as (typeof plugins)[number],
           );
         }
 

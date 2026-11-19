@@ -10,10 +10,18 @@ description: Implements and debugs css-doctor consumers: the CLI, Vite/Rollup pl
 Use for changes in:
 
 - `packages/cli/`
+- `packages/css-doctor-gui/` (local Web report viewer + Tauri scaffold)
+- `packages/css-doctor-shared/` (pure helpers: class scan, clamps, patterns)
 - `packages/css-doctor-vite/`
 - `packages/css-doctor-next/`
+- `packages/css-doctor-rsbuild/` / remix / nuxt when touching adapter integration
 - shared behavior around `splitCssByPages`, page scanning, page chunks,
   diagnostics, reporters, and plugin lifecycle
+
+`css-doctor-shared` is internal-only (`private: true`): never publish it.
+Publishable consumers list it under `devDependencies` and bundle via tsup
+`noExternal`. Put only semantics-identical helpers in `css-doctor-shared`. Keep bundler
+lifecycle, emission, and route graphs inside each adapter.
 
 Read `AGENTS.md` first. Read the relevant package source and tests before
 editing. All three integrations consume the native binding; build it first.
@@ -97,9 +105,20 @@ classes are detected so empty usage cannot wipe the stylesheet.
 - Baselines default to `.css-doctor/baseline.json`; optional project config is
   `.css-doctor/config.json` (CLI flags > config > defaults). Framework adapters
   do not persist baselines; they keep calling `optimizeCss` unchanged.
+  Generated CLI/GUI envelopes live under `.css-doctor/reports/` and are
+  gitignored (`**/.css-doctor/reports/`). Do not ignore the whole
+  `.css-doctor/` folder—baseline/config should stay commit-able.
 - Exit code `1` for setup/analysis failures or failed quality gates; ordinary
   diagnostics warnings alone keep `0` unless a gate is configured.
 - Use lazy binding loading so `--help`/`--version` work before the native build.
+- `css-doctor gui` attaches `classUsage` + canonical `selectorAnalysis`
+  (`SELECTOR_ANALYSIS_SCHEMA_VERSION`) via Core match rows assembled in
+  `css-doctor-shared` (`buildSelectorAnalysisReport`). Plain `check` JSON stays
+  unchanged. GUI normalize accepts v1, projects legacy `classUsage`-only as
+  `legacy-class-only`, and fails closed on future schema versions. The dashboard
+  Selector Explorer (`shared/selector-explorer.ts`) displays contract metrics
+  and rows; filtering/sorting are presentation-only. See
+  `docs/report-contract.md`.
 - Verify:
 
   ```bash

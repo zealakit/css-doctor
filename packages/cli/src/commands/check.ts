@@ -9,11 +9,12 @@ import type {
   JsHealthReport,
   JsSelectorInfo,
 } from "@zealakit/css-doctor-binding";
+import type { SelectorAnalysisReport } from "@zealakit/css-doctor-shared";
 
 import packageJson from "../../package.json";
-import { formatJsonReport } from "../formatters/json";
 import { formatCompactHealthSummary } from "../formatters/health-terminal";
 import { formatTerminalReport, terminalExitCode } from "../formatters/terminal";
+import { emitCliReport } from "../utils/emit-report";
 import {
   describeError,
   isDirectory,
@@ -105,6 +106,44 @@ export type CheckSummary = {
   totalMs: number;
 };
 
+/** Optional source usage matrix attached by GUI startup (or future check flags). */
+export type CheckClassUsageReport = {
+  byClass: Record<string, Array<{ file: string; count: number }>>;
+  /** Bare id tokens (no `#`). Absent on older reports. */
+  byId?: Record<string, Array<{ file: string; count: number }>>;
+  /** HTML element/type names. Absent on older reports. */
+  byTag?: Record<string, Array<{ file: string; count: number }>>;
+  /** Attribute name or `name=value`. Absent on older reports. */
+  byAttribute?: Record<string, Array<{ file: string; count: number }>>;
+  /** Named but unresolved dynamic class tokens (not confirmed usage). */
+  unresolvedByClass?: Record<string, Array<{ file: string; count: number }>>;
+  unresolvedById?: Record<string, Array<{ file: string; count: number }>>;
+  unresolvedByAttribute?: Record<
+    string,
+    Array<{ file: string; count: number }>
+  >;
+  /** Core matcher results when CSS selectors were available at scan time. */
+  selectorMatches?: Array<{
+    selector: string;
+    confidence: "confirmed" | "partial" | "unresolved" | "unsupported" | "none";
+    status: "used" | "unused" | "partial" | "unknown";
+    matchCount: number;
+    matchedElements: number;
+    usageOccurrences: number;
+    usageFiles: number;
+    partialElements: number;
+    unresolvedElements: number;
+    hasUnprovenRuntimeState: boolean;
+    hasUnprovenPositional: boolean;
+    level?: "low" | "medium" | "high";
+    sources?: Array<"static" | "runtime" | "config">;
+    notes: string[];
+  }>;
+  scannedFiles: number;
+  elementsScanned?: number;
+  notes: string[];
+};
+
 /** Structured report emitted by `css-doctor check --json`. */
 export type CheckReport = {
   schemaVersion: 1;
@@ -121,6 +160,19 @@ export type CheckReport = {
   summary: CheckSummary;
   /** Aggregated CSS Health Score for successfully read files. */
   health: JsHealthReport | null;
+  /**
+   * Literal source usage (class / id / tag / attribute).
+   * Omitted by plain `check` unless a caller attaches it (e.g. `css-doctor gui`).
+   * Older reports may only populate `byClass`.
+   */
+  classUsage?: CheckClassUsageReport;
+  /**
+   * Canonical selector analysis contract (`selectorAnalysis.schemaVersion`).
+   * Built by `css-doctor gui` (and future check flags) from Core definitions +
+   * matches. Absent on plain `check` and legacy reports — not the same as an
+   * empty analysis.
+   */
+  selectorAnalysis?: SelectorAnalysisReport;
 };
 
 /** Options accepted by the programmatic `runCheck` API. */
@@ -135,6 +187,8 @@ export type CheckRunOptions = {
 
 type CheckCliOptions = {
   json?: boolean;
+  out?: string;
+  save?: boolean;
   threshold?: number;
   failUnder?: number;
 };
@@ -149,6 +203,14 @@ export function registerCheckCommand(program: Command): void {
       "CSS files or glob patterns (quote globs to let css-doctor expand them)",
     )
     .option("-j, --json", "Output raw JSON for piping and CI/CD")
+    .option(
+      "--out <path>",
+      "Atomically write the JSON envelope to <path> (success or failure)",
+    )
+    .option(
+      "--save",
+      "On success, atomically write .css-doctor/reports/check-latest.json",
+    )
     .option(
       "--threshold <number>",
       "Warn when a file contains more than <number> selectors",
@@ -165,15 +227,21 @@ export function registerCheckCommand(program: Command): void {
         failUnder: options.failUnder,
       });
 
-      if (options.json === true) {
-        process.stdout.write(`${formatJsonReport(report)}\n`);
-      } else {
-        let output = formatTerminalReport(report);
-        if (report.health) {
-          output += `\n${formatCompactHealthSummary(report.health)}\n`;
-        }
-        process.stdout.write(`${output}\n`);
-      }
+      await emitCliReport(
+        report,
+        {
+          json: options.json,
+          out: options.out,
+          save: options.save,
+        },
+        () => {
+          let output = formatTerminalReport(report);
+          if (report.health) {
+            output += `\n${formatCompactHealthSummary(report.health)}\n`;
+          }
+          process.stdout.write(`${output}\n`);
+        },
+      );
 
       process.exitCode = terminalExitCode(report);
     });

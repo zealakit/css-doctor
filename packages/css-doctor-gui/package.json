@@ -1,0 +1,86 @@
+{
+  "name": "@zealakit/css-doctor-gui",
+  "version": "1.2.0",
+  "description": "Local Web report viewer for CSS Doctor CLI analysis JSON (optional Desktop shell)",
+  "keywords": [
+    "css",
+    "css-doctor",
+    "gui",
+    "report-viewer",
+    "devtools",
+    "css-analysis",
+    "css-health",
+    "css-optimizer",
+    "performance",
+    "frontend"
+  ],
+  "author": "nqhed - Huy Edward Nguyen",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "css-doctor-gui": "./dist-server/cli.js"
+  },
+  "main": "./dist-server/index.js",
+  "types": "./dist-server/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist-server/index.d.ts",
+      "import": "./dist-server/index.js",
+      "default": "./dist-server/index.js"
+    },
+    "./server": {
+      "types": "./dist-server/index.d.ts",
+      "import": "./dist-server/index.js",
+      "default": "./dist-server/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "dist-server",
+    "README.md"
+  ],
+  "scripts": {
+    "dev": "tsx server/dev.ts",
+    "build": "pnpm build:client && pnpm build:server",
+    "build:client": "vite build",
+    "build:server": "tsup --config tsup.config.ts",
+    "start": "node dist-server/cli.js",
+    "desktop:dev": "node ./scripts/desktop-dev.mjs",
+    "desktop:build": "node ./scripts/desktop-build.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.server.json",
+    "test": "pnpm typecheck && pnpm build && tsx --test \"test/**/*.test.ts\"",
+    "lint": "biome lint src server shared test",
+    "format": "biome format --write src server shared test",
+    "format:check": "biome format src server shared test",
+    "check": "biome check src server shared test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "@zealakit/css-doctor-shared": "workspace:*",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tsup": "^8.5.1",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.8"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zealakit/css-doctor.git",
+    "directory": "packages/css-doctor-gui"
+  },
+  "bugs": {
+    "url": "https://github.com/zealakit/css-doctor/issues"
+  },
+  "homepage": "https://github.com/zealakit/css-doctor#readme"
+}

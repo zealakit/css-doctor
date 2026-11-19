@@ -1,6 +1,6 @@
 {
   "name": "vite-svelte-tailwind",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "format": "biome format --write .",
     "format:check": "biome format .",
-    "check": "biome check ."
+    "check": "biome check .",
+    "css:gui": "css-doctor gui --no-open"
   },
   "dependencies": {
     "svelte": "^5.0.0"
@@ -18,10 +19,12 @@
     "@sveltejs/vite-plugin-svelte": "^5.1.0",
     "@tailwindcss/vite": "^4.0.0",
     "@types/node": "^22.0.0",
+    "@zealakit/css-doctor-cli": "workspace:*",
     "@zealakit/css-doctor-vite": "workspace:*",
+    "@zealakit/css-doctor-gui": "workspace:*",
     "svelte-check": "^4.0.0",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.6.0",
-    "vite": "^6.0.0"
+    "vite": "^6.4.6"
   }
 }

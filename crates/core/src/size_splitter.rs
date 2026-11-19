@@ -16,7 +16,6 @@ use lightningcss::rules::CssRule;
 use lightningcss::rules::CssRuleList;
 use lightningcss::rules::nesting::NestingRule;
 use lightningcss::rules::style::StyleRule;
-use lightningcss::selector::Selector;
 use lightningcss::stylesheet::{ParserOptions, PrinterOptions, StyleSheet};
 use lightningcss::traits::ToCss;
 
@@ -72,26 +71,30 @@ pub fn split_css_by_size(
         return Err("max_chunk_size must be greater than zero".to_string());
     }
 
-    if css.len() <= config.max_chunk_size {
-        if !config.minify {
+    // Measure against the would-be emitted form. When minify is on, prefer a
+    // single minified stylesheet whenever it already fits the budget so we do
+    // not invent unnecessary chunks from unminified source size alone.
+    if config.minify {
+        let minified = minify_css(css)?;
+        if minified.len() <= config.max_chunk_size {
             return Ok(SizeSplitOutput {
                 variables_css: String::new(),
-                chunks: if css.trim().is_empty() {
+                chunks: if minified.is_empty() {
                     Vec::new()
                 } else {
-                    vec![css.to_string()]
+                    vec![minified]
                 },
                 split: false,
                 oversized: false,
             });
         }
-
+    } else if css.len() <= config.max_chunk_size {
         return Ok(SizeSplitOutput {
             variables_css: String::new(),
             chunks: if css.trim().is_empty() {
                 Vec::new()
             } else {
-                vec![minify_css(css)?]
+                vec![css.to_string()]
             },
             split: false,
             oversized: false,
@@ -116,8 +119,23 @@ pub fn split_css_by_size(
     }
 
     let variables_css = render_rules(&variables, config.minify)?;
-    let chunks = split_rules(body, config.max_chunk_size, config.minify)?;
-    let oversized = variables_css.len() > config.max_chunk_size
+    // When variables alone exceed the budget after isolation, keep them as a
+    // single oversized variables chunk rather than inventing false body splits.
+    let (prelude, body) = take_leading_hoisted_rules(body);
+    let mut chunks = split_rules(body, config.max_chunk_size, config.minify)?;
+    if !prelude.is_empty() {
+        let prelude_css = render_rules(&prelude, config.minify)?;
+        if let Some(first) = chunks.first_mut() {
+            if first.is_empty() {
+                *first = prelude_css;
+            } else if !prelude_css.is_empty() {
+                *first = format!("{prelude_css}{first}");
+            }
+        } else if !prelude_css.is_empty() {
+            chunks.push(prelude_css);
+        }
+    }
+    let oversized = (!variables_css.is_empty() && variables_css.len() > config.max_chunk_size)
         || chunks
             .iter()
             .any(|chunk| chunk.len() > config.max_chunk_size);
@@ -128,18 +146,6 @@ pub fn split_css_by_size(
         split: true,
         oversized,
     })
-}
-
-fn is_variable_rule_css(rule: &CssRule<'_>) -> bool {
-    match <CssRule<'_> as ToCss>::to_css_string(rule, PrinterOptions::default()) {
-        Ok(css) => {
-            let css = css.trim_start().to_ascii_lowercase();
-            css.starts_with("@custom-media")
-                || css.starts_with("@property")
-                || css.starts_with("@theme")
-        }
-        Err(_) => false,
-    }
 }
 
 /// Minifies a stylesheet without splitting it.
@@ -177,16 +183,17 @@ fn partition_rules<'i>(
     body: &mut Vec<CssRule<'i>>,
 ) -> Result<(), String> {
     for rule in rules {
-        if is_variable_rule_css(rule) {
-            variables.push(rule.clone());
-            continue;
-        }
-
         match rule {
             CssRule::Property(_) | CssRule::CustomMedia(_) => {
                 variables.push(rule.clone());
             }
-            CssRule::Unknown(unknown) if unknown.name.as_ref().eq_ignore_ascii_case("theme") => {
+            // `@custom-media` / `@property` / `@theme` may parse as unknown rules
+            // depending on parser options; treat them as variable definitions.
+            CssRule::Unknown(unknown)
+                if ["theme", "custom-media", "property"]
+                    .iter()
+                    .any(|name| unknown.name.as_ref().eq_ignore_ascii_case(name)) =>
+            {
                 variables.push(rule.clone());
             }
             CssRule::Style(style) => {
@@ -300,10 +307,9 @@ where
 fn partition_style<'i>(
     style: &StyleRule<'i>,
 ) -> Result<(Vec<StyleRule<'i>>, Option<StyleRule<'i>>), String> {
-    if style.selectors.0.iter().any(selector_has_variable_scope) {
-        return Ok((vec![style.clone()], None));
-    }
-
+    // Only custom properties belong in the variables chunk. A bare `:root` /
+    // `:host` rule with normal declarations must stay in body CSS — otherwise
+    // we invent a variables chunk with no custom properties.
     let mut variable_declarations = DeclarationBlock::default();
     let mut body_declarations = DeclarationBlock::default();
 
@@ -349,63 +355,116 @@ fn partition_style<'i>(
     Ok((vec![variable_style], body_style))
 }
 
-fn selector_has_variable_scope(selector: &Selector<'_>) -> bool {
-    match <Selector<'_> as ToCss>::to_css_string(selector, PrinterOptions::default()) {
-        Ok(css) => {
-            let lower = css.to_ascii_lowercase();
-            lower.contains(":root") || lower.contains(":host")
+fn is_hoisted_prelude_rule(rule: &CssRule<'_>) -> bool {
+    matches!(
+        rule,
+        CssRule::Import(_) | CssRule::Namespace(_) | CssRule::LayerStatement(_)
+    )
+}
+
+fn take_leading_hoisted_rules<'i>(
+    mut rules: Vec<CssRule<'i>>,
+) -> (Vec<CssRule<'i>>, Vec<CssRule<'i>>) {
+    let mut prelude = Vec::new();
+    while rules
+        .first()
+        .is_some_and(|rule| is_hoisted_prelude_rule(rule))
+    {
+        if let Some(rule) = rules.first().cloned() {
+            prelude.push(rule);
+            rules.remove(0);
         }
-        Err(_) => false,
     }
+    (prelude, rules)
 }
 
 fn is_custom_property(property: &Property<'_>) -> bool {
     matches!(property, Property::Custom(_))
 }
 
+/// Greedily groups top-level rules into chunks no larger than `max_chunk_size`.
+///
+/// Each rule is serialized once to learn its size; chunks are then rendered
+/// once each (instead of re-printing the growing buffer after every rule, which
+/// was O(n²) in the number of rules). The separator between rules is measured
+/// from a probe so the estimate matches the printer exactly; a final exact
+/// check per chunk keeps correctness even if the estimate were off.
 fn split_rules<'i>(
     rules: Vec<CssRule<'i>>,
     max_chunk_size: usize,
     minify: bool,
 ) -> Result<Vec<String>, String> {
-    let mut chunks = Vec::new();
-    let mut current = Vec::new();
-
-    for rule in rules {
-        current.push(rule);
-
-        let rendered = render_rules(&current, minify)?;
-
-        if rendered.len() <= max_chunk_size {
-            continue;
-        }
-
-        if current.len() == 1 {
-            chunks.push(rendered);
-            current.clear();
-            continue;
-        }
-
-        let last = current
-            .pop()
-            .ok_or_else(|| "internal rule buffer error".to_string())?;
-        chunks.push(render_rules(&current, minify)?);
-        current.clear();
-        current.push(last);
-
-        let single = render_rules(&current, minify)?;
-
-        if single.len() > max_chunk_size {
-            chunks.push(single);
-            current.clear();
-        }
+    if rules.is_empty() {
+        return Ok(Vec::new());
     }
 
-    if !current.is_empty() {
-        chunks.push(render_rules(&current, minify)?);
+    let sizes = rules
+        .iter()
+        .map(|rule| render_rule_len(rule, minify))
+        .collect::<Result<Vec<_>, _>>()?;
+    let (separator, trailer) = measure_framing(&rules, &sizes, minify)?;
+
+    let mut chunks = Vec::new();
+    let mut start = 0usize;
+
+    while start < rules.len() {
+        let mut end = start;
+        let mut estimate = trailer;
+
+        while end < rules.len() {
+            let next = sizes[end] + if end > start { separator } else { 0 };
+            if end > start && estimate + next > max_chunk_size {
+                break;
+            }
+            estimate += next;
+            end += 1;
+        }
+
+        // Exact check: shrink only if the estimate undershot the real size.
+        let mut rendered = render_rules(&rules[start..end], minify)?;
+        while end - start > 1 && rendered.len() > max_chunk_size {
+            end -= 1;
+            rendered = render_rules(&rules[start..end], minify)?;
+        }
+
+        chunks.push(rendered);
+        start = end;
     }
 
     Ok(chunks)
+}
+
+fn render_rule_len(rule: &CssRule<'_>, minify: bool) -> Result<usize, String> {
+    <CssRule<'_> as ToCss>::to_css_string(
+        rule,
+        PrinterOptions {
+            minify,
+            ..PrinterOptions::default()
+        },
+    )
+    .map(|css| css.len())
+    .map_err(|error| format!("failed to render CSS rule: {error}"))
+}
+
+/// Measures the printer's framing: `(between two rules, after the last rule)`.
+/// Both are 0 when minified.
+fn measure_framing(
+    rules: &[CssRule<'_>],
+    sizes: &[usize],
+    minify: bool,
+) -> Result<(usize, usize), String> {
+    let Some(first) = rules.first() else {
+        return Ok((0, 0));
+    };
+    let trailer = render_rules(std::slice::from_ref(first), minify)?
+        .len()
+        .saturating_sub(sizes[0]);
+    if rules.len() < 2 {
+        return Ok((0, trailer));
+    }
+    let joined = render_rules(&rules[..2], minify)?.len();
+    let separator = joined.saturating_sub(sizes[0] + sizes[1] + trailer);
+    Ok((separator, trailer))
 }
 
 fn render_rules<'i>(rules: &[CssRule<'i>], minify: bool) -> Result<String, String> {
@@ -498,11 +557,15 @@ mod tests {
             }
             .c { display: block; }
         "#;
+        let minified = minify_css(css).expect("minify");
+        // Force a split after minify by budgeting below the full sheet but
+        // above a typical single rule so @media stays intact as one node.
+        let budget = (minified.len() / 2).max(20);
 
         let output = split_css_by_size(
             css,
             &SizeSplitterConfig {
-                max_chunk_size: 80,
+                max_chunk_size: budget,
                 isolate_variables: false,
                 minify: true,
             },
@@ -628,6 +691,160 @@ mod tests {
     }
 
     #[test]
+    fn does_not_split_when_only_unminified_source_exceeds_budget() {
+        let css = ".card { color: red; background: blue; margin: 1rem; padding: 1rem; }";
+        let minified = minify_css(css).expect("minify");
+        assert!(css.len() > minified.len());
+        let budget = minified.len();
+        assert!(css.len() > budget);
+
+        let output = split_css_by_size(
+            css,
+            &SizeSplitterConfig {
+                max_chunk_size: budget,
+                isolate_variables: true,
+                minify: true,
+            },
+        )
+        .expect("split succeeds");
+
+        assert!(!output.split);
+        assert_eq!(output.chunks, vec![minified]);
+        assert!(output.variables_css.is_empty());
+    }
+
+    #[test]
+    fn does_not_create_variables_chunk_for_root_without_custom_properties() {
+        let css = format!(":root {{ color: red; }} {}", ".x{color:blue}".repeat(40));
+        let output = split_css_by_size(
+            &css,
+            &SizeSplitterConfig {
+                max_chunk_size: 40,
+                isolate_variables: true,
+                minify: true,
+            },
+        )
+        .expect("split succeeds");
+
+        assert!(output.variables_css.is_empty());
+        assert!(output.chunks.iter().any(|chunk| chunk.contains(":root")
+            && chunk.contains("color:red")
+            || chunk.contains("color:red")));
+    }
+
+    #[test]
+    fn preserves_layer_statement_order_in_the_first_chunk() {
+        let css = r#"
+            @layer reset, components, utilities;
+            @layer reset { .a { margin: 0; } }
+            @layer components { .b { color: red; } }
+            @layer utilities { .c { padding: 1rem; } }
+            .d { display: block; }
+            .e { display: flex; }
+            .f { display: grid; }
+        "#;
+        let minified = minify_css(css).expect("minify");
+        let budget = (minified.len() / 2).max(40);
+        let output = split_css_by_size(
+            css,
+            &SizeSplitterConfig {
+                max_chunk_size: budget,
+                isolate_variables: false,
+                minify: true,
+            },
+        )
+        .expect("split succeeds");
+
+        assert!(output.split);
+        let first = output.chunks.first().expect("first chunk");
+        assert!(
+            first.contains("@layer reset, components, utilities")
+                || first.contains("@layer reset,components,utilities"),
+            "layer order statement must stay in the first chunk: {first}"
+        );
+        assert!(
+            output
+                .chunks
+                .iter()
+                .skip(1)
+                .all(|chunk| !chunk.contains("@layer reset,")),
+            "later chunks must not repeat the layer order statement: {:?}",
+            output.chunks
+        );
+    }
+
+    #[test]
+    fn marks_oversized_variables_chunk_without_dropping_custom_properties() {
+        let css = format!(
+            ":root {{ {} }} .a {{ color: var(--v0); }}",
+            (0..40)
+                .map(|index| format!("--v{index}: {index}px;"))
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
+        let output = split_css_by_size(
+            &css,
+            &SizeSplitterConfig {
+                max_chunk_size: 40,
+                isolate_variables: true,
+                minify: true,
+            },
+        )
+        .expect("split succeeds");
+
+        assert!(!output.variables_css.is_empty());
+        assert!(output.variables_css.contains("--v0"));
+        assert!(output.oversized || output.variables_css.len() <= 40);
+        assert!(
+            output
+                .chunks
+                .iter()
+                .any(|chunk| chunk.contains("var(--v0)") || chunk.contains(".a"))
+        );
+    }
+
+    #[test]
+    fn keeps_import_rules_at_the_start_of_the_first_chunk() {
+        let css = r#"
+            @import url("tokens.css");
+            .a { color: red; }
+            .b { color: blue; }
+            .c { color: green; }
+            .d { color: navy; }
+            .e { color: teal; }
+            .f { color: purple; }
+        "#;
+        let output = split_css_by_size(
+            css,
+            &SizeSplitterConfig {
+                max_chunk_size: 30,
+                isolate_variables: false,
+                minify: true,
+            },
+        )
+        .expect("split succeeds");
+
+        assert!(output.split);
+        assert!(
+            output
+                .chunks
+                .first()
+                .is_some_and(|chunk| chunk.contains("@import")),
+            "first chunk should keep @import: {:?}",
+            output.chunks
+        );
+        assert!(
+            output
+                .chunks
+                .iter()
+                .skip(1)
+                .all(|chunk| !chunk.contains("@import")),
+            "later chunks must not contain @import: {:?}",
+            output.chunks
+        );
+    }
+
+    #[test]
     fn does_not_duplicate_rules_across_size_chunks() {
         let css =
             ".a{color:red}.b{color:blue}.c{color:green}.d{color:#000}.e{color:#fff}.f{color:navy}";
@@ -658,5 +875,80 @@ mod tests {
         }
 
         assert_eq!(seen.len(), 6, "every input selector should appear once");
+    }
+
+    fn many_rules_css(count: usize) -> String {
+        (0..count)
+            .map(|i| {
+                format!(
+                    ".r{i} {{ color: #{c:06x}; margin: {m}px; }}",
+                    c = i * 977,
+                    m = i % 40
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn rule_size_estimate_matches_the_printer_for_both_modes() {
+        let css = ".a { color: red; } @media (min-width: 10px) { .b { margin: 0; } } .c:hover { top: 1px; }";
+        let stylesheet = StyleSheet::parse(css, ParserOptions::default()).expect("parse");
+        let rules = stylesheet.rules.0;
+
+        for minify in [true, false] {
+            let sizes = rules
+                .iter()
+                .map(|rule| render_rule_len(rule, minify).expect("len"))
+                .collect::<Vec<_>>();
+            let (separator, trailer) = measure_framing(&rules, &sizes, minify).expect("framing");
+            let estimate: usize =
+                sizes.iter().sum::<usize>() + separator * (rules.len() - 1) + trailer;
+            let exact = render_rules(&rules, minify).expect("render").len();
+            assert_eq!(estimate, exact, "minify={minify}");
+        }
+    }
+
+    #[test]
+    fn many_rules_split_into_budgeted_chunks_without_losing_rules() {
+        let css = many_rules_css(400);
+        for minify in [true, false] {
+            let output = split_css_by_size(
+                &css,
+                &SizeSplitterConfig {
+                    max_chunk_size: 1_000,
+                    isolate_variables: false,
+                    minify,
+                },
+            )
+            .expect("split");
+
+            assert!(output.chunks.len() > 5);
+            assert!(!output.oversized);
+            assert!(output.chunks.iter().all(|chunk| chunk.len() <= 1_000));
+            let joined = output.chunks.join("");
+            for i in 0..400 {
+                assert!(joined.contains(&format!(".r{i}")), "missing .r{i}");
+            }
+        }
+    }
+
+    #[test]
+    fn an_oversized_rule_is_emitted_alone() {
+        let big = format!(".big {{ content: \"{}\"; }}", "x".repeat(300));
+        let css = format!(".a {{ color: red; }}\n{big}\n.b {{ color: blue; }}");
+        let output = split_css_by_size(
+            &css,
+            &SizeSplitterConfig {
+                max_chunk_size: 100,
+                isolate_variables: false,
+                minify: true,
+            },
+        )
+        .expect("split");
+
+        assert!(output.oversized);
+        assert_eq!(output.chunks.len(), 3);
+        assert!(output.chunks[1].contains(".big"));
     }
 }

@@ -16,6 +16,9 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
+use crate::confidence::{ConfidenceLevel, RuntimeEvidence, derive_verdict, meets_min_confidence};
+use crate::markup_match::{MatchConfidence, SelectorUsageStatus};
+
 use lightningcss::declaration::DeclarationBlock;
 use lightningcss::rules::CssRule;
 use lightningcss::rules::CssRuleList;
@@ -24,6 +27,21 @@ use lightningcss::rules::style::StyleRule;
 use lightningcss::selector::{Component, Selector};
 use lightningcss::stylesheet::{ParserOptions, PrinterOptions, StyleSheet};
 use lightningcss::traits::ToCss;
+
+/// How strictly a selector must match a page's class usage.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MatchingMode {
+    /// A selector is used by a page when **any** positively required class is
+    /// used there. Safest for dead-code elimination (default).
+    #[default]
+    Conservative,
+    /// A selector is used by a page only when **every** class it strictly
+    /// requires (compound and combinator chain, outside `:is()` / `:not()` /
+    /// `:has()`) is used there. `.btn.primary` is dead on a page that uses
+    /// `.btn` but never `.primary`.
+    Precise,
+}
 
 /// Configuration for page-coverage splitting.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,6 +59,24 @@ pub struct ChunkConfig {
     /// Minify serialized CSS. Defaults to `true`.
     #[serde(default = "default_minify")]
     pub minify: bool,
+    /// Class matching strictness. Defaults to [`MatchingMode::Conservative`].
+    #[serde(default)]
+    pub matching: MatchingMode,
+    /// Dead-code removal only acts on `unused` verdicts at or above this level.
+    /// Static-only "unused" is `medium`; runtime-covered "unused" is `high`.
+    /// Defaults to `medium`, which keeps the pre-confidence behavior.
+    #[serde(default = "default_min_confidence")]
+    pub remove_unused_min_confidence: ConfidenceLevel,
+    /// Selectors a browser run matched. Never removed.
+    #[serde(default)]
+    pub runtime_used: Vec<String>,
+    /// Selectors that covered routes never matched (upgrades "unused" to `high`).
+    #[serde(default)]
+    pub runtime_unused: Vec<String>,
+}
+
+const fn default_min_confidence() -> ConfidenceLevel {
+    ConfidenceLevel::Medium
 }
 
 impl Default for ChunkConfig {
@@ -49,6 +85,10 @@ impl Default for ChunkConfig {
             min_page_ratio: 0.5,
             force_common_selectors: Vec::new(),
             minify: true,
+            matching: MatchingMode::Conservative,
+            remove_unused_min_confidence: ConfidenceLevel::Medium,
+            runtime_used: Vec::new(),
+            runtime_unused: Vec::new(),
         }
     }
 }
@@ -219,6 +259,10 @@ struct SplitContext {
     page_usage: BTreeMap<String, HashSet<String>>,
     min_page_ratio: f32,
     force_common_selectors: Vec<String>,
+    matching: MatchingMode,
+    min_confidence: ConfidenceLevel,
+    runtime_used: BTreeSet<String>,
+    runtime_unused: BTreeSet<String>,
     stats: BTreeMap<String, SelectorStat>,
     dead_code_count: usize,
 }
@@ -249,6 +293,20 @@ impl SplitContext {
             page_usage,
             min_page_ratio: input.config.min_page_ratio,
             force_common_selectors,
+            matching: input.config.matching,
+            min_confidence: input.config.remove_unused_min_confidence,
+            runtime_used: input
+                .config
+                .runtime_used
+                .iter()
+                .map(|selector| selector_key(selector))
+                .collect(),
+            runtime_unused: input
+                .config
+                .runtime_unused
+                .iter()
+                .map(|selector| selector_key(selector))
+                .collect(),
             stats: BTreeMap::new(),
             dead_code_count: 0,
         }
@@ -259,6 +317,10 @@ impl SplitContext {
         let selector_lower = selector_text.to_lowercase();
         let mut classes = BTreeSet::new();
         collect_classes(selector, &mut classes);
+        let mut strict = BTreeSet::new();
+        if self.matching == MatchingMode::Precise {
+            collect_strict_classes(selector, &mut strict);
+        }
 
         let forced_common = self.is_forced_common(&selector_lower, &classes);
 
@@ -281,7 +343,11 @@ impl SplitContext {
                     .filter(|class| usage.contains(*class))
                     .count();
 
-                if hits > 0 {
+                // Precise: every strictly required class must be on the page.
+                let satisfied =
+                    strict.is_empty() || strict.iter().all(|class| usage.contains(class));
+
+                if hits > 0 && satisfied {
                     pages.push(page.clone());
                     total_occurrences += hits;
                 }
@@ -304,6 +370,32 @@ impl SplitContext {
             };
 
             (pages, total_occurrences, ratio, classification)
+        };
+
+        // Confidence gate: only remove selectors whose "unused" verdict is
+        // trusted enough; a runtime hit always keeps the selector.
+        let classification = if matches!(classification, Classification::Dead) {
+            let key = selector_key(&selector_text);
+            let runtime = if self.runtime_used.contains(&key) {
+                RuntimeEvidence::Hit
+            } else if self.runtime_unused.contains(&key) {
+                RuntimeEvidence::CoveredUnused
+            } else {
+                RuntimeEvidence::NotCollected
+            };
+            let verdict = derive_verdict(
+                MatchConfidence::None,
+                SelectorUsageStatus::Unused,
+                runtime,
+                false,
+            );
+            if meets_min_confidence(&verdict, self.min_confidence) {
+                classification
+            } else {
+                Classification::Common
+            }
+        } else {
+            classification
         };
 
         let page_count = pages.len();
@@ -338,6 +430,29 @@ impl SplitContext {
                     .any(|class| class == forced.trim_start_matches('.'))
         })
     }
+}
+
+/// Comparison key: lowercase, collapsed whitespace, no spaces around combinators.
+fn selector_key(selector: &str) -> String {
+    let collapsed = selector
+        .to_lowercase()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let mut key = String::with_capacity(collapsed.len());
+    let chars: Vec<char> = collapsed.chars().collect();
+    for (index, &ch) in chars.iter().enumerate() {
+        if ch == ' ' {
+            let prev = index.checked_sub(1).and_then(|i| chars.get(i)).copied();
+            let next = chars.get(index + 1).copied();
+            let combinator = |c: Option<char>| matches!(c, Some('>' | '+' | '~'));
+            if combinator(prev) || combinator(next) {
+                continue;
+            }
+        }
+        key.push(ch);
+    }
+    key
 }
 
 fn target_chunk_name(classification: &Classification) -> String {
@@ -647,6 +762,19 @@ fn collect_required_classes(selector: &Selector<'_>, classes: &mut BTreeSet<Stri
     classless
 }
 
+/// Classes that must **all** exist on a page for the selector to match.
+///
+/// Only plain class components of the selector chain count. Anything under
+/// `:not()`, `:is()` / `:where()` / `:any()`, `:has()` or nesting is left out,
+/// so the set is a necessary condition and never over-strict.
+fn collect_strict_classes(selector: &Selector<'_>, classes: &mut BTreeSet<String>) {
+    for component in selector.iter_raw_match_order() {
+        if let Component::Class(name) = component {
+            classes.insert(name.0.to_lowercase());
+        }
+    }
+}
+
 fn selector_to_css(selector: &Selector<'_>) -> Result<String, String> {
     <Selector<'_> as ToCss>::to_css_string(selector, PrinterOptions::default())
         .map_err(|error| format!("failed to serialize selector: {error}"))
@@ -701,6 +829,7 @@ mod tests {
                 min_page_ratio: 0.5,
                 force_common_selectors: Vec::new(),
                 minify: false,
+                ..Default::default()
             },
         })
         .expect("split succeeds")
@@ -864,6 +993,7 @@ mod tests {
                 min_page_ratio: 0.5,
                 force_common_selectors: vec![".legacy-popup".to_string()],
                 minify: false,
+                ..Default::default()
             },
         })
         .expect("split succeeds");
@@ -1020,6 +1150,7 @@ mod tests {
                 min_page_ratio: 1.5,
                 force_common_selectors: Vec::new(),
                 minify: false,
+                ..Default::default()
             },
         })
         .expect_err("invalid config should fail");
@@ -1035,6 +1166,7 @@ mod tests {
                 min_page_ratio: 0.75,
                 force_common_selectors: Vec::new(),
                 minify: true,
+                ..Default::default()
             },
         })
         .expect("split succeeds");
@@ -1042,5 +1174,132 @@ mod tests {
         assert!(output.common_css.contains(".shared{color:red}"));
         assert!(output.page_chunks["home"].contains(".home{color:#00f}"));
         assert!(!output.common_css.contains("\n"));
+    }
+
+    fn split_with(
+        css: &str,
+        usage: HashMap<String, HashSet<String>>,
+        matching: MatchingMode,
+    ) -> SplitOutput {
+        split_css_by_pages(&SplitInput {
+            css_content: css.to_string(),
+            page_usage: usage,
+            config: ChunkConfig {
+                min_page_ratio: 0.5,
+                force_common_selectors: Vec::new(),
+                minify: false,
+                matching,
+                ..Default::default()
+            },
+        })
+        .expect("split succeeds")
+    }
+
+    #[test]
+    fn precise_matching_removes_compounds_missing_a_class() {
+        let css = ".btn.primary { color: red; } .btn { color: blue; }";
+        let usage = pages(&[("home", &["btn"]), ("about", &["btn"])]);
+
+        let conservative = split_with(css, usage.clone(), MatchingMode::Conservative);
+        assert_eq!(conservative.dead_code_count, 0);
+        assert!(conservative.common_css.contains(".btn.primary"));
+
+        let precise = split_with(css, usage, MatchingMode::Precise);
+        assert_eq!(precise.dead_code_count, 1);
+        assert!(!precise.common_css.contains(".primary"));
+        assert!(precise.common_css.contains(".btn"));
+    }
+
+    #[test]
+    fn precise_matching_requires_the_whole_descendant_chain() {
+        let css = ".nav .item { color: red; }";
+        let only_item = pages(&[("home", &["item"])]);
+        let both = pages(&[("home", &["nav", "item"])]);
+
+        assert_eq!(
+            split_with(css, only_item.clone(), MatchingMode::Conservative).dead_code_count,
+            0
+        );
+        assert_eq!(
+            split_with(css, only_item, MatchingMode::Precise).dead_code_count,
+            1
+        );
+        assert_eq!(
+            split_with(css, both, MatchingMode::Precise).dead_code_count,
+            0
+        );
+    }
+
+    #[test]
+    fn precise_matching_is_not_over_strict_for_alternatives_and_negation() {
+        let css = ":is(.a, .b) { color: red; } .c:not(.d) { color: blue; }";
+        let usage = pages(&[("home", &["a", "c"])]);
+        let precise = split_with(css, usage, MatchingMode::Precise);
+        assert_eq!(precise.dead_code_count, 0);
+        assert!(precise.common_css.contains(".a"));
+        assert!(precise.common_css.contains(".c"));
+    }
+
+    fn split_gated(css: &str, min: ConfidenceLevel, used: &[&str], unused: &[&str]) -> SplitOutput {
+        split_css_by_pages(&SplitInput {
+            css_content: css.to_string(),
+            page_usage: pages(&[("home", &["live"]), ("about", &["live"])]),
+            config: ChunkConfig {
+                min_page_ratio: 0.5,
+                minify: false,
+                remove_unused_min_confidence: min,
+                runtime_used: used.iter().map(|s| (*s).to_string()).collect(),
+                runtime_unused: unused.iter().map(|s| (*s).to_string()).collect(),
+                ..Default::default()
+            },
+        })
+        .expect("split succeeds")
+    }
+
+    #[test]
+    fn default_min_confidence_keeps_todays_removal() {
+        let out = split_gated(
+            ".live { a: b } .ghost { a: b }",
+            ConfidenceLevel::Medium,
+            &[],
+            &[],
+        );
+        assert_eq!(out.dead_code_count, 1);
+        assert!(!out.common_css.contains(".ghost"));
+    }
+
+    #[test]
+    fn high_min_confidence_keeps_static_only_unused_selectors() {
+        let css = ".live { a: b } .ghost { a: b }";
+        let out = split_gated(css, ConfidenceLevel::High, &[], &[]);
+        assert_eq!(out.dead_code_count, 0);
+        assert!(out.common_css.contains(".ghost"));
+    }
+
+    #[test]
+    fn high_min_confidence_removes_runtime_covered_unused_selectors() {
+        let css = ".live { a: b } .ghost { a: b } .other { a: b }";
+        let out = split_gated(css, ConfidenceLevel::High, &[], &[".ghost"]);
+        assert_eq!(out.dead_code_count, 1);
+        assert!(!out.common_css.contains(".ghost"));
+        assert!(out.common_css.contains(".other"));
+    }
+
+    #[test]
+    fn runtime_hit_always_keeps_a_selector() {
+        let out = split_gated(
+            ".live { a: b } .ghost { a: b }",
+            ConfidenceLevel::Medium,
+            &[".GHOST"],
+            &[],
+        );
+        assert_eq!(out.dead_code_count, 0);
+        assert!(out.common_css.contains(".ghost"));
+    }
+
+    #[test]
+    fn selector_keys_ignore_spacing_around_combinators() {
+        assert_eq!(selector_key(".A  >  .b"), ".a>.b");
+        assert_eq!(selector_key(".a .b"), ".a .b");
     }
 }

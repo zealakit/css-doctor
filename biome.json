@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.6.3/schema.json",
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "root": true,
   "vcs": {
     "enabled": true,
@@ -16,13 +16,15 @@
       "**/*.json",
       "!**/*.d.ts",
       "!**/dist",
+      "!**/dist-server",
       "!**/node_modules",
       "!**/fixtures",
       "!**/.next",
       "!**/coverage",
       "!**/.nuxt",
       "!**/.output",
-      "!**/.svelte-kit"
+      "!**/.svelte-kit",
+      "!**/src-tauri"
     ]
   },
   "formatter": {

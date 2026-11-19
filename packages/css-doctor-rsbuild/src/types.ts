@@ -8,6 +8,26 @@ export type PageCoverageOptions = {
   minPageRatio?: number;
   /** Selectors or classes that always stay in the common chunk. */
   forceCommon?: string[];
+  /**
+   * Class matching strictness for page coverage.
+   * - `"conservative"` (default): a selector is used when any required class is.
+   * - `"precise"`: every class a selector strictly requires must be used on the
+   *   page, so `.btn.primary` is removed where `.primary` never appears.
+   *   Classes added at runtime that are not statically visible can be removed
+   *   wrongly; use `forceCommon` / `pageUsage` for those.
+   */
+  matching?: "conservative" | "precise";
+  /**
+   * Dead-code removal only acts on selectors whose "unused" verdict has at
+   * least this confidence. Static-only evidence is `"medium"` (default, the
+   * long-standing behavior); `"high"` also requires runtime coverage evidence
+   * via `runtimeUnused`.
+   */
+  removeUnusedMinConfidence?: "low" | "medium" | "high";
+  /** Selectors a browser run matched (from `css-doctor coverage`); never removed. */
+  runtimeUsed?: string[];
+  /** Selectors covered browser runs never matched; makes "unused" high confidence. */
+  runtimeUnused?: string[];
 };
 
 /** Tier 2: physical size-budget splitting. */
@@ -26,14 +46,34 @@ export type CssDoctorRsbuildOptions = {
   pageCoverage?: PageCoverageOptions;
   /** Tier 2 configuration. */
   sizeBudget?: SizeBudgetOptions;
+  /**
+   * Explicit page → class usage. Merged with route/entrypoint scanning when
+   * both are available.
+   */
+  pageUsage?: Record<string, string[]>;
   /** Minify emitted CSS. Defaults to true for production builds. */
   minify?: boolean;
   /** Print the diagnostics summary. @default true */
   report?: boolean;
+  /**
+   * Function names resolved as class helpers when scanning source
+   * (`cn("a", { b: on })`). Defaults to clsx, cn, cx, classnames, classNames,
+   * twMerge, twJoin, cva, tv. `[]` disables helper resolution.
+   */
+  classHelpers?: string[];
+  /**
+   * Track CSS Modules usage (`styles.foo`) from css-loader exports in the
+   * compilation and split module CSS by page instead of skipping it. Modules
+   * whose exports cannot be read stay skipped. Set `false` to always skip.
+   * @default true
+   */
+  cssModules?: boolean;
   /** Only process CSS assets whose name matches these patterns. */
   include?: Array<string | RegExp>;
   /** Skip CSS assets whose name matches these patterns. */
   exclude?: Array<string | RegExp>;
+  /** Optional diagnostics callback. Failures are reported, never thrown. */
+  onDiagnostics?: (result: CssDoctorRsbuildDiagnostics) => void | Promise<void>;
 };
 
 /** One final CSS chunk produced by either pipeline tier. */

@@ -12,6 +12,12 @@ pub struct QualityGateConfig {
     pub min_dimension_scores: Vec<MinDimensionScore>,
     pub max_css_size: Option<usize>,
     pub max_size_increase_percent: Option<f64>,
+    /// Fail when selector count growth exceeds this percentage.
+    #[serde(default)]
+    pub max_selector_increase_percent: Option<f64>,
+    /// Fail when rule count growth exceeds this percentage.
+    #[serde(default)]
+    pub max_rule_increase_percent: Option<f64>,
     pub max_new_errors: Option<usize>,
     pub max_new_warnings: Option<usize>,
     pub fail_on_regression: bool,
@@ -140,10 +146,40 @@ pub fn evaluate_quality_gates(
         });
     }
 
+    if let Some(max_increase) = config.max_selector_increase_percent {
+        let change = report.changes.selectors.change_percent;
+        let passed = change.map(|value| value <= max_increase).unwrap_or(true);
+        let detail = match change {
+            Some(value) => format!("{value:.1}% <= {max_increase}%"),
+            None => "selector change unavailable".to_string(),
+        };
+        results.push(GateCheckResult {
+            id: "maxSelectorIncreasePercent".into(),
+            label: "Maximum selector growth".into(),
+            passed,
+            detail,
+        });
+    }
+
+    if let Some(max_increase) = config.max_rule_increase_percent {
+        let change = report.changes.rules.change_percent;
+        let passed = change.map(|value| value <= max_increase).unwrap_or(true);
+        let detail = match change {
+            Some(value) => format!("{value:.1}% <= {max_increase}%"),
+            None => "rule change unavailable".to_string(),
+        };
+        results.push(GateCheckResult {
+            id: "maxRuleIncreasePercent".into(),
+            label: "Maximum rule growth".into(),
+            passed,
+            detail,
+        });
+    }
+
     if config.fail_on_regression {
         let passed = !matches!(
             report.status,
-            RegressionStatus::Regressed | RegressionStatus::Mixed
+            RegressionStatus::Regressed | RegressionStatus::Mixed | RegressionStatus::Inconclusive
         );
         results.push(GateCheckResult {
             id: "failOnRegression".into(),
@@ -224,6 +260,29 @@ mod tests {
                 .results
                 .iter()
                 .any(|result| result.id == "maxSizeIncreasePercent" && !result.passed)
+        );
+    }
+
+    #[test]
+    fn fails_on_selector_growth_gate() {
+        let mut baseline = make_baseline(".a{color:red}", 90);
+        let mut current = make_baseline(".a{color:red}", 90);
+        baseline.health.selectors = 2;
+        current.health.selectors = 40;
+        let report = compare_baselines(&baseline, &current, &CompareOptions::default());
+        let evaluation = evaluate_quality_gates(
+            &report,
+            &QualityGateConfig {
+                max_selector_increase_percent: Some(50.0),
+                ..QualityGateConfig::default()
+            },
+        );
+        assert!(!evaluation.passed);
+        assert!(
+            evaluation
+                .results
+                .iter()
+                .any(|result| result.id == "maxSelectorIncreasePercent" && !result.passed)
         );
     }
 

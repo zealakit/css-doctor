@@ -31,8 +31,22 @@ export async function atomicWriteFile(
     if (options.backup === true) {
       try {
         await copyFile(absolutePath, `${absolutePath}.bak`);
-      } catch {
-        // Original may not exist yet.
+      } catch (error) {
+        const code =
+          typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          typeof (error as { code?: unknown }).code === "string"
+            ? (error as { code: string }).code
+            : null;
+        if (code !== "ENOENT") {
+          // Refuse to overwrite when the user asked for a backup and it failed.
+          return {
+            ok: false,
+            error: `Failed to create backup for ${absolutePath}: ${describeError(error)}`,
+          };
+        }
+        // Original may not exist yet — backup is unnecessary.
       }
     }
 

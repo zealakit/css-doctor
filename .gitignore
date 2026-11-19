@@ -46,6 +46,7 @@ storybook-static/
 
 # Build output
 dist/
+dist-server/
 *.tsbuildinfo
 *.tgz
 
@@ -58,6 +59,16 @@ blob-report/
 packages/cli/test/tmp-baseline/
 .eslintcache
 .stylelintcache
+
+# -----------------------------------------------------------------------------
+# css-doctor local run artifacts
+# Keep `.css-doctor/baseline.json` and `.css-doctor/config.json` commit-able
+# for regression gates / project defaults. Only ignore generated reports and
+# atomic-write leftovers.
+# -----------------------------------------------------------------------------
+**/.css-doctor/reports/
+**/.css-doctor/.css-doctor-*.tmp
+**/.css-doctor/**/*.bak
 
 # -----------------------------------------------------------------------------
 # Rust / Cargo
@@ -118,3 +129,5 @@ packages/binding/index.d.cts
 .nuxt/
 .output/
 .svelte-kit/
+
+/plans

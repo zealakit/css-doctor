@@ -1,6 +1,11 @@
 name: CI
 
 on:
+  # push:
+  #   branches:
+  #     - main
+  #     - master
+  # pull_request:
   workflow_dispatch:
 
 permissions:
@@ -40,6 +45,9 @@ jobs:
       - name: Install Node dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Repair mismatched esbuild binaries
+        run: node scripts/repair-esbuild-binaries.mjs
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -67,6 +75,9 @@ jobs:
 
       - name: Workspace build
         run: pnpm build
+
+      - name: Workspace typecheck
+        run: pnpm -r --filter "./packages/**" typecheck
 
       - name: Workspace tests
         run: pnpm test

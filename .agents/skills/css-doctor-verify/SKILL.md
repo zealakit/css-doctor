@@ -136,7 +136,9 @@ git status --ignored --short | head
 Confirm:
 
 - No `node_modules`, `target`, `dist`, `.next`, `.node`, generated binding
-  loader, coverage, or local agent state is staged.
+  loader, coverage, `.css-doctor/reports/`, or local agent state is staged.
+- `.css-doctor/baseline.json` / `.css-doctor/config.json` may be committed on
+  purpose; do not gitignore the whole `.css-doctor/` tree.
 - `Cargo.lock` and `pnpm-lock.yaml` are intentionally committed.
 - `AGENTS.md`, skills, and rules are committed when updated.
 - No secrets or `.env*` files.

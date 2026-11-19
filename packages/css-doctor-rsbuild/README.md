@@ -49,6 +49,8 @@ export default defineConfig({
 | `sizeBudget.isolateVariables` | `true` | Extract `:root` and `@theme` variables first. |
 | `minify` | production | Minify emitted CSS with LightningCSS. |
 | `report` | `true` | Print coverage and chunk diagnostics. |
+| `pageUsage` | scanned | Optional explicit page → class map; merged with entrypoint scanning. |
+| `onDiagnostics` | — | Callback with build diagnostics; failures are logged, never thrown. |
 | `exclude` | CSS Modules safety | Skip matching CSS assets. |
 
 ## Safety and limitations
@@ -56,6 +58,7 @@ export default defineConfig({
 - Production build only; works with the Rspack bundler.
 - Peer range @rsbuild/core >=1 remains broad.
 - CSS Modules and scoped framework styles are left untouched.
+- `minify: false` keeps LightningCSS output readable; host Rspack CSS minimizers are not always removable — prefer disabling host CSS minify in Rsbuild config when you need exact readable assets.
 
 ## Full documentation
 

@@ -24,9 +24,12 @@ pub fn content_fingerprint(content: &str) -> String {
     format!("{hash:016x}")
 }
 
-/// Stable diagnostic identity that ignores line/column drift.
+/// Stable diagnostic identity.
 ///
-/// Format: `code|path|selector|severity`
+/// Format: `code|path|selector|severity|line:column`
+///
+/// Location is included when present so two diagnostics that share the same
+/// code/path/selector but sit at different source positions stay distinct.
 #[must_use]
 pub fn diagnostic_fingerprint(diagnostic: &HealthDiagnostic) -> String {
     diagnostic_fingerprint_parts(
@@ -34,6 +37,9 @@ pub fn diagnostic_fingerprint(diagnostic: &HealthDiagnostic) -> String {
         diagnostic.file_path.as_deref(),
         diagnostic.selector.as_deref(),
         diagnostic.severity,
+        diagnostic
+            .location
+            .map(|location| (location.line, location.column)),
     )
 }
 
@@ -43,6 +49,7 @@ pub fn diagnostic_fingerprint_parts(
     file_path: Option<&str>,
     selector: Option<&str>,
     severity: HealthSeverity,
+    location: Option<(u32, u32)>,
 ) -> String {
     let path = file_path.map(normalize_relative_path).unwrap_or_default();
     let selector = selector.unwrap_or("").trim();
@@ -51,7 +58,11 @@ pub fn diagnostic_fingerprint_parts(
         HealthSeverity::Warning => "warning",
         HealthSeverity::Info => "info",
     };
-    format!("{code}|{path}|{selector}|{severity}")
+    let location = match location {
+        Some((line, column)) => format!("{line}:{column}"),
+        None => String::new(),
+    };
+    format!("{code}|{path}|{selector}|{severity}|{location}")
 }
 
 #[cfg(test)]
@@ -68,7 +79,7 @@ mod tests {
     }
 
     #[test]
-    fn fingerprint_ignores_location() {
+    fn fingerprint_includes_location() {
         let left = HealthDiagnostic {
             code: "dead.empty-rule".into(),
             severity: HealthSeverity::Warning,
@@ -82,9 +93,19 @@ mod tests {
         };
         let mut right = left.clone();
         right.location = Some(crate::model::SourceLocation::new(40, 1));
-        assert_eq!(
+        assert_ne!(
             diagnostic_fingerprint(&left),
             diagnostic_fingerprint(&right)
+        );
+        assert_eq!(
+            diagnostic_fingerprint(&left),
+            diagnostic_fingerprint_parts(
+                "dead.empty-rule",
+                Some("src/a.css"),
+                Some(".dead"),
+                HealthSeverity::Warning,
+                Some((10, 1)),
+            )
         );
     }
 

@@ -48,7 +48,7 @@ export default defineNuxtConfig({
 | `pageCoverage.minPageRatio` | `0.5` | Minimum ratio (0.0-1.0) for the common chunk. |
 | `pageCoverage.forceCommon` | `[]` | Selectors or classes forced into common CSS. |
 | `sizeBudget.enabled` | `true` | Enable byte-budget splitting. |
-| `sizeBudget.maxChunkSize` | `60 * 1024` | Maximum bytes per emitted chunk. |
+| `sizeBudget.maxChunkSize` | `30 * 1024` | Maximum bytes per emitted chunk. |
 | `sizeBudget.isolateVariables` | `true` | Extract `:root` and `@theme` variables first. |
 | `minify` | production | Minify emitted CSS with LightningCSS. |
 | `report` | `true` | Print coverage and chunk diagnostics. |

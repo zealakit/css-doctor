@@ -100,24 +100,23 @@ pub fn build_optimization_report(
     };
 
     let emitted_bytes_total: usize = output.chunks.iter().map(|chunk| chunk.size_bytes).sum();
-    let output_rules: usize = output
+    // One parse per emitted chunk, folding all three counters together.
+    let (output_rules, output_selectors, output_declarations) = output
         .chunks
         .iter()
         .filter_map(|chunk| analyze_css(&chunk.css).ok())
-        .map(|result| result.stats.rule_count)
-        .sum();
-    let output_selectors: usize = output
-        .chunks
-        .iter()
-        .filter_map(|chunk| analyze_css(&chunk.css).ok())
-        .map(|result| result.stats.selector_count)
-        .sum();
-    let output_declarations: usize = output
-        .chunks
-        .iter()
-        .filter_map(|chunk| analyze_css(&chunk.css).ok())
-        .map(|result| result.stats.declaration_count + result.stats.important_declaration_count)
-        .sum();
+        .fold(
+            (0usize, 0usize, 0usize),
+            |(rules, selectors, declarations), result| {
+                (
+                    rules + result.stats.rule_count,
+                    selectors + result.stats.selector_count,
+                    declarations
+                        + result.stats.declaration_count
+                        + result.stats.important_declaration_count,
+                )
+            },
+        );
 
     // Single-file equivalent output for elimination accounting: prefer the
     // common chunk when page coverage ran without duplication, otherwise use
@@ -193,37 +192,33 @@ pub fn build_optimization_report(
 }
 
 fn reference_eliminated_bytes(input: &PipelineInput, output: &PipelineOutput) -> usize {
-    // Prefer common (+ vars) without page duplication as the "single payload"
-    // reference when page coverage applied.
-    if output.page_coverage_applied {
-        let shared: usize = output
-            .chunks
-            .iter()
-            .filter(|chunk| {
-                matches!(
-                    chunk.kind,
-                    crate::pipeline::PipelineChunkKind::Common
-                        | crate::pipeline::PipelineChunkKind::Variables
-                ) || (chunk.variables && chunk.page.is_none())
-            })
-            .map(|chunk| chunk.size_bytes)
-            .sum();
-        if shared > 0 {
-            return shared;
-        }
-    }
-
+    // Independent single-stylesheet reference for *actual* reduction.
+    // Never use common+variables alone — that would count page CSS moved into
+    // page chunks as "bytes eliminated". Prefer a minified copy of the original
+    // input (same minify flag as the pipeline) so redistribution is excluded.
     if input.minify {
         if let Ok(minified) = crate::size_splitter::minify_css(&input.css_content) {
             return minified.len();
         }
     }
 
-    output
+    // Without minify, fall back to the first emitted body when there is no
+    // splitting duplication; otherwise keep the original byte length so
+    // redistribution cannot inflate savings.
+    let page_chunks = output
         .chunks
-        .first()
-        .map(|chunk| chunk.size_bytes)
-        .unwrap_or(input.css_content.len())
+        .iter()
+        .filter(|chunk| chunk.page.is_some())
+        .count();
+    if page_chunks == 0 {
+        return output
+            .chunks
+            .first()
+            .map(|chunk| chunk.size_bytes)
+            .unwrap_or(input.css_content.len());
+    }
+
+    input.css_content.len()
 }
 
 #[cfg(test)]
@@ -244,6 +239,7 @@ mod tests {
                 enabled: true,
                 min_page_ratio: 1.0,
                 force_common: vec![],
+                ..Default::default()
             },
             size_budget: SizeBudgetConfig {
                 enabled: false,
@@ -260,5 +256,12 @@ mod tests {
         );
         assert_eq!(report.schema_version, 1);
         assert!(report.operations.page_coverage_split);
+        // Page-specific CSS that was only redistributed must not count as savings.
+        assert!(
+            report.impact.bytes_eliminated <= 0,
+            "bytes_eliminated={} must not treat split redistribution as savings",
+            report.impact.bytes_eliminated
+        );
+        assert!(report.impact.redistributed_bytes > 0);
     }
 }

@@ -1,0 +1,156 @@
+{
+  "schemaVersion": 1,
+  "command": "check",
+  "version": "1.1.1",
+  "generatedAt": "2026-11-13T10:00:00.000Z",
+  "cwd": "/tmp/demo",
+  "patterns": ["src/**/*.css"],
+  "threshold": null,
+  "failUnder": null,
+  "success": true,
+  "errors": [],
+  "files": [
+    {
+      "path": "src/app.css",
+      "absolutePath": "/tmp/demo/src/app.css",
+      "sizeBytes": 120,
+      "ok": true,
+      "totalMs": 1.2,
+      "readMs": 0.2,
+      "analysisMs": 1,
+      "issues": [
+        {
+          "kind": "empty-rule",
+          "severity": "warning",
+          "message": "Rule \".unused\" has no declarations and no nested rules (dead code candidate).",
+          "location": { "line": 4, "column": 1 },
+          "selector": ".unused"
+        }
+      ],
+      "result": {
+        "selectors": [
+          {
+            "raw": ".card",
+            "kinds": ["class"],
+            "classes": ["card"],
+            "ids": [],
+            "tags": [],
+            "attributes": [],
+            "pseudoClasses": [],
+            "pseudoElements": [],
+            "combinators": [],
+            "specificity": { "ids": 0, "classes": 1, "types": 0 },
+            "ruleIndex": 0,
+            "nestingDepth": 0
+          },
+          {
+            "raw": ".unused",
+            "kinds": ["class"],
+            "classes": ["unused"],
+            "ids": [],
+            "tags": [],
+            "attributes": [],
+            "pseudoClasses": [],
+            "pseudoElements": [],
+            "combinators": [],
+            "specificity": { "ids": 0, "classes": 1, "types": 0 },
+            "ruleIndex": 1,
+            "nestingDepth": 0
+          }
+        ],
+        "rules": [
+          {
+            "index": 0,
+            "selectorIndices": [0],
+            "declarationCount": 1,
+            "importantDeclarationCount": 0,
+            "nestingDepth": 0,
+            "location": { "line": 1, "column": 1 }
+          },
+          {
+            "index": 1,
+            "selectorIndices": [1],
+            "declarationCount": 0,
+            "importantDeclarationCount": 0,
+            "nestingDepth": 0,
+            "location": { "line": 4, "column": 1 }
+          }
+        ],
+        "stats": {
+          "ruleCount": 2,
+          "selectorCount": 2,
+          "declarationCount": 1,
+          "importantDeclarationCount": 0,
+          "uniqueClassCount": 2,
+          "uniqueIdCount": 0,
+          "uniqueTagCount": 0,
+          "uniqueAttributeCount": 0,
+          "maxNestingDepth": 0,
+          "warningCount": 0
+        },
+        "warnings": []
+      }
+    }
+  ],
+  "summary": {
+    "files": 1,
+    "analyzed": 1,
+    "failed": 0,
+    "filesWithIssues": 1,
+    "totalSizeBytes": 120,
+    "rules": 2,
+    "selectors": 2,
+    "declarations": 1,
+    "warnings": 0,
+    "hints": 1,
+    "issues": 1,
+    "analysisMs": 1,
+    "totalMs": 1.2
+  },
+  "health": {
+    "schemaVersion": 1,
+    "overall": 82,
+    "grade": "B",
+    "status": "watch",
+    "dimensions": [
+      {
+        "id": "maintainability",
+        "score": 80,
+        "weight": 1,
+        "effectiveWeight": 1,
+        "evaluated": true,
+        "issueCount": 1,
+        "errorCount": 0,
+        "warningCount": 1,
+        "infoCount": 0,
+        "diagnosticCodes": ["dead.empty-rule"],
+        "recommendations": ["Remove empty rules"]
+      }
+    ],
+    "summary": {
+      "files": 1,
+      "rules": 2,
+      "selectors": 2,
+      "declarations": 1,
+      "sizeBytes": 120,
+      "errors": 0,
+      "warnings": 1,
+      "suggestions": 0,
+      "analysisMs": 1
+    },
+    "diagnostics": [
+      {
+        "code": "dead.empty-rule",
+        "severity": "warning",
+        "category": "dead_code",
+        "message": "Empty rule detected",
+        "filePath": "src/app.css",
+        "location": { "line": 4, "column": 1 },
+        "selector": ".unused",
+        "remediation": "Remove the empty rule or add declarations.",
+        "certainty": "high"
+      }
+    ],
+    "recommendations": ["Remove empty rules"]
+  }
+}

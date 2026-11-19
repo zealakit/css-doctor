@@ -88,23 +88,36 @@ jobs:
             exit 1
           fi
 
-      - name: Build CLI and adapters
+      - name: Build internal shared + CLI/adapters
         run: |
           set -euo pipefail
-          pnpm --filter @zealakit/css-doctor-cli build
+          # css-doctor-shared is internal-only: build it, then bundle into consumers.
+          # It must never be published as its own npm package.
+          pnpm --filter @zealakit/css-doctor-shared build
           pnpm --filter @zealakit/css-doctor-vite build
           pnpm --filter @zealakit/css-doctor-rsbuild build
           pnpm --filter @zealakit/css-doctor-remix build
           pnpm --filter @zealakit/css-doctor-nuxt build
           pnpm --filter @zealakit/css-doctor-next build
+          pnpm --filter @zealakit/css-doctor-cli build
 
-      - name: Verify CLI bundle
+      - name: Verify CLI bundle + shared is internalized
         shell: bash
         run: |
           set -euo pipefail
           test -x packages/cli/dist/index.js
           head -1 packages/cli/dist/index.js | grep -Fx '#!/usr/bin/env node'
           node packages/cli/dist/index.js --help >/dev/null
+          for pkg in css-doctor-vite css-doctor-rsbuild css-doctor-next cli; do
+            if grep -R -E '(from|require\()[[:space:]]*["'"'"']@zealakit/css-doctor-shared["'"'"']' "packages/${pkg}/dist" >/dev/null 2>&1; then
+              echo "packages/${pkg}/dist still imports @zealakit/css-doctor-shared" >&2
+              exit 1
+            fi
+            if ! grep -R -E 'scanClassOccurrences|clampMinPageRatio|matchesPatterns' "packages/${pkg}/dist" >/dev/null 2>&1; then
+              echo "packages/${pkg}/dist missing bundled shared helpers" >&2
+              exit 1
+            fi
+          done
 
       - name: Rewrite workspace dependencies to current release
         shell: bash
@@ -135,18 +148,27 @@ jobs:
             manifest.publishConfig.access = "public";
 
             const depKeys = ["dependencies", "peerDependencies", "optionalDependencies"];
+            const internalOnly = new Set(["@zealakit/css-doctor-shared"]);
             for (const key of depKeys) {
               if (!manifest[key]) continue;
+              for (const depName of Object.keys(manifest[key])) {
+                if (internalOnly.has(depName)) {
+                  delete manifest[key][depName];
+                }
+              }
               if (manifest[key]["@zealakit/css-doctor-binding"]) {
                 manifest[key]["@zealakit/css-doctor-binding"] = version;
               }
               if (manifest[key]["@zealakit/css-doctor-vite"]) {
                 manifest[key]["@zealakit/css-doctor-vite"] = version;
               }
+              if (Object.keys(manifest[key]).length === 0) {
+                delete manifest[key];
+              }
             }
 
             fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
-            console.log(`Updated ${manifest.name}: version -> ${version}, pinned binding -> ${version}`);
+            console.log(`Updated ${manifest.name}: version -> ${version}, stripped internal-only deps, pinned publishable @zealakit deps`);
           }
           NODE
 

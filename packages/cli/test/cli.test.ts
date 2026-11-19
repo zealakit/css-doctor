@@ -9,7 +9,10 @@ import type { CheckReport } from "../src/commands/check";
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const cliPath = join(packageRoot, "dist", "index.js");
 
-function runCli(args: string[]): SpawnSyncReturns<string> {
+function runCli(
+  args: string[],
+  options: { env?: NodeJS.ProcessEnv } = {},
+): SpawnSyncReturns<string> {
   return spawnSync(process.execPath, [cliPath, ...args], {
     cwd: packageRoot,
     encoding: "utf8",
@@ -17,6 +20,7 @@ function runCli(args: string[]): SpawnSyncReturns<string> {
       ...process.env,
       FORCE_COLOR: "0",
       NO_COLOR: "1",
+      ...options.env,
     },
   });
 }
@@ -437,7 +441,16 @@ test("optimize --dry-run emits an optimization report without writing", () => {
     success: boolean;
     dryRun: boolean;
     files: Array<{
-      report: { schemaVersion: number; operations: { minified: boolean } };
+      report: {
+        schemaVersion: number;
+        operations: {
+          minified: boolean;
+          pageCoverageSplit: boolean;
+          sizeBudgetSplit: boolean;
+          variablesIsolated: boolean;
+        };
+        chunks: Array<{ name: string }>;
+      };
     }>;
   };
   assert.equal(report.success, true);
@@ -445,6 +458,55 @@ test("optimize --dry-run emits an optimization report without writing", () => {
   assert.ok(report.files[0]);
   assert.equal(report.files[0].report.schemaVersion, 1);
   assert.equal(report.files[0].report.operations.minified, true);
+  assert.equal(report.files[0].report.operations.pageCoverageSplit, false);
+  assert.equal(report.files[0].report.operations.sizeBudgetSplit, false);
+});
+
+test("optimize --no-isolate-variables disables variable isolation", () => {
+  const result = runCli([
+    "optimize",
+    "test/fixtures/basic.css",
+    "--dry-run",
+    "--json",
+    "--no-page-coverage",
+    "--no-isolate-variables",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+  const report = JSON.parse(result.stdout) as {
+    files: Array<{
+      report: {
+        operations: { variablesIsolated: boolean; sizeBudgetSplit: boolean };
+      };
+    }>;
+  };
+  assert.ok(report.files[0]);
+  assert.equal(report.files[0].report.operations.variablesIsolated, false);
+});
+
+test("split --no-page-coverage keeps coverage disabled", () => {
+  const result = runCli([
+    "split",
+    "test/fixtures/basic.css",
+    "--dry-run",
+    "--json",
+    "--no-page-coverage",
+    "--no-size-budget",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+  const report = JSON.parse(result.stdout) as {
+    command: string;
+    files: Array<{
+      report: {
+        operations: { pageCoverageSplit: boolean; sizeBudgetSplit: boolean };
+      };
+    }>;
+  };
+  assert.equal(report.command, "split");
+  assert.ok(report.files[0]);
+  assert.equal(report.files[0].report.operations.pageCoverageSplit, false);
+  assert.equal(report.files[0].report.operations.sizeBudgetSplit, false);
 });
 
 test("optimize rejects --write together with --dry-run", () => {
@@ -512,4 +574,43 @@ test("help lists optimize and fix commands", () => {
   assert.match(result.stdout, /optimize/);
   assert.match(result.stdout, /split/);
   assert.match(result.stdout, /fix/);
+  assert.match(result.stdout, /gui/);
+});
+
+test("gui --help documents web runtime flags", () => {
+  const result = runCli(["gui", "--help"]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /--port/);
+  assert.match(result.stdout, /--no-open/);
+  assert.match(result.stdout, /--strict-port/);
+  assert.match(result.stdout, /--desktop/);
+  assert.match(result.stdout, /--report/);
+});
+
+test("gui --desktop fails clearly when desktop app is missing", () => {
+  const result = runCli(["gui", "test/fixtures/basic.css", "--desktop"], {
+    env: {
+      ...process.env,
+      CSS_DOCTOR_GUI_DESKTOP: "/tmp/css-doctor-gui-missing-app.app",
+    },
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout, /running check/i);
+  assert.match(result.stderr, /desktop/i);
+  assert.doesNotMatch(result.stdout, /listening on|web mode/i);
+});
+
+test("gui --help does not eagerly load the GUI package", () => {
+  const result = runCli(["gui", "--help"], {
+    env: {
+      ...process.env,
+      // Force a cwd without node_modules; help must still succeed.
+      npm_config_user_agent: "pnpm",
+    },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(
+    result.stdout,
+    /Run CSS check once, then open the local report viewer/,
+  );
 });

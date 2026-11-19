@@ -176,12 +176,19 @@ impl BaselineDiagnostic {
 
     #[must_use]
     pub fn identity_key(&self) -> String {
-        diagnostic_fingerprint_parts(
-            &self.code,
-            self.file_path.as_deref(),
-            self.selector.as_deref(),
-            self.severity,
-        )
+        // Prefer the stored fingerprint (includes location). Fall back to the
+        // soft key only for legacy baselines that lack location in fingerprint.
+        if self.fingerprint.split('|').count() >= 5 {
+            self.fingerprint.clone()
+        } else {
+            diagnostic_fingerprint_parts(
+                &self.code,
+                self.file_path.as_deref(),
+                self.selector.as_deref(),
+                self.severity,
+                None,
+            )
+        }
     }
 }
 
