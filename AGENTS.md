@@ -14,7 +14,7 @@ Turborepo.
 | --- | --- |
 | `crates/core` | Rust engine: parse, selector extraction, usage matrix, page-coverage splitter, CSS Health Score |
 | `packages/binding` | NAPI-RS bridge exposing `analyzeCss`, `splitCssByPages`, `optimizeCss`, and JS types |
-| `packages/cli` | `css-doctor` terminal CLI (`check`, `health`, `baseline`, `diff`, `optimize`, `split`, `fix`; Commander + tsup, ESM) |
+| `packages/cli` | `css-doctor` terminal CLI (`check`, `health`, `baseline`, `diff`, `optimize`, `split`, `fix`, `coverage import`; Commander + tsup, ESM) |
 | `packages/css-doctor-shared` | Internal-only pure helpers (class scan, clamps, patterns); built in-repo and bundled into publishable packages — never published to npm |
 | `packages/css-doctor-vite` | Vite/Rollup plugin (ESM + CJS + DTS) |
 | `packages/css-doctor-next` | Next.js config wrapper + Webpack plugin (ESM + CJS + DTS) |
@@ -211,11 +211,28 @@ Do not merge CLI and adapter config loaders into one discovery path — lifecycl
 
 ### Known limitations
 
-- CSS Modules (`styles.foo`) and helper-built class strings (`cn`/`clsx`) are
-  not fully resolved by static source scanning. Literal Tailwind tokens in
-  `class`/`className` strings are accepted. Use `pageUsage` or
-  `forceCommonSelectors` for the rest.
-- Next path aliases beyond `@/` need explicit `pageUsage`.
+- Runtime coverage (`css-doctor coverage import`, config `coverage`) feeds the
+  selector matches built for `css-doctor gui` via Core's `derive_verdict`
+  (`deriveUsageVerdict` in the binding). `check`/`health`/`optimize` and the
+  bundler adapters do **not** consume it yet; range→rule mapping uses built CSS
+  text, not source maps.
+- Class helpers (`cn`, `clsx`, `cva`, `tv`, `twMerge`, ... configurable via
+  `classHelpers`) are resolved by a tokenizer in `css-doctor-shared`: literals
+  are confirmed, object keys are possible usage, identifiers/interpolations are
+  reported as unknown evidence (`unknownEvidenceCount`). No expression
+  evaluation; use `pageUsage` / `forceCommonSelectors` for the unknown rest.
+- CSS Modules: the CLI maps `styles.foo` / `styles["foo"]` / destructuring to
+  local classes and reports dynamic access as unknown evidence. Vite captures
+  `css.modules.getJSON` (user hook still runs), maps used locals to emitted
+  classes, keeps whole modules on dynamic access, and keeps unreferenced
+  modules common; opt out with `cssModules: false`. Next (webpack) and Rsbuild
+  still **skip** `*.module.css` assets (no css-loader export mapping yet).
+- Path aliases: Next uses `createModuleResolver` (tsconfig/jsconfig `paths`,
+  `extends`, workspace `exports`). Vite/Rsbuild scan the bundler's own module
+  graph, so aliases are already resolved there; the shared resolver is the
+  fallback for CLI-style scans.
+- `classHelpers` is applied per build via `setActiveClassHelpers` (process-wide
+  setting; concurrent builds with different lists in one process would race).
 - A selector with multiple classes is matched conservatively by any class.
 - `@keyframes` are always common; animation usage is not tracked per page.
 - **Content hash integrity:** Vite / Next (webpack) / Rsbuild finalize hashed

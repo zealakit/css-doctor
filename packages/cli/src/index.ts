@@ -3,6 +3,7 @@ import { Command, CommanderError } from "commander";
 import packageJson from "../package.json";
 import { registerBaselineCommand } from "./commands/baseline";
 import { registerCheckCommand } from "./commands/check";
+import { registerCoverageCommand } from "./commands/coverage";
 import { registerDiffCommand } from "./commands/diff";
 import { registerFixCommand } from "./commands/fix";
 import { registerHealthCommand } from "./commands/health";
@@ -31,6 +32,7 @@ registerDiffCommand(program);
 registerOptimizeCommand(program);
 registerSplitCommand(program);
 registerFixCommand(program);
+registerCoverageCommand(program);
 registerGuiCommand(program);
 
 try {

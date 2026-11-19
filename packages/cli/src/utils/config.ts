@@ -1,6 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 
+import { DEFAULT_CLASS_HELPERS } from "@zealakit/css-doctor-shared";
+
 import { describeError } from "./file";
 
 export const DEFAULT_BASELINE_PATH = ".css-doctor/baseline.json";
@@ -32,6 +34,13 @@ export type CssDoctorConfig = {
   baseline: string;
   patterns: string[];
   threshold: number | null;
+  /** Function names resolved as class helpers (`cn`, `clsx`, `cva`, ...). */
+  classHelpers: string[];
+  /**
+   * Runtime coverage evidence: `true` reads `.css-doctor/coverage.json`, a
+   * string is a custom path, `false` disables it.
+   */
+  coverage: boolean | string;
   regression: CssDoctorRegressionConfig;
   qualityGates: CssDoctorQualityGatesConfig;
 };
@@ -46,6 +55,8 @@ const DEFAULT_CONFIG: CssDoctorConfig = {
   baseline: DEFAULT_BASELINE_PATH,
   patterns: [],
   threshold: null,
+  classHelpers: [...DEFAULT_CLASS_HELPERS],
+  coverage: false,
   regression: {
     enabled: true,
     scoreTolerance: 1,
@@ -155,6 +166,35 @@ function normalizeConfig(value: unknown, errors: string[]): CssDoctorConfig {
       errors.push("`threshold` must be a non-negative integer.");
     } else {
       config.threshold = root.threshold;
+    }
+  }
+
+  if (root.coverage !== undefined) {
+    if (
+      typeof root.coverage === "boolean" ||
+      (typeof root.coverage === "string" && root.coverage.trim() !== "")
+    ) {
+      config.coverage = root.coverage;
+    } else {
+      errors.push("`coverage` must be a boolean or a non-empty path string.");
+    }
+  }
+
+  if (root.classHelpers !== undefined) {
+    if (
+      !Array.isArray(root.classHelpers) ||
+      root.classHelpers.some(
+        (name) =>
+          typeof name !== "string" || !/^[A-Za-z_$][\w$]*$/.test(name.trim()),
+      )
+    ) {
+      errors.push(
+        "`classHelpers` must be an array of function names (identifiers).",
+      );
+    } else {
+      config.classHelpers = (root.classHelpers as string[]).map((name) =>
+        name.trim(),
+      );
     }
   }
 

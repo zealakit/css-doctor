@@ -146,3 +146,84 @@ test("gui startup attaches classUsage for Used In columns", async () => {
     assert.equal(result.report.classUsage?.byClass.card?.[0]?.count, 1);
   });
 });
+
+test("collectProjectClassUsage resolves class helpers and reports unknown evidence", async () => {
+  await withTempDir(async (cwd) => {
+    await mkdir(join(cwd, "src"), { recursive: true });
+    await writeFile(
+      join(cwd, "src/button.tsx"),
+      [
+        `const button = cva("btn", { variants: { size: { sm: "btn-sm", lg: "btn-lg" } } });`,
+        `export const B = ({ extra }) => <button className={cn(button(), "px-2", { "is-active": on }, extra)} />;`,
+      ].join("\n"),
+    );
+
+    const usage = await collectProjectClassUsage(cwd);
+    for (const name of ["btn", "btn-sm", "btn-lg", "px-2"]) {
+      assert.ok(usage.byClass[name], `${name} should be confirmed`);
+    }
+    assert.ok(usage.unresolvedByClass["is-active"]);
+    assert.equal(usage.byClass["is-active"], undefined);
+    assert.equal(usage.unknownEvidenceCount, 2); // button() and extra
+    assert.equal(usage.unknownEvidenceByFile["src/button.tsx"]?.[0]?.line, 2);
+
+    const disabled = await collectProjectClassUsage(cwd, { classHelpers: [] });
+    assert.equal(disabled.byClass["btn-sm"], undefined);
+  });
+});
+
+test("collectProjectClassUsage maps CSS Modules access to local classes", async () => {
+  await withTempDir(async (cwd) => {
+    await mkdir(join(cwd, "src"), { recursive: true });
+    await writeFile(
+      join(cwd, "src/card.tsx"),
+      `import styles from "./card.module.css";
+const { title } = styles;
+export const C = () => <div className={styles.card + styles["is-open"]}>{title}</div>;`,
+    );
+    await writeFile(
+      join(cwd, "src/dyn.tsx"),
+      `import s from "./dyn.module.css";\nexport const D = ({ v }) => <i className={s[v]} />;`,
+    );
+
+    const usage = await collectProjectClassUsage(cwd);
+    for (const name of ["card", "is-open", "title"]) {
+      assert.ok(usage.byClass[name], `${name} should be used`);
+    }
+    assert.equal(usage.unknownEvidenceByFile["src/dyn.tsx"]?.length, 1);
+    assert.equal(usage.unknownEvidenceByFile["src/card.tsx"], undefined);
+  });
+});
+
+test("runtime coverage upgrades selector verdicts via Core rules", async () => {
+  await withTempDir(async (cwd) => {
+    await mkdir(join(cwd, "src"), { recursive: true });
+    await writeFile(
+      join(cwd, "src/app.tsx"),
+      `export const A = () => <div className="seen" />;`,
+    );
+    const verdicts = new Map<string, "hit" | "coveredUnused">([
+      [".runtime-only", "hit"],
+      [".ghost", "coveredUnused"],
+    ]);
+    const usage = await collectProjectClassUsage(cwd, {
+      selectors: [".seen", ".runtime-only", ".ghost", ".plain"],
+      runtimeVerdicts: verdicts,
+    });
+    const by = (selector: string) =>
+      usage.selectorMatches.find((match) => match.selector === selector);
+
+    assert.equal(by(".seen")?.status, "used");
+    assert.deepEqual(by(".seen")?.sources, ["static"]);
+
+    assert.equal(by(".runtime-only")?.status, "used");
+    assert.equal(by(".runtime-only")?.level, "high");
+    assert.deepEqual(by(".runtime-only")?.sources, ["static", "runtime"]);
+
+    assert.equal(by(".ghost")?.status, "unused");
+    assert.equal(by(".ghost")?.level, "high");
+
+    assert.equal(by(".plain")?.status, "unused");
+    assert.equal(by(".plain")?.level, "medium");
+  });
+});

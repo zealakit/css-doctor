@@ -4,6 +4,7 @@ import { buildSelectorAnalysisReport } from "@zealakit/css-doctor-shared";
 
 import { runCheck, type CheckReport } from "../commands/check";
 import { terminalExitCode } from "../formatters/terminal";
+import { loadRuntimeEvidence } from "../runtime-coverage/load-runtime";
 import { collectProjectClassUsage } from "./collect-class-usage";
 import {
   DEFAULT_REPORTS_DIR,
@@ -70,9 +71,21 @@ export async function runGuiStartupAnalysis(
   // Plain `css-doctor check` stays unchanged (no classUsage / selectorAnalysis).
   if (annotated.success || annotated.files.length > 0) {
     const selectors = collectSelectorsFromReport(annotated);
+    const runtime = await loadRuntimeEvidence(
+      cwd,
+      resolved.loaded.config.coverage,
+    );
     const classUsage = await collectProjectClassUsage(cwd, {
       selectors: selectors.map((item) => item.selector),
+      classHelpers: resolved.loaded.config.classHelpers,
+      ...(runtime ? { runtimeVerdicts: runtime.verdicts } : {}),
     });
+    if (runtime) {
+      classUsage.notes.push(
+        `Runtime coverage applied from ${runtime.routes.length} route(s).`,
+        ...runtime.warnings,
+      );
+    }
     const selectorAnalysis = buildSelectorAnalysisReport({
       definitions: selectors,
       matches: classUsage.selectorMatches,

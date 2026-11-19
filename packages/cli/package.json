@@ -38,7 +38,7 @@
     "README_CN.md"
   ],
   "scripts": {
-    "build": "tsup && node -e \"require('node:fs').chmodSync('dist/index.js', 0o755)\"",
+    "build": "rm -rf dist && tsup && node -e \"require('node:fs').chmodSync('dist/index.js', 0o755)\"",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "test": "pnpm typecheck && pnpm build && tsx --test test/**/*.test.ts",
@@ -83,5 +83,13 @@
   "bugs": {
     "url": "https://github.com/zealakit/css-doctor/issues"
   },
-  "homepage": "https://github.com/zealakit/css-doctor#readme"
+  "homepage": "https://github.com/zealakit/css-doctor#readme",
+  "exports": {
+    ".": "./dist/index.js",
+    "./playwright": {
+      "types": "./dist/playwright.d.ts",
+      "import": "./dist/playwright.js"
+    },
+    "./package.json": "./package.json"
+  }
 }

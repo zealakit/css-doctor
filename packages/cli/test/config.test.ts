@@ -65,3 +65,28 @@ test("invalid qualityGates shape collects field errors", async () => {
     loaded.errors.some((error) => error.includes("maxSelectorIncreasePercent")),
   );
 });
+
+test("coverage setting accepts booleans and paths, rejects junk", async () => {
+  const { mkdtemp, writeFile, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { loadProjectConfig } = await import("../src/utils/config");
+  const dir = await mkdtemp(join(tmpdir(), "cssd-cfg-"));
+  try {
+    for (const [value, expected, errors] of [
+      [true, true, 0],
+      ['"cov/x.json"', "cov/x.json", 0],
+      [3, false, 1],
+    ] as const) {
+      await writeFile(
+        join(dir, "c.json"),
+        `{"coverage": ${typeof value === "string" ? value : JSON.stringify(value)}}`,
+      );
+      const loaded = await loadProjectConfig(dir, "c.json");
+      assert.equal(loaded.config.coverage, expected);
+      assert.equal(loaded.errors.length, errors);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

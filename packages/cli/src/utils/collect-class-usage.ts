@@ -2,9 +2,16 @@ import { readFile } from "node:fs/promises";
 import { relative, resolve, sep } from "node:path";
 
 import type { JsMarkupFileEvidence } from "@zealakit/css-doctor-binding";
-import { scanSourceEvidence } from "@zealakit/css-doctor-shared";
+import type { UnknownEvidence } from "@zealakit/css-doctor-shared";
+import {
+  normalizeLevelAndSources,
+  scanCssModuleUsage,
+  scanSourceEvidence,
+} from "@zealakit/css-doctor-shared";
 import fastGlob from "fast-glob";
 
+import { normalizeSelector } from "../runtime-coverage/coverage-store";
+import type { RuntimeVerdict } from "../runtime-coverage/coverage-store";
 import { loadBinding } from "./binding";
 import { describeError } from "./file";
 
@@ -28,6 +35,8 @@ export type SelectorUsageMatchHit = {
   unresolvedElements: number;
   hasUnprovenRuntimeState: boolean;
   hasUnprovenPositional: boolean;
+  level?: "low" | "medium" | "high";
+  sources?: Array<"static" | "runtime" | "config">;
   notes: string[];
 };
 
@@ -48,12 +57,19 @@ export type CheckClassUsage = {
   selectorMatches: SelectorUsageMatchHit[];
   scannedFiles: number;
   elementsScanned: number;
+  /** Class-helper arguments that could not be resolved, per file (blind spots). */
+  unknownEvidenceByFile: Record<string, UnknownEvidence[]>;
+  unknownEvidenceCount: number;
   notes: string[];
 };
 
 export type CollectClassUsageOptions = {
   /** When provided, Core matches these selectors against collected evidence. */
   selectors?: string[];
+  /** Class helper names to resolve. Omit for defaults; `[]` disables. */
+  classHelpers?: readonly string[];
+  /** Runtime coverage verdicts (normalized selector -> verdict). */
+  runtimeVerdicts?: ReadonlyMap<string, RuntimeVerdict>;
 };
 
 const SOURCE_GLOBS = [
@@ -89,6 +105,7 @@ export async function collectProjectClassUsage(
     "Runtime states (:hover/:focus) and positional pseudos never yield confirmed confidence.",
     "Parent/sibling combinators are matched within a single source file only.",
     "PascalCase components are not counted as native HTML elements.",
+    "Class helper calls (cn/clsx/cva/...) resolve literals; unresolvable arguments are reported as unknown evidence.",
   ];
 
   let paths: string[] = [];
@@ -117,6 +134,8 @@ export async function collectProjectClassUsage(
   const unresolvedById = new Map<string, Map<string, number>>();
   const unresolvedByAttribute = new Map<string, Map<string, number>>();
   const files: JsMarkupFileEvidence[] = [];
+  const unknownEvidenceByFile: Record<string, UnknownEvidence[]> = {};
+  let unknownEvidenceCount = 0;
   let elementsScanned = 0;
 
   for (const absolute of paths) {
@@ -127,8 +146,16 @@ export async function collectProjectClassUsage(
       continue;
     }
 
-    const evidence = scanSourceEvidence(source);
+    const evidence = scanSourceEvidence(
+      source,
+      options.classHelpers ? { classHelpers: options.classHelpers } : {},
+    );
     const displayPath = toProjectPath(absolute, root);
+    applyCssModuleUsage(source, evidence);
+    if (evidence.unknown.length > 0) {
+      unknownEvidenceByFile[displayPath] = evidence.unknown;
+      unknownEvidenceCount += evidence.unknown.length;
+    }
     elementsScanned += evidence.elements.length;
 
     files.push({
@@ -168,35 +195,42 @@ export async function collectProjectClassUsage(
         elements: [],
         files,
       });
-      selectorMatches = matches.map((item) => ({
-        selector: item.selector,
-        confidence: normalizeConfidence(String(item.confidence)),
-        status: normalizeStatus(String(item.status)),
-        matchCount: item.matchCount,
-        matchedElements: item.matchedElements,
-        usageOccurrences: item.usageOccurrences,
-        usageFiles: item.usageFiles,
-        usageByFile: Array.isArray(item.usageByFile)
-          ? item.usageByFile
-              .filter(
-                (hit) =>
-                  hit &&
-                  typeof hit.file === "string" &&
-                  hit.file.trim() &&
-                  typeof hit.count === "number" &&
-                  hit.count > 0,
-              )
-              .map((hit) => ({
-                file: hit.file.trim(),
-                count: Math.trunc(hit.count),
-              }))
-          : [],
-        partialElements: item.partialElements,
-        unresolvedElements: item.unresolvedElements,
-        hasUnprovenRuntimeState: item.hasUnprovenRuntimeState,
-        hasUnprovenPositional: item.hasUnprovenPositional,
-        notes: item.notes,
-      }));
+      selectorMatches = matches.map((item) =>
+        applyRuntimeVerdict(
+          binding,
+          {
+            selector: item.selector,
+            confidence: normalizeConfidence(String(item.confidence)),
+            status: normalizeStatus(String(item.status)),
+            matchCount: item.matchCount,
+            matchedElements: item.matchedElements,
+            usageOccurrences: item.usageOccurrences,
+            usageFiles: item.usageFiles,
+            usageByFile: Array.isArray(item.usageByFile)
+              ? item.usageByFile
+                  .filter(
+                    (hit) =>
+                      hit &&
+                      typeof hit.file === "string" &&
+                      hit.file.trim() &&
+                      typeof hit.count === "number" &&
+                      hit.count > 0,
+                  )
+                  .map((hit) => ({
+                    file: hit.file.trim(),
+                    count: Math.trunc(hit.count),
+                  }))
+              : [],
+            partialElements: item.partialElements,
+            unresolvedElements: item.unresolvedElements,
+            hasUnprovenRuntimeState: item.hasUnprovenRuntimeState,
+            hasUnprovenPositional: item.hasUnprovenPositional,
+            ...normalizeLevelAndSources(item.level, item.sources),
+            notes: item.notes,
+          },
+          options.runtimeVerdicts,
+        ),
+      );
     } catch (error) {
       notes.push(`Selector matching skipped: ${describeError(error)}`);
     }
@@ -213,7 +247,82 @@ export async function collectProjectClassUsage(
     selectorMatches,
     scannedFiles: paths.length,
     elementsScanned,
+    unknownEvidenceByFile,
+    unknownEvidenceCount,
     notes,
+  };
+}
+
+/**
+ * CSS Modules: the analyzed CSS keeps local names, so `styles.foo` is usage of
+ * `.foo`. Dynamic access cannot be resolved and is reported as unknown evidence.
+ */
+function applyCssModuleUsage(
+  source: string,
+  evidence: ReturnType<typeof scanSourceEvidence>,
+): void {
+  for (const usage of scanCssModuleUsage(source)) {
+    if (usage.locals.length > 0) {
+      evidence.elements.push({
+        tag: null,
+        id: null,
+        classes: usage.locals.map((name) => name.toLowerCase()),
+        dynamicClasses: [],
+        attributes: {},
+        dynamicAttributes: [],
+        parentIndex: null,
+        depth: 0,
+        line: null,
+        column: null,
+      });
+      for (const name of usage.locals) {
+        const token = name.toLowerCase();
+        evidence.confirmed.classes.set(
+          token,
+          (evidence.confirmed.classes.get(token) ?? 0) + 1,
+        );
+      }
+    }
+    if (usage.dynamic) {
+      evidence.unknown.push({
+        helper: "css-modules",
+        line: 1,
+        excerpt: `dynamic access to ${usage.specifier}`,
+      });
+    }
+  }
+}
+
+/**
+ * Combines a static match with runtime coverage via Core's verdict rules
+ * (`deriveUsageVerdict`). Without runtime evidence the match is unchanged.
+ */
+function applyRuntimeVerdict(
+  binding: ReturnType<typeof loadBinding>,
+  match: SelectorUsageMatchHit,
+  verdicts: ReadonlyMap<string, RuntimeVerdict> | undefined,
+): SelectorUsageMatchHit {
+  const runtime = verdicts?.get(normalizeSelector(match.selector));
+  if (!runtime) {
+    return match;
+  }
+  const verdict = binding.deriveUsageVerdict(
+    match.confidence,
+    match.status,
+    runtime,
+    false,
+  );
+  const extra = normalizeLevelAndSources(verdict.level, verdict.sources);
+  return {
+    ...match,
+    status: normalizeStatus(verdict.status),
+    ...extra,
+    notes: [
+      ...match.notes,
+      runtime === "hit"
+        ? "Runtime coverage: selector matched in a browser run."
+        : "Runtime coverage: covered routes never matched this selector.",
+    ],
   };
 }
 
@@ -229,6 +338,8 @@ function emptyUsage(notes: string[]): CheckClassUsage {
     selectorMatches: [],
     scannedFiles: 0,
     elementsScanned: 0,
+    unknownEvidenceByFile: {},
+    unknownEvidenceCount: 0,
     notes,
   };
 }

@@ -187,6 +187,60 @@ css-doctor check [patterns...] [options]
 - Literal paths that contain glob characters (for example `src/[slug].css`)
   still work when passed as an existing file path.
 
+### Class helpers and unknown evidence
+
+Source scanning resolves calls to `clsx`, `cn`, `cx`, `classnames`,
+`classNames`, `twMerge`, `twJoin`, `cva` and `tv`. Set `classHelpers` in
+`.css-doctor/config.json` to use your own names:
+
+```json
+{ "classHelpers": ["cn", "tw"] }
+```
+
+String literals, static template parts and arrays are confirmed usage. Object
+keys (`{ "is-active": on }`) count as possible usage. Identifiers, calls and
+interpolated names cannot be resolved and are reported per file as *unknown
+evidence* (`classUsage.unknownEvidenceByFile`). Dynamic CSS Modules access
+(`styles[x]`) is reported the same way.
+
+### Runtime coverage (`coverage import`)
+
+Import browser CSS coverage as runtime evidence:
+
+```bash
+css-doctor coverage import coverage/*.json \
+  --route-map routes.json --build-id "$GIT_SHA"
+```
+
+Accepted inputs: Chrome DevTools Coverage export, Puppeteer/Playwright
+`page.coverage.stopCSSCoverage()` output (stylesheet `text` required), the
+Playwright helper's own files, and CDP rule usage with `styleSheets`.
+`routes.json` maps URL patterns to app routes (`*`, `:id` and `[id]` match one
+segment, `**` the rest): `{ "/blog/*": "/blog/[id]" }`.
+
+Results are merged into `.css-doctor/coverage.json` by route + build id. A
+selector is *used* if any imported run used it, and *never used* only if every
+covered run missed it. Entries from another build id, or whose stylesheet
+changed, are reported as stale warnings and never applied silently. Ranges are
+mapped to rules by locating rules in the built CSS text (no source maps).
+
+Enable it in `.css-doctor/config.json` (`"coverage": true`, or a custom path).
+`css-doctor gui` then combines runtime evidence with static matching through
+Core's verdict rules: a runtime hit makes a selector `used` (high confidence),
+a selector no covered route matched becomes `unused` (high instead of medium),
+and each selector row lists its `sources` (`static`, `runtime`). `check`,
+`health` and `optimize` do not consume coverage yet.
+
+Record coverage from Playwright tests:
+
+```ts
+import { collectCssCoverage } from "@zealakit/css-doctor-cli/playwright";
+
+await collectCssCoverage(page, async () => {
+  await page.goto("http://localhost:3000/blog/42");
+});
+```
+
 ### Example terminal output
 
 ```text

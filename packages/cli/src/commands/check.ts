@@ -135,6 +135,8 @@ export type CheckClassUsageReport = {
     unresolvedElements: number;
     hasUnprovenRuntimeState: boolean;
     hasUnprovenPositional: boolean;
+    level?: "low" | "medium" | "high";
+    sources?: Array<"static" | "runtime" | "config">;
     notes: string[];
   }>;
   scannedFiles: number;
