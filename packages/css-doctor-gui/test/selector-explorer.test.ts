@@ -326,3 +326,21 @@ function assertOrderedByUsagesDesc(rows: SelectorExplorerRow[]): void {
     assert.ok(prev >= next);
   }
 }
+
+test("carries confidence level and sources through to explorer rows", () => {
+  const report = attachFullAnalysis(loadCheckReport());
+  const records = report.cssAnalysis?.selectorAnalysis?.selectors;
+  assert.ok(records);
+  const card = records.find((row) => row.selector === ".card");
+  assert.ok(card);
+  card.level = "high";
+  card.sources = ["static", "runtime"];
+
+  const view = buildSelectorExplorerView(report);
+  const row = view.rows.find((item) => item.selector === ".card");
+  assert.equal(row?.level, "high");
+  assert.deepEqual(row?.sources, ["static", "runtime"]);
+  // Rows without level (older reports) stay unchanged.
+  const other = view.rows.find((item) => item.selector === "#app");
+  assert.equal(other?.level, undefined);
+});

@@ -21,6 +21,7 @@ export function SelectorExplorerRow({ row }: SelectorExplorerRowProps) {
     row.unresolvedElements > 0 ||
     row.hasUnprovenRuntimeState ||
     row.hasUnprovenPositional ||
+    row.sources !== undefined ||
     row.legacyProjection ||
     row.definitions.some(
       (item) => item.line !== undefined || item.column !== undefined,
@@ -63,6 +64,16 @@ export function SelectorExplorerRow({ row }: SelectorExplorerRowProps) {
           >
             {statusLabel(row.status)}
           </span>
+          {row.level ? (
+            <span
+              className={`dashboard__level dashboard__level--${row.level}`}
+              title={`${row.level} confidence${
+                row.sources?.length ? ` · ${row.sources.join(" + ")}` : ""
+              }`}
+            >
+              {row.level}
+            </span>
+          ) : null}
         </td>
         <td className="numeric">
           {row.usageCount === null ? (
@@ -209,6 +220,19 @@ function SelectorDetailPanel({ row }: { row: SelectorExplorerRowModel }) {
           </ul>
         </DetailBlock>
       )}
+
+      {row.level ? (
+        <DetailBlock title="Confidence">
+          <ul>
+            <li>
+              Level: {row.level}
+              {row.sources?.length
+                ? ` (evidence: ${row.sources.join(", ")})`
+                : ""}
+            </li>
+          </ul>
+        </DetailBlock>
+      ) : null}
 
       {row.notes.length > 0 ? (
         <DetailBlock title="Analysis notes">

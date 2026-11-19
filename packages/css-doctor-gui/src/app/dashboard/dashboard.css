@@ -518,6 +518,29 @@
   background: var(--cssd-bg-muted);
 }
 
+.dashboard__level {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border: 1px solid var(--cssd-border);
+  border-radius: 999px;
+  font-size: 0.68rem;
+  line-height: 1.5;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cssd-text-muted);
+}
+
+.dashboard__level--high {
+  color: #0f766e;
+  border-color: color-mix(in srgb, #0f766e 35%, var(--cssd-border));
+}
+
+.dashboard__level--low {
+  color: #9a3412;
+  border-color: color-mix(in srgb, #9a3412 30%, var(--cssd-border));
+}
+
 :root[data-theme="dark"] .dashboard__kind--id,
 html[data-theme="dark"] .dashboard__kind--id {
   color: #5eead4;

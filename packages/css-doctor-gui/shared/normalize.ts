@@ -1062,6 +1062,8 @@ function toGuiSelectorAnalysis(
       unresolvedElements: row.unresolvedElements,
       hasUnprovenRuntimeState: row.hasUnprovenRuntimeState,
       hasUnprovenPositional: row.hasUnprovenPositional,
+      ...(row.level ? { level: row.level } : {}),
+      ...(row.sources ? { sources: row.sources } : {}),
       definitions: row.definitions.map((definition) => ({
         file: definition.file,
         line: definition.line,

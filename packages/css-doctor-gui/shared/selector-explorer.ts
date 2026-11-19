@@ -45,6 +45,10 @@ export type SelectorExplorerRow = {
   unresolvedElements: number;
   hasUnprovenRuntimeState: boolean;
   hasUnprovenPositional: boolean;
+  /** Trust level of the verdict; absent for legacy rows / older reports. */
+  level?: "low" | "medium" | "high";
+  /** Evidence sources behind the verdict (static / runtime / config). */
+  sources?: Array<"static" | "runtime" | "config">;
   notes: string[];
   /** True when row is projected from legacy symbol bags, not Core match rows. */
   legacyProjection: boolean;
@@ -250,6 +254,8 @@ function buildFromSelectorAnalysis(
       unresolvedElements: row.unresolvedElements,
       hasUnprovenRuntimeState: row.hasUnprovenRuntimeState,
       hasUnprovenPositional: row.hasUnprovenPositional,
+      ...(row.level ? { level: row.level } : {}),
+      ...(row.sources ? { sources: [...row.sources] } : {}),
       notes: [...row.notes],
       legacyProjection: false,
     };
