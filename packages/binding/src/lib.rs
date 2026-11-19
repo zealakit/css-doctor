@@ -211,6 +211,43 @@ pub fn analyze_css_json(css_content: String) -> Result<String, napi::Error> {
     })
 }
 
+/// Runs a synchronous binding function on the libuv thread pool.
+///
+/// Used by the `*Async` variants of the heavy exports so adapters (Vite
+/// `generateBundle`, webpack `processAssets`, the Remix request path) never
+/// block the event loop on large stylesheets. The wrapped closure is the exact
+/// sync implementation, so sync and async results are identical.
+pub struct BlockingTask<T> {
+    work: Option<Box<dyn FnOnce() -> Result<T, napi::Error> + Send>>,
+}
+
+impl<T> BlockingTask<T> {
+    fn new(work: impl FnOnce() -> Result<T, napi::Error> + Send + 'static) -> Self {
+        Self {
+            work: Some(Box::new(work)),
+        }
+    }
+}
+
+impl<T> Task for BlockingTask<T>
+where
+    T: napi::bindgen_prelude::ToNapiValue + napi::bindgen_prelude::TypeName + Send + 'static,
+{
+    type Output = T;
+    type JsValue = T;
+
+    fn compute(&mut self) -> Result<Self::Output, napi::Error> {
+        match self.work.take() {
+            Some(work) => work(),
+            None => Err(napi::Error::from_reason("async task already consumed")),
+        }
+    }
+
+    fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue, napi::Error> {
+        Ok(output)
+    }
+}
+
 /// Background task used by [`analyze_css_async`].
 pub struct AnalyzeCssTask {
     css_content: String,
@@ -449,6 +486,25 @@ fn map_markup_element(element: JsMarkupElement) -> core::MarkupElement {
         parent_index: element.parent_index,
         depth: element.depth,
     }
+}
+
+/// Matches CSS selectors against static markup evidence (Core source of truth).
+///
+/// Prefer `files` so parent/sibling combinators never cross source files.
+/// Runtime states like `:hover` never produce `confirmed` confidence.
+/// Async variant of [`match_selectors_against_markup`]: runs on the libuv
+/// thread pool.
+#[napi(
+    js_name = "matchSelectorsAgainstMarkupAsync",
+    ts_return_type = "Promise<Array<JsSelectorUsageMatch>>"
+)]
+pub fn match_selectors_against_markup_async(
+    selectors: Vec<String>,
+    evidence: JsMarkupEvidence,
+) -> AsyncTask<BlockingTask<Vec<JsSelectorUsageMatch>>> {
+    AsyncTask::new(BlockingTask::new(move || {
+        match_selectors_against_markup(selectors, evidence)
+    }))
 }
 
 /// Matches CSS selectors against static markup evidence (Core source of truth).
@@ -731,6 +787,20 @@ pub fn split_css_by_pages(input: JsSplitInput) -> Result<JsSplitOutput, napi::Er
     core::split_css_by_pages(&core_input)
         .map(JsSplitOutput::from)
         .map_err(napi::Error::from_reason)
+}
+
+/// Async variant of [`optimize_css`]: runs on the libuv thread pool.
+///
+/// # Errors
+///
+/// Rejects like `optimizeCss` when the configuration is invalid or the
+/// stylesheet/AST cannot be processed.
+#[napi(
+    js_name = "optimizeCssAsync",
+    ts_return_type = "Promise<JsPipelineOutput>"
+)]
+pub fn optimize_css_async(input: JsPipelineInput) -> AsyncTask<BlockingTask<JsPipelineOutput>> {
+    AsyncTask::new(BlockingTask::new(move || optimize_css(input)))
 }
 
 /// Configuration for the semantic page-coverage tier.
@@ -1254,6 +1324,34 @@ pub struct JsHealthBatchInput {
     pub files: Vec<JsHealthFileInput>,
     pub weights: Option<JsHealthWeights>,
     pub thresholds: Option<JsHealthThresholds>,
+}
+
+/// Async variant of [`evaluate_css_health`]: runs on the libuv thread pool.
+///
+/// # Errors
+///
+/// Rejects like `evaluateCssHealth`.
+#[napi(
+    js_name = "evaluateCssHealthAsync",
+    ts_return_type = "Promise<JsHealthReport>"
+)]
+pub fn evaluate_css_health_async(input: JsHealthInput) -> AsyncTask<BlockingTask<JsHealthReport>> {
+    AsyncTask::new(BlockingTask::new(move || evaluate_css_health(input)))
+}
+
+/// Async variant of [`evaluate_css_health_batch`]: runs on the libuv thread pool.
+///
+/// # Errors
+///
+/// Rejects like `evaluateCssHealthBatch`.
+#[napi(
+    js_name = "evaluateCssHealthBatchAsync",
+    ts_return_type = "Promise<JsHealthReport>"
+)]
+pub fn evaluate_css_health_batch_async(
+    input: JsHealthBatchInput,
+) -> AsyncTask<BlockingTask<JsHealthReport>> {
+    AsyncTask::new(BlockingTask::new(move || evaluate_css_health_batch(input)))
 }
 
 /// Evaluates and merges CSS Health Score across multiple stylesheets.

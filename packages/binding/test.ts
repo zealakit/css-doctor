@@ -405,6 +405,56 @@ async function main(): Promise<void> {
     /invalid confidence level/,
   );
 
+  // Async variants run on the thread pool and must match the sync results.
+  const asyncPipelineInput = {
+    cssContent: ".a { color: red; } .b { color: blue; }",
+    pageUsage: { home: ["a"], about: ["a", "b"] },
+    sizeBudget: { enabled: false },
+    minify: true,
+  };
+  const asyncPipeline = binding.optimizeCssAsync(asyncPipelineInput);
+  assert.ok(asyncPipeline instanceof Promise);
+  assert.deepEqual(
+    await asyncPipeline,
+    binding.optimizeCss(asyncPipelineInput),
+  );
+  await assert.rejects(
+    binding.optimizeCssAsync({
+      ...asyncPipelineInput,
+      pageCoverage: { enabled: true, minPageRatio: 3 },
+    }),
+  );
+
+  const healthInput = {
+    cssContent: ".a { color: red; } .a { color: red; }",
+    filePath: "a.css",
+  };
+  const asyncHealth = await binding.evaluateCssHealthAsync(healthInput);
+  const syncHealth = binding.evaluateCssHealth(healthInput);
+  assert.equal(asyncHealth.summary.score, syncHealth.summary.score);
+  assert.equal(asyncHealth.diagnostics.length, syncHealth.diagnostics.length);
+
+  const markup = {
+    elements: [
+      {
+        classes: ["a"],
+        dynamicClasses: [],
+        attributes: {},
+        dynamicAttributes: [],
+        depth: 0,
+      },
+    ],
+    files: [],
+  };
+  const asyncMatches = await binding.matchSelectorsAgainstMarkupAsync(
+    [".a", ".z"],
+    markup,
+  );
+  assert.deepEqual(
+    asyncMatches,
+    binding.matchSelectorsAgainstMarkup([".a", ".z"], markup),
+  );
+
   console.log("\n✅ css-doctor NAPI binding OK");
   console.log(
     `   ${result.stats.ruleCount} rules, ${result.stats.selectorCount} selectors, ` +

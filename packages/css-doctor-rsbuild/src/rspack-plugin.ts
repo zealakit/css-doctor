@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { posix } from "node:path";
 import { performance } from "node:perf_hooks";
 
-import { analyzeCss, optimizeCss } from "@zealakit/css-doctor-binding";
+import { analyzeCss, optimizeCssAsync } from "@zealakit/css-doctor-binding";
 import type {
   JsChunkOutput,
   JsSelectorStat,
@@ -289,7 +289,7 @@ export class CssDoctorRspackPlugin {
           moduleClasses.length > 0
             ? withCommonClasses(pageUsage, moduleClasses)
             : pageUsage;
-        const pipeline = optimizeCss({
+        const pipeline = await optimizeCssAsync({
           cssContent: originalCss,
           pageUsage: assetPageUsage,
           pageCoverage: {

@@ -100,24 +100,23 @@ pub fn build_optimization_report(
     };
 
     let emitted_bytes_total: usize = output.chunks.iter().map(|chunk| chunk.size_bytes).sum();
-    let output_rules: usize = output
+    // One parse per emitted chunk, folding all three counters together.
+    let (output_rules, output_selectors, output_declarations) = output
         .chunks
         .iter()
         .filter_map(|chunk| analyze_css(&chunk.css).ok())
-        .map(|result| result.stats.rule_count)
-        .sum();
-    let output_selectors: usize = output
-        .chunks
-        .iter()
-        .filter_map(|chunk| analyze_css(&chunk.css).ok())
-        .map(|result| result.stats.selector_count)
-        .sum();
-    let output_declarations: usize = output
-        .chunks
-        .iter()
-        .filter_map(|chunk| analyze_css(&chunk.css).ok())
-        .map(|result| result.stats.declaration_count + result.stats.important_declaration_count)
-        .sum();
+        .fold(
+            (0usize, 0usize, 0usize),
+            |(rules, selectors, declarations), result| {
+                (
+                    rules + result.stats.rule_count,
+                    selectors + result.stats.selector_count,
+                    declarations
+                        + result.stats.declaration_count
+                        + result.stats.important_declaration_count,
+                )
+            },
+        );
 
     // Single-file equivalent output for elimination accounting: prefer the
     // common chunk when page coverage ran without duplication, otherwise use

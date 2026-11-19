@@ -94,6 +94,7 @@ pnpm monitor                # dependency dashboard at http://127.0.0.1:4177
 
 # Rust
 pnpm test:cargo             # cargo test --workspace
+cargo bench -p css_doctor_core    # criterion: analyze, size split, pipeline, health (300 KiB generated input)
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
 

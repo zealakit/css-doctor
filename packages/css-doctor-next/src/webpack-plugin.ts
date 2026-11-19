@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, extname, posix, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 
-import { analyzeCss, optimizeCss } from "@zealakit/css-doctor-binding";
+import { analyzeCss, optimizeCssAsync } from "@zealakit/css-doctor-binding";
 import type {
   JsChunkOutput,
   JsCssAnalysisResult,
@@ -277,7 +277,7 @@ export class CssDoctorWebpackPlugin {
       const originalCss = sourceToString(asset.source.source());
 
       try {
-        const pipeline = optimizeCss({
+        const pipeline = await optimizeCssAsync({
           cssContent: originalCss,
           pageUsage,
           pageCoverage: {

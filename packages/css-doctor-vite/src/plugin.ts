@@ -3,7 +3,7 @@ import { basename, dirname, extname, posix, relative } from "node:path";
 import { performance } from "node:perf_hooks";
 
 import { createFilter } from "@rollup/pluginutils";
-import { analyzeCss, optimizeCss } from "@zealakit/css-doctor-binding";
+import { analyzeCss, optimizeCssAsync } from "@zealakit/css-doctor-binding";
 import type {
   JsCssAnalysisResult,
   JsSelectorStat,
@@ -504,7 +504,7 @@ async function analyzeAndSplit(
     const originalContent = sourceToCss(output.source);
 
     try {
-      const pipeline = optimizeCss({
+      const pipeline = await optimizeCssAsync({
         cssContent: originalContent,
         pageUsage,
         pageCoverage: {

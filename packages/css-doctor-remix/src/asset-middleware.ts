@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { optimizeCss } from "@zealakit/css-doctor-binding";
+import { optimizeCssAsync } from "@zealakit/css-doctor-binding";
 import type { JsChunkOutput } from "@zealakit/css-doctor-binding";
 
 import { CssCacheManager } from "./cache-manager";
@@ -85,7 +85,7 @@ export const withCssDoctorAssets = <T extends RemixAssetServerLike>(
     }
 
     try {
-      const pipeline = optimizeCss({
+      const pipeline = await optimizeCssAsync({
         cssContent: originalCss,
         pageUsage: {},
         pageCoverage: {

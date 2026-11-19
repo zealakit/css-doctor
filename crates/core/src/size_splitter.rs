@@ -148,18 +148,6 @@ pub fn split_css_by_size(
     })
 }
 
-fn is_variable_rule_css(rule: &CssRule<'_>) -> bool {
-    match <CssRule<'_> as ToCss>::to_css_string(rule, PrinterOptions::default()) {
-        Ok(css) => {
-            let css = css.trim_start().to_ascii_lowercase();
-            css.starts_with("@custom-media")
-                || css.starts_with("@property")
-                || css.starts_with("@theme")
-        }
-        Err(_) => false,
-    }
-}
-
 /// Minifies a stylesheet without splitting it.
 ///
 /// # Errors
@@ -195,16 +183,17 @@ fn partition_rules<'i>(
     body: &mut Vec<CssRule<'i>>,
 ) -> Result<(), String> {
     for rule in rules {
-        if is_variable_rule_css(rule) {
-            variables.push(rule.clone());
-            continue;
-        }
-
         match rule {
             CssRule::Property(_) | CssRule::CustomMedia(_) => {
                 variables.push(rule.clone());
             }
-            CssRule::Unknown(unknown) if unknown.name.as_ref().eq_ignore_ascii_case("theme") => {
+            // `@custom-media` / `@property` / `@theme` may parse as unknown rules
+            // depending on parser options; treat them as variable definitions.
+            CssRule::Unknown(unknown)
+                if ["theme", "custom-media", "property"]
+                    .iter()
+                    .any(|name| unknown.name.as_ref().eq_ignore_ascii_case(name)) =>
+            {
                 variables.push(rule.clone());
             }
             CssRule::Style(style) => {
@@ -393,49 +382,89 @@ fn is_custom_property(property: &Property<'_>) -> bool {
     matches!(property, Property::Custom(_))
 }
 
+/// Greedily groups top-level rules into chunks no larger than `max_chunk_size`.
+///
+/// Each rule is serialized once to learn its size; chunks are then rendered
+/// once each (instead of re-printing the growing buffer after every rule, which
+/// was O(n²) in the number of rules). The separator between rules is measured
+/// from a probe so the estimate matches the printer exactly; a final exact
+/// check per chunk keeps correctness even if the estimate were off.
 fn split_rules<'i>(
     rules: Vec<CssRule<'i>>,
     max_chunk_size: usize,
     minify: bool,
 ) -> Result<Vec<String>, String> {
-    let mut chunks = Vec::new();
-    let mut current = Vec::new();
-
-    for rule in rules {
-        current.push(rule);
-
-        let rendered = render_rules(&current, minify)?;
-
-        if rendered.len() <= max_chunk_size {
-            continue;
-        }
-
-        if current.len() == 1 {
-            chunks.push(rendered);
-            current.clear();
-            continue;
-        }
-
-        let last = current
-            .pop()
-            .ok_or_else(|| "internal rule buffer error".to_string())?;
-        chunks.push(render_rules(&current, minify)?);
-        current.clear();
-        current.push(last);
-
-        let single = render_rules(&current, minify)?;
-
-        if single.len() > max_chunk_size {
-            chunks.push(single);
-            current.clear();
-        }
+    if rules.is_empty() {
+        return Ok(Vec::new());
     }
 
-    if !current.is_empty() {
-        chunks.push(render_rules(&current, minify)?);
+    let sizes = rules
+        .iter()
+        .map(|rule| render_rule_len(rule, minify))
+        .collect::<Result<Vec<_>, _>>()?;
+    let (separator, trailer) = measure_framing(&rules, &sizes, minify)?;
+
+    let mut chunks = Vec::new();
+    let mut start = 0usize;
+
+    while start < rules.len() {
+        let mut end = start;
+        let mut estimate = trailer;
+
+        while end < rules.len() {
+            let next = sizes[end] + if end > start { separator } else { 0 };
+            if end > start && estimate + next > max_chunk_size {
+                break;
+            }
+            estimate += next;
+            end += 1;
+        }
+
+        // Exact check: shrink only if the estimate undershot the real size.
+        let mut rendered = render_rules(&rules[start..end], minify)?;
+        while end - start > 1 && rendered.len() > max_chunk_size {
+            end -= 1;
+            rendered = render_rules(&rules[start..end], minify)?;
+        }
+
+        chunks.push(rendered);
+        start = end;
     }
 
     Ok(chunks)
+}
+
+fn render_rule_len(rule: &CssRule<'_>, minify: bool) -> Result<usize, String> {
+    <CssRule<'_> as ToCss>::to_css_string(
+        rule,
+        PrinterOptions {
+            minify,
+            ..PrinterOptions::default()
+        },
+    )
+    .map(|css| css.len())
+    .map_err(|error| format!("failed to render CSS rule: {error}"))
+}
+
+/// Measures the printer's framing: `(between two rules, after the last rule)`.
+/// Both are 0 when minified.
+fn measure_framing(
+    rules: &[CssRule<'_>],
+    sizes: &[usize],
+    minify: bool,
+) -> Result<(usize, usize), String> {
+    let Some(first) = rules.first() else {
+        return Ok((0, 0));
+    };
+    let trailer = render_rules(std::slice::from_ref(first), minify)?
+        .len()
+        .saturating_sub(sizes[0]);
+    if rules.len() < 2 {
+        return Ok((0, trailer));
+    }
+    let joined = render_rules(&rules[..2], minify)?.len();
+    let separator = joined.saturating_sub(sizes[0] + sizes[1] + trailer);
+    Ok((separator, trailer))
 }
 
 fn render_rules<'i>(rules: &[CssRule<'i>], minify: bool) -> Result<String, String> {
@@ -846,5 +875,80 @@ mod tests {
         }
 
         assert_eq!(seen.len(), 6, "every input selector should appear once");
+    }
+
+    fn many_rules_css(count: usize) -> String {
+        (0..count)
+            .map(|i| {
+                format!(
+                    ".r{i} {{ color: #{c:06x}; margin: {m}px; }}",
+                    c = i * 977,
+                    m = i % 40
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn rule_size_estimate_matches_the_printer_for_both_modes() {
+        let css = ".a { color: red; } @media (min-width: 10px) { .b { margin: 0; } } .c:hover { top: 1px; }";
+        let stylesheet = StyleSheet::parse(css, ParserOptions::default()).expect("parse");
+        let rules = stylesheet.rules.0;
+
+        for minify in [true, false] {
+            let sizes = rules
+                .iter()
+                .map(|rule| render_rule_len(rule, minify).expect("len"))
+                .collect::<Vec<_>>();
+            let (separator, trailer) = measure_framing(&rules, &sizes, minify).expect("framing");
+            let estimate: usize =
+                sizes.iter().sum::<usize>() + separator * (rules.len() - 1) + trailer;
+            let exact = render_rules(&rules, minify).expect("render").len();
+            assert_eq!(estimate, exact, "minify={minify}");
+        }
+    }
+
+    #[test]
+    fn many_rules_split_into_budgeted_chunks_without_losing_rules() {
+        let css = many_rules_css(400);
+        for minify in [true, false] {
+            let output = split_css_by_size(
+                &css,
+                &SizeSplitterConfig {
+                    max_chunk_size: 1_000,
+                    isolate_variables: false,
+                    minify,
+                },
+            )
+            .expect("split");
+
+            assert!(output.chunks.len() > 5);
+            assert!(!output.oversized);
+            assert!(output.chunks.iter().all(|chunk| chunk.len() <= 1_000));
+            let joined = output.chunks.join("");
+            for i in 0..400 {
+                assert!(joined.contains(&format!(".r{i}")), "missing .r{i}");
+            }
+        }
+    }
+
+    #[test]
+    fn an_oversized_rule_is_emitted_alone() {
+        let big = format!(".big {{ content: \"{}\"; }}", "x".repeat(300));
+        let css = format!(".a {{ color: red; }}\n{big}\n.b {{ color: blue; }}");
+        let output = split_css_by_size(
+            &css,
+            &SizeSplitterConfig {
+                max_chunk_size: 100,
+                isolate_variables: false,
+                minify: true,
+            },
+        )
+        .expect("split");
+
+        assert!(output.oversized);
+        assert_eq!(output.chunks.len(), 3);
+        assert!(output.chunks[1].contains(".big"));
     }
 }
