@@ -320,6 +320,26 @@ async function main(): Promise<void> {
   assert.equal(regression.schemaVersion, 1);
   assert.equal(regression.status, "healthy");
 
+  const [confirmed, unused] = binding.matchSelectorsAgainstMarkup(
+    [".a", ".zzz"],
+    {
+      elements: [
+        {
+          classes: ["a"],
+          dynamicClasses: [],
+          attributes: {},
+          dynamicAttributes: [],
+          depth: 0,
+        },
+      ],
+      files: [],
+    },
+  );
+  assert.equal(confirmed?.level, "high");
+  assert.deepEqual(confirmed?.sources, ["static"]);
+  assert.equal(unused?.status, "unused");
+  assert.equal(unused?.level, "medium");
+
   console.log("\n✅ css-doctor NAPI binding OK");
   console.log(
     `   ${result.stats.ruleCount} rules, ${result.stats.selectorCount} selectors, ` +

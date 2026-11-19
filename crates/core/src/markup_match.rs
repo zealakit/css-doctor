@@ -33,6 +33,8 @@ use lightningcss::stylesheet::{ParserOptions, StyleSheet};
 use parcel_selectors::attr::{AttrSelectorOperator, ParsedAttrSelectorOperation};
 use serde::{Deserialize, Serialize};
 
+use crate::confidence::{ConfidenceLevel, EvidenceSource, RuntimeEvidence, derive_verdict};
+
 /// How strongly static analysis supports a selector usage claim.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -138,6 +140,10 @@ pub struct SelectorUsageMatch {
     pub unresolved_elements: u32,
     pub has_unproven_runtime_state: bool,
     pub has_unproven_positional: bool,
+    /// How far this verdict can be trusted (see [`crate::confidence`]).
+    pub level: ConfidenceLevel,
+    /// Evidence sources behind the verdict (static-only from this matcher).
+    pub sources: Vec<EvidenceSource>,
     pub notes: Vec<String>,
 }
 
@@ -346,6 +352,12 @@ fn finish_match(input: FinishMatchParams<'_>) -> SelectorUsageMatch {
         input.runtime,
         input.positional,
     );
+    let verdict = derive_verdict(
+        input.confidence,
+        status,
+        RuntimeEvidence::NotCollected,
+        false,
+    );
     SelectorUsageMatch {
         selector: input.selector_css.to_owned(),
         confidence: input.confidence,
@@ -359,6 +371,8 @@ fn finish_match(input: FinishMatchParams<'_>) -> SelectorUsageMatch {
         unresolved_elements: input.unresolved,
         has_unproven_runtime_state: input.runtime,
         has_unproven_positional: input.positional,
+        level: verdict.level,
+        sources: verdict.sources,
         notes: input.notes,
     }
 }

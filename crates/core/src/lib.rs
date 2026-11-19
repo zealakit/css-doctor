@@ -42,6 +42,7 @@
 //! ```
 
 mod analyzer;
+mod confidence;
 mod health;
 mod markup_match;
 mod model;
@@ -54,6 +55,10 @@ mod splitter;
 mod usage;
 
 pub use analyzer::analyze_css;
+pub use confidence::{
+    ConfidenceLevel, EvidenceSource, RuntimeEvidence, UsageVerdict, derive_verdict,
+    meets_min_confidence,
+};
 pub use health::{
     DiagnosticCertainty, DimensionId, DimensionScore, HealthDiagnostic, HealthEvaluationInput,
     HealthGrade, HealthReport, HealthScoreConfig, HealthScoreSummary, HealthSeverity, HealthStatus,

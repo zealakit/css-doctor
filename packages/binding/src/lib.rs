@@ -357,7 +357,85 @@ pub struct JsSelectorUsageMatch {
     pub unresolved_elements: u32,
     pub has_unproven_runtime_state: bool,
     pub has_unproven_positional: bool,
+    /// Trust level of the verdict: `"low"`, `"medium"` or `"high"`.
+    pub level: String,
+    /// Evidence sources: any of `"static"`, `"runtime"`, `"config"`.
+    pub sources: Vec<String>,
     pub notes: Vec<String>,
+}
+
+/// A usage verdict combining static, runtime and config evidence.
+#[napi(object)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsUsageVerdict {
+    /// `"used"`, `"unused"`, `"partial"` or `"unknown"`.
+    pub status: String,
+    /// `"low"`, `"medium"` or `"high"`.
+    pub level: String,
+    /// Any of `"static"`, `"runtime"`, `"config"`.
+    pub sources: Vec<String>,
+}
+
+/// Combines a static match with runtime coverage evidence (Core source of truth).
+///
+/// `runtime` is `"notCollected"`, `"coveredUnused"` or `"hit"`.
+#[napi(js_name = "deriveUsageVerdict")]
+pub fn derive_usage_verdict(
+    confidence: String,
+    status: String,
+    runtime: String,
+    forced_by_config: bool,
+) -> Result<JsUsageVerdict, napi::Error> {
+    let confidence = match confidence.as_str() {
+        "confirmed" => core::MatchConfidence::Confirmed,
+        "partial" => core::MatchConfidence::Partial,
+        "unresolved" => core::MatchConfidence::Unresolved,
+        "unsupported" => core::MatchConfidence::Unsupported,
+        "none" => core::MatchConfidence::None,
+        other => {
+            return Err(napi::Error::from_reason(format!(
+                "invalid match confidence '{other}'"
+            )));
+        }
+    };
+    let status = match status.as_str() {
+        "used" => core::SelectorUsageStatus::Used,
+        "unused" => core::SelectorUsageStatus::Unused,
+        "partial" => core::SelectorUsageStatus::Partial,
+        "unknown" => core::SelectorUsageStatus::Unknown,
+        other => {
+            return Err(napi::Error::from_reason(format!(
+                "invalid usage status '{other}'"
+            )));
+        }
+    };
+    let runtime = match runtime.as_str() {
+        "notCollected" => core::RuntimeEvidence::NotCollected,
+        "coveredUnused" => core::RuntimeEvidence::CoveredUnused,
+        "hit" => core::RuntimeEvidence::Hit,
+        other => {
+            return Err(napi::Error::from_reason(format!(
+                "invalid runtime evidence '{other}'"
+            )));
+        }
+    };
+    let verdict = core::derive_verdict(confidence, status, runtime, forced_by_config);
+    Ok(JsUsageVerdict {
+        status: match verdict.status {
+            core::SelectorUsageStatus::Used => "used",
+            core::SelectorUsageStatus::Unused => "unused",
+            core::SelectorUsageStatus::Partial => "partial",
+            core::SelectorUsageStatus::Unknown => "unknown",
+        }
+        .to_owned(),
+        level: verdict.level.as_str().to_owned(),
+        sources: verdict
+            .sources
+            .iter()
+            .map(|source| source.as_str().to_owned())
+            .collect(),
+    })
 }
 
 fn map_markup_element(element: JsMarkupElement) -> core::MarkupElement {
@@ -422,6 +500,12 @@ pub fn match_selectors_against_markup(
                     unresolved_elements: item.unresolved_elements,
                     has_unproven_runtime_state: item.has_unproven_runtime_state,
                     has_unproven_positional: item.has_unproven_positional,
+                    level: item.level.as_str().to_owned(),
+                    sources: item
+                        .sources
+                        .iter()
+                        .map(|source| source.as_str().to_owned())
+                        .collect(),
                     notes: item.notes,
                 })
                 .collect()
