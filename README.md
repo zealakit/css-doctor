@@ -373,6 +373,10 @@ Release prep: see [`docs/release-checklist.md`](./docs/release-checklist.md).
 | `sizeBudget.enabled`          | `boolean`              | `true`                   | Enable byte-budget splitting.                          |
 | `sizeBudget.maxChunkSize`     | `number`               | `60 * 1024`              | Maximum bytes per emitted chunk.                       |
 | `sizeBudget.isolateVariables` | `boolean`              | `true`                   | Extract `:root` and Tailwind `@theme` variables first. |
+| `pageCoverage.matching`       | `"conservative" \| "precise"` | `"conservative"`   | `"precise"` removes compounds missing a required class. |
+| `pageCoverage.removeUnusedMinConfidence` | `"low" \| "medium" \| "high"` | `"medium"` | Minimum confidence for dead-code removal (`"high"` needs `runtimeUnused`). |
+| `classHelpers`                | `string[]`             | `cn`, `clsx`, `cva`, …   | Function names resolved as class helpers.              |
+| `cssModules`                  | `boolean`              | `true`                   | Split CSS Modules by usage (Vite, Next, Rsbuild).      |
 | `minify`                      | `boolean`              | production/build value   | Minify emitted CSS with LightningCSS.                  |
 | `report`                      | `boolean`              | `true`                   | Print coverage and split diagnostics.                  |
 | `exclude`                     | `(string \| RegExp)[]` | CSS Modules safety rules | Skip matching assets.                                  |

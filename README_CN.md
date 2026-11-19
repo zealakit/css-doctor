@@ -296,6 +296,10 @@ Remix 3 没有构建期 page-to-CSS 依赖图。Middleware 使用 `sizeBudget`�
 | `sizeBudget.enabled` | `boolean` | `true` | 启用按字节预算分割。 |
 | `sizeBudget.maxChunkSize` | `number` | `60 * 1024` | 每个 chunk 的最大字节数。 |
 | `sizeBudget.isolateVariables` | `boolean` | `true` | 先提取 `:root` 与 Tailwind `@theme` 变量。 |
+| `pageCoverage.matching` | `"conservative" \| "precise"` | `"conservative"` | `"precise"` 会移除缺少必需 class 的复合选择器。 |
+| `pageCoverage.removeUnusedMinConfidence` | `"low" \| "medium" \| "high"` | `"medium"` | 删除无用代码所需的最低置信度（`"high"` 需要 `runtimeUnused`）。 |
+| `classHelpers` | `string[]` | `cn`、`clsx`、`cva` 等 | 作为 class helper 解析的函数名。 |
+| `cssModules` | `boolean` | `true` | 按使用情况拆分 CSS Modules（Vite、Next、Rsbuild）。 |
 | `minify` | `boolean` | production/build 值 | 使用 LightningCSS 压缩 CSS。 |
 | `report` | `boolean` | `true` | 输出覆盖率与 split 诊断。 |
 | `exclude` | `(string \| RegExp)[]` | CSS Modules 安全规则 | 跳过匹配的资源。 |

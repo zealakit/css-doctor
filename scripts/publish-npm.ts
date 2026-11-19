@@ -375,7 +375,7 @@ function assertSharedBundled(target: PublishTarget): void {
   const unresolvedImportPattern =
     /(?:from|require\()\s*["']@zealakit\/css-doctor-shared["']/;
   const helperPattern =
-    /scanClassOccurrences|clampMinPageRatio|matchesPatterns/;
+    /scanClassOccurrences|clampMinPageRatio|matchesPatterns|scanSourceEvidence|buildSelectorAnalysisReport/;
 
   for (const file of files) {
     const contents = readFileSync(file, "utf8");

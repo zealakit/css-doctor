@@ -138,6 +138,51 @@ css-doctor check [patterns...] [options]
 - Path literal chứa ký tự glob (ví dụ `src/[slug].css`) vẫn hoạt động nếu file
   tồn tại và bạn truyền đúng đường dẫn file.
 
+### Class helper và unknown evidence
+
+Quét nguồn phân giải các lời gọi `clsx`, `cn`, `cx`, `classnames`,
+`classNames`, `twMerge`, `twJoin`, `cva` và `tv`. Đặt `classHelpers` trong
+`.css-doctor/config.json` để dùng tên riêng:
+
+```json
+{ "classHelpers": ["cn", "tw"] }
+```
+
+Chuỗi literal, phần tĩnh của template và mảng là usage đã xác nhận. Key của
+object (`{ "is-active": on }`) là usage có thể xảy ra. Identifier, lời gọi hàm
+và tên nội suy không phân giải được sẽ được báo theo từng file là *unknown
+evidence* (`classUsage.unknownEvidenceByFile`).
+
+### Runtime coverage (`coverage import`)
+
+Nhập coverage CSS từ trình duyệt làm bằng chứng runtime:
+
+```bash
+css-doctor coverage import coverage/*.json \
+  --route-map routes.json --build-id "$GIT_SHA"
+```
+
+Hỗ trợ export Chrome DevTools Coverage, kết quả `page.coverage.stopCSSCoverage()`
+của Puppeteer/Playwright (cần `text` của stylesheet), file của helper Playwright
+và CDP rule usage kèm `styleSheets`. `routes.json` ánh xạ mẫu URL sang route
+(`*`, `:id`, `[id]` khớp một segment, `**` khớp phần còn lại).
+
+Kết quả được gộp vào `.css-doctor/coverage.json` theo route và build id. Một
+selector là *used* nếu bất kỳ lần chạy nào dùng nó. Mục thuộc build id khác hoặc
+stylesheet đã đổi sẽ bị cảnh báo là stale và không áp dụng. Bật bằng
+`"coverage": true` trong config; hiện `css-doctor gui` dùng nó, còn `check`,
+`health`, `optimize` thì chưa.
+
+Ghi coverage từ test Playwright:
+
+```ts
+import { collectCssCoverage } from "@zealakit/css-doctor-cli/playwright";
+
+await collectCssCoverage(page, async () => {
+  await page.goto("http://localhost:3000/blog/42");
+});
+```
+
 ### Ví dụ output terminal
 
 ```text
@@ -301,7 +346,9 @@ config > mặc định.
 - Tên binary: `css-doctor` (trường `bin` của package).
 - CLI **phân tích** và **chấm điểm** CSS. Page-coverage split / size budget /
   tách biến cho bundle thuộc adapter framework.
-- CSS Modules / class động nằm ngoài phạm vi check tĩnh.
+- Class động chỉ được phân giải khi là literal (xem `classHelpers` ở trên);
+  phần còn lại được báo là unknown evidence. CSS Modules được ánh xạ theo
+  `styles.foo` ở mức nguồn; việc tách CSS Modules theo bundle thuộc adapter.
 - Cần binary native đúng nền tảng; không cần Rust toolchain khi đã có prebuild.
 
 ## Tài liệu đầy đủ
